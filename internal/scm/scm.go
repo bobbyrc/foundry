@@ -48,6 +48,16 @@ type Issue struct {
 	Author    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Comments  []IssueComment
+}
+
+// IssueComment is one comment on an issue. Association is GitHub's authorAssociation as-is
+// (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE, ...).
+type IssueComment struct {
+	Author      string
+	Association string
+	Body        string
+	CreatedAt   time.Time
 }
 
 type IssueSpec struct {

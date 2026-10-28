@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/foundry/internal/scm"
 	"github.com/bobbyrc/foundry/internal/store"
 )
 
@@ -37,7 +40,7 @@ func (e *Engine) intakeLoop(ctx context.Context, p *config.Project) error {
 			continue
 		}
 
-		body := fmt.Sprintf("%s\n\n---\nGitHub issue #%d: %s", is.Body, is.Number, is.URL)
+		body := fmt.Sprintf("%s%s\n\n---\nGitHub issue #%d: %s", is.Body, trustedComments(is.Comments), is.Number, is.URL)
 		t, err := e.createTask(ctx, domain.Task{
 			Project:   p.Name,
 			Kind:      domain.KindIssue,
@@ -56,4 +59,24 @@ func (e *Engine) intakeLoop(ctx context.Context, p *config.Project) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// trustedComments renders the comments written by someone with write access to the repo
+// (OWNER, MEMBER, COLLABORATOR); everyone else's comments are left out because the repo may
+// be public. It returns "" when there are none.
+func trustedComments(comments []scm.IssueComment) string {
+	var b strings.Builder
+	for _, c := range comments {
+		switch c.Association {
+		case "OWNER", "MEMBER", "COLLABORATOR":
+		default:
+			continue
+		}
+		if b.Len() == 0 {
+			b.WriteString("\n\nComments from maintainers:")
+		}
+		fmt.Fprintf(&b, "\n\nComment by @%s (%s, %s):\n%s", c.Author, c.Association,
+			c.CreatedAt.Format(time.RFC3339), c.Body)
+	}
+	return b.String()
 }

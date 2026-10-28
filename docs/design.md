@@ -147,7 +147,8 @@ slowed the agent down (missing docs, flaky test, bad tooling, foundry itself). F
 friction by fingerprint and, when `friction.auto_file` is on, files a GitHub issue in the right
 repo (the project, or foundry's own repo for factory friction) labelled `friction`. Issue intake
 picks up issues labelled `foundry` (configurable), so turning a friction issue into work is one
-label — or automatic with `friction.auto_queue`.
+label — or automatic with `friction.auto_queue`. Comments from OWNER/MEMBER/COLLABORATOR are
+included in the task body; others are ignored.
 
 The retro loop (`loops.retro`, default every 24h) is the factory's retrospective. Each day, code
 gathers the evidence of the last `lookback` (blocked and failed tasks with their reasons,
