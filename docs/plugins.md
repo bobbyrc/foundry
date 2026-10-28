@@ -190,6 +190,11 @@ Environment: each command inherits foundry's environment, then the project's `en
 The `status` command gets only `FOUNDRY_DEPLOY_ID`. It does not get `FOUNDRY_REF`, so it cannot look
 up a deployment by commit. A command that needs the commit must do that work in `deploy`.
 
+Each command runs in its own process group, and foundry kills that whole group as soon as the command
+exits. A `deploy` that starts a long-running server with `&` or `nohup` will lose it: the server is
+killed, and the health check fails with "connection refused". Start long-running processes in their
+own session instead (`setsid`, or hand them to `launchd` or `systemd`).
+
 Output conventions. Foundry reads only the **last non-empty stdout line**. Earlier lines are
 ignored, so print progress freely. On failure the error includes the tail of the output.
 
