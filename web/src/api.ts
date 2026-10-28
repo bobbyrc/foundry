@@ -69,6 +69,9 @@ async function request<T>(
     method,
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    // Never answer from the browser's cache: a stored sign-in state replayed after a browser
+    // restart showed the setup page to an instance that already had its owner.
+    cache: 'no-store',
   });
 
   if (!res.ok) {
@@ -254,6 +257,7 @@ async function configRequest<T>(method: string, path: string, body?: unknown): P
     method,
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
+    cache: 'no-store',
   });
   if (!res.ok) {
     if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { changePassword, getStats, login, logout, setUserRole } from './api';
+import { changePassword, getAuthState, getStats, login, logout, setUserRole } from './api';
 import { UNAUTHORIZED_EVENT } from './auth';
 
 // api.ts reads and dispatches on `window`, which Node does not have. A plain EventTarget is
@@ -106,5 +106,13 @@ describe('api 401 handling', () => {
     target.addEventListener(UNAUTHORIZED_EVENT, seen);
     await expect(logout()).rejects.toMatchObject({ status: 401 });
     expect(seen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('caching', () => {
+  it('never answers an API call from the browser cache', async () => {
+    fetchMock.mockResolvedValue(respond(200, { setup_required: false, user: null }));
+    await getAuthState();
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).cache).toBe('no-store');
   });
 });
