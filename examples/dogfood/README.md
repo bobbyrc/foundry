@@ -42,6 +42,26 @@ commands inherit it from there.
 - Any change under `examples/dogfood/**` is high risk. That covers the release scripts, so a
   human approves every change to the deploy pipeline.
 
+## Updating
+
+`update.sh` moves the instance to the latest `main` in one step:
+
+```
+mise exec -- examples/dogfood/update.sh
+```
+
+It does these steps in order:
+
+1. Builds `main` in a temporary worktree.
+2. Pauses the factory and waits until no run is active and no release is in flight.
+3. Swaps `$DOGFOOD/foundry`, keeping the old binary as `foundry.prev`.
+4. Restarts the daemon and checks that it answers with the new version.
+5. Resumes the factory, unless it was already paused before the update.
+
+If the new version doesn't come up healthy, the script restarts the previous binary. It does nothing if
+the instance already runs `main`. A launcher at `$DOGFOOD/run-daemon.sh`, if present, is used to
+start the daemon. Run the script from your own shell, never from an agent that foundry runs.
+
 ## Stopping
 
 - Stop new work: `foundry pause`.
