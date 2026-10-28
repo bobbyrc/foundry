@@ -136,3 +136,33 @@ func TestLoopProdCancelledIncidentStaysDismissed(t *testing.T) {
 		t.Fatalf("got %d incidents after the owner cancelled the first, want 1", n)
 	}
 }
+
+// A new incident carries the project's service logs in its Evidence section.
+func TestLoopProdIncidentIncludesServiceLogs(t *testing.T) {
+	doc := lpDoc(t, t.TempDir(), "    deploy:\n      type: test\n      logs: echo prod-log-line\n", "")
+	env := lpNewEngine(t, doc)
+	env.obs.obs = []domain.SignalObservation{lpObservation("error", 5, time.Now())}
+
+	env.run(loopProdWatch)
+
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 {
+		t.Fatalf("got %d incidents, want 1", len(incidents))
+	}
+	want := "\n## Evidence\n\n```\n== service logs (echo prod-log-line) ==\nprod-log-line\n```\n"
+	if !strings.Contains(incidents[0].Body, want) {
+		t.Fatalf("incident body lacks the evidence section:\n%s", incidents[0].Body)
+	}
+}
+
+// Without a logs command, a prod incident body is unchanged.
+func TestLoopProdIncidentWithoutLogsHasNoEvidence(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	env.obs.obs = []domain.SignalObservation{lpObservation("error", 5, time.Now())}
+
+	env.run(loopProdWatch)
+
+	if body := env.tasks(domain.KindIncident)[0].Body; strings.Contains(body, "## Evidence") {
+		t.Fatalf("incident has an evidence section without a logs command:\n%s", body)
+	}
+}

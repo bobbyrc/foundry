@@ -15,6 +15,7 @@ func TestNoopDeployer(t *testing.T) {
 	h, err := d.Deploy(context.Background(), "abc")
 	require.NoError(t, err)
 	assert.Equal(t, "noop-abc", h.ID)
+	assert.Empty(t, h.Output, "noop runs nothing, so it has no deploy output")
 
 	st, err := d.Status(context.Background(), h.ID)
 	require.NoError(t, err)

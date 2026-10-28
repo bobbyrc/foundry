@@ -83,6 +83,41 @@ func TestCommandDeployNonZeroExit(t *testing.T) {
 	assert.Contains(t, err.Error(), "boom")
 }
 
+func TestCommandDeployCapturesOutput(t *testing.T) {
+	// stdout and stderr both land in Output (their relative order is not guaranteed).
+	d := newTestCommand(t, map[string]any{
+		"deploy": `echo "uploading assets"; echo "warning: slow" >&2; echo "built ok"; echo '{"id":"dpl_9","url":"https://x.example","state":"ready"}'`,
+	}, nil)
+	h, err := d.Deploy(context.Background(), "sha")
+	require.NoError(t, err)
+	assert.Equal(t, "dpl_9", h.ID)
+	assert.Equal(t, "https://x.example", h.URL)
+	for _, line := range []string{"uploading assets", "warning: slow", "built ok"} {
+		assert.Contains(t, h.Output, line+"\n")
+	}
+	assert.Contains(t, h.Output, `{"id":"dpl_9","url":"https://x.example","state":"ready"}`+"\n")
+}
+
+func TestCommandDeployOutputKeepsLastFourKilobytes(t *testing.T) {
+	// 10,000 numbered lines (about 60KB): Output is the newest 4KB and ends with the last line.
+	d := newTestCommand(t, map[string]any{
+		"deploy": `i=0; while [ $i -lt 10000 ]; do echo "line $i"; i=$((i+1)); done; echo "https://last.example"`,
+	}, nil)
+	h, err := d.Deploy(context.Background(), "sha")
+	require.NoError(t, err)
+	assert.Equal(t, "https://last.example", h.URL)
+	assert.LessOrEqual(t, len(h.Output), deployOutputTail)
+	assert.True(t, strings.HasSuffix(h.Output, "line 9999\nhttps://last.example\n"), h.Output[len(h.Output)-40:])
+	assert.NotContains(t, h.Output, "line 100\n")
+}
+
+func TestCommandDeployNoOutputIsEmpty(t *testing.T) {
+	d := newTestCommand(t, map[string]any{"deploy": `true`}, nil)
+	h, err := d.Deploy(context.Background(), "sha")
+	require.NoError(t, err)
+	assert.Empty(t, h.Output)
+}
+
 func TestCommandStatusJSON(t *testing.T) {
 	d := newTestCommand(t, map[string]any{
 		"deploy": `echo https://ignored.example`,

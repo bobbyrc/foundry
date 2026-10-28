@@ -4,15 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/deploy"
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/notify"
 	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/foundry/internal/sysproc"
 )
 
 const (
@@ -26,7 +31,15 @@ const (
 	deployProbeTitles = 3
 	// defaultDeployTimeout fails a release still building after this long, when the config sets none.
 	defaultDeployTimeout = 30 * time.Minute
+	// serviceLogsTail is how many trailing bytes of the project's deploy.logs output are kept.
+	serviceLogsTail = 8 << 10
+	// evidenceCap is how many trailing bytes of a release's evidence go into an incident body.
+	evidenceCap = 12 << 10
 )
+
+// serviceLogsTimeout bounds one run of the project's deploy.logs command. It is a variable so
+// tests can shorten it.
+var serviceLogsTimeout = 30 * time.Second
 
 // deployHealthTally counts consecutive failed health checks per deployment ID. It lives in
 // process memory on purpose: a restart resets the count, which only delays a rollback.
@@ -137,6 +150,7 @@ func (e *Engine) startRelease(ctx context.Context, p *config.Project, dep deploy
 	if _, err := e.setDeployment(ctx, d.ID, func(x *domain.Deployment) error {
 		x.ProviderID = handle.ID
 		x.URL = handle.URL
+		x.Log = deployOutputEvidence(handle.Output)
 		x.State = domain.DeployDeploying
 		return nil
 	}); err != nil {
@@ -265,6 +279,8 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.Deployer, d domain.Deployment, reason string, rollbackEligible bool) error {
 	notes := reason
 	state := domain.DeployFailed
+	// Service logs are read before any rollback, so they show the release that failed.
+	logs := serviceLogsEvidence(ctx, p)
 	if rollbackEligible && p.Deploy.RollbackEnabled() {
 		prev, err := e.d.Store.LastHealthyDeployment(ctx, p.Name)
 		switch {
@@ -285,6 +301,7 @@ func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.
 	failed, err := e.setDeployment(ctx, d.ID, func(x *domain.Deployment) error {
 		x.State = state
 		x.Notes = notes
+		x.Log = appendEvidence(x.Log, logs)
 		return nil
 	})
 	if err != nil {
@@ -310,6 +327,7 @@ func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.
 	if task != nil {
 		body += fmt.Sprintf("- Merged task: %s (PR #%d %s)\n", task.ID, task.PRNumber, task.PRURL)
 	}
+	body += evidenceSection(failed.Log)
 	incident, err := e.createTask(ctx, domain.Task{
 		Project:   p.Name,
 		Kind:      domain.KindIncident,
@@ -363,4 +381,149 @@ func deployShortRef(ref string) string {
 		return ref[:7]
 	}
 	return ref
+}
+
+// deployOutputEvidence is the first part of a release's log: the tail of its deploy command's
+// output. A release whose command printed nothing has no log.
+func deployOutputEvidence(output string) string {
+	if output == "" {
+		return ""
+	}
+	return "== deploy output ==\n" + output
+}
+
+// serviceLogsEvidence runs the project's deploy.logs command and returns its section of the
+// evidence: the last 8KB of its output, plus the reason if it failed or timed out. It returns ""
+// when the project has no logs command. A failing logs command never fails the caller.
+func serviceLogsEvidence(ctx context.Context, p *config.Project) string {
+	if p.Deploy == nil || p.Deploy.Logs == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("== service logs (" + p.Deploy.Logs + ") ==\n")
+	out, err := runServiceLogs(ctx, p)
+	b.WriteString(out)
+	if err != nil {
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString("logs command failed: " + err.Error() + "\n")
+	} else if out == "" {
+		b.WriteString("(no output)\n")
+	}
+	return b.String()
+}
+
+// runServiceLogs runs the project's deploy.logs command with sh -c in the project directory. The
+// environment is foundry's, then the project's env. It returns the last 8KB of stdout and stderr
+// together, and the error if the command failed or ran past serviceLogsTimeout.
+func runServiceLogs(ctx context.Context, p *config.Project) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, serviceLogsTimeout)
+	defer cancel()
+
+	out := &tailBuffer{max: serviceLogsTail}
+	cmd := exec.CommandContext(ctx, "sh", "-c", p.Deploy.Logs)
+	cmd.Dir = p.Path
+	cmd.Env = append(os.Environ(), projectEnvPairs(p.Env)...)
+	// Stdout and Stderr are the same writer, so os/exec calls it from one goroutine at a time.
+	cmd.Stdout = out
+	cmd.Stderr = out
+	sysproc.Configure(cmd)
+	err := cmd.Start()
+	if err == nil {
+		err = sysproc.Wait(cmd)
+	}
+	if ctx.Err() == context.DeadlineExceeded {
+		err = fmt.Errorf("timed out after %s", serviceLogsTimeout)
+	}
+	return strings.TrimRight(out.String(), "\n"), err
+}
+
+// projectEnvPairs turns a project's env into sorted KEY=value pairs.
+func projectEnvPairs(env map[string]string) []string {
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	pairs := make([]string, 0, len(keys))
+	for _, k := range keys {
+		pairs = append(pairs, k+"="+env[k])
+	}
+	return pairs
+}
+
+// tailBuffer keeps the last max bytes written to it. It is not safe for concurrent use.
+type tailBuffer struct {
+	max int
+	buf []byte
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > 2*b.max {
+		b.buf = append([]byte(nil), b.buf[len(b.buf)-b.max:]...)
+	}
+	return len(p), nil
+}
+
+// String returns the last max bytes written, starting on a rune boundary.
+func (b *tailBuffer) String() string {
+	return lastBytes(string(b.buf), b.max)
+}
+
+// lastBytes returns the last n bytes of s, starting on a rune boundary.
+func lastBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	i := len(s) - n
+	for i < len(s) && !utf8.RuneStart(s[i]) {
+		i++
+	}
+	return s[i:]
+}
+
+// appendEvidence adds a section to a release's log, on its own line.
+func appendEvidence(log, section string) string {
+	switch {
+	case section == "":
+		return log
+	case log == "":
+		return section
+	case strings.HasSuffix(log, "\n"):
+		return log + section
+	default:
+		return log + "\n" + section
+	}
+}
+
+// evidenceSection renders evidence as a "## Evidence" section of an incident body, in a code
+// fence that a backtick run inside the evidence cannot close early. Past evidenceCap only the
+// newest output is kept, and the section says so. It returns "" for no evidence.
+func evidenceSection(evidence string) string {
+	if evidence == "" {
+		return ""
+	}
+	const truncated = "...(earlier output truncated)\n"
+	text := evidence
+	if len(text) > evidenceCap {
+		text = truncated + lastBytes(evidence, evidenceCap-len(truncated))
+	}
+	fence := strings.Repeat("`", max(3, longestBacktickRun(text)+1))
+	return "\n## Evidence\n\n" + fence + "\n" + text + "\n" + fence + "\n"
+}
+
+// longestBacktickRun returns the length of the longest run of backticks in s.
+func longestBacktickRun(s string) int {
+	longest, run := 0, 0
+	for _, r := range s {
+		if r == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	return longest
 }

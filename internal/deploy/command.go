@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"sort"
@@ -19,6 +20,9 @@ import (
 
 // outputTail is how many trailing bytes of a failed command's output go into its error.
 const outputTail = 2 << 10
+
+// deployOutputTail is how many trailing bytes of a deploy command's output are kept on its Handle.
+const deployOutputTail = 4 << 10
 
 func init() {
 	Register("command", newCommandDeployer)
@@ -62,13 +66,14 @@ func newCommandDeployer(cfg Config) (Deployer, error) {
 
 // Deploy runs the deploy command with FOUNDRY_REF set. The last stdout line may be a JSON object
 // {"id","url","state"} or a bare URL; without either the ID is generated. Without a status command
-// the deploy is treated as synchronous and recorded as ready.
+// the deploy is treated as synchronous and recorded as ready. The Handle carries the tail of the
+// command's output (stdout and stderr) as Output.
 func (d *commandDeployer) Deploy(ctx context.Context, ref string) (Handle, error) {
-	out, err := d.run(ctx, "deploy", d.deployCmd, "FOUNDRY_REF="+ref)
+	stdout, output, err := d.run(ctx, "deploy", d.deployCmd, "FOUNDRY_REF="+ref)
 	if err != nil {
 		return Handle{}, err
 	}
-	res := parseDeployLine(lastLine(out))
+	res := parseDeployLine(lastLine(stdout))
 	id := res.ID
 	if id == "" {
 		id = fmt.Sprintf("cmd-%s-%d", prefix(ref, 8), time.Now().Unix())
@@ -78,7 +83,7 @@ func (d *commandDeployer) Deploy(ctx context.Context, ref string) (Handle, error
 		d.statuses[id] = Status{State: StateReady, URL: res.URL}
 		d.mu.Unlock()
 	}
-	return Handle{ID: id, URL: res.URL}, nil
+	return Handle{ID: id, URL: res.URL, Output: output}, nil
 }
 
 // Status runs the status command with FOUNDRY_DEPLOY_ID set, or without one returns the remembered
@@ -92,7 +97,7 @@ func (d *commandDeployer) Status(ctx context.Context, id string) (Status, error)
 		}
 		return Status{State: StateReady}, nil
 	}
-	out, err := d.run(ctx, "status", d.statusCmd, "FOUNDRY_DEPLOY_ID="+id)
+	out, _, err := d.run(ctx, "status", d.statusCmd, "FOUNDRY_DEPLOY_ID="+id)
 	if err != nil {
 		return Status{}, err
 	}
@@ -104,36 +109,70 @@ func (d *commandDeployer) Rollback(ctx context.Context, id, ref string) error {
 	if d.rollbackCmd == "" {
 		return errors.New("deploy: no rollback command configured")
 	}
-	_, err := d.run(ctx, "rollback", d.rollbackCmd, "FOUNDRY_ROLLBACK_ID="+id, "FOUNDRY_ROLLBACK_REF="+ref)
+	_, _, err := d.run(ctx, "rollback", d.rollbackCmd, "FOUNDRY_ROLLBACK_ID="+id, "FOUNDRY_ROLLBACK_REF="+ref)
 	return err
 }
 
-// run executes command with sh -c in the project directory and returns its stdout. The environment
-// is the process environment, then the project's env, then extra, so extra wins on conflicts. A
-// non-zero exit or timeout is an error that carries the tail of the command's output.
-func (d *commandDeployer) run(ctx context.Context, label, command string, extra ...string) (string, error) {
+// run executes command with sh -c in the project directory. It returns the command's stdout (which
+// the caller parses for its result) and the last deployOutputTail bytes of stdout and stderr
+// combined, as they arrived (the evidence for incidents). The environment is the
+// process environment, then the project's env, then extra, so extra wins on conflicts. A non-zero
+// exit or timeout is an error that carries the tail of the command's output.
+func (d *commandDeployer) run(ctx context.Context, label, command string, extra ...string) (stdout, output string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 
-	var stdout, stderr bytes.Buffer
+	var out bytes.Buffer
+	combined := &tailWriter{max: deployOutputTail}
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = d.dir
 	cmd.Env = append(append(os.Environ(), d.env...), extra...)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = io.MultiWriter(&out, combined)
+	cmd.Stderr = combined
 	// On timeout the whole process group is killed, not just sh, and Wait does not block on pipes a
 	// grandchild still holds open. A deploy that exits 0 but leaves a background child behind still
 	// succeeds (see sysproc.Wait).
 	sysproc.Configure(cmd)
-	err := cmd.Start()
+	err = cmd.Start()
 	if err == nil {
 		err = sysproc.Wait(cmd)
 	}
 	if err != nil {
-		output := strings.TrimSpace(stdout.String() + stderr.String())
-		return "", fmt.Errorf("deploy: %s command failed: %w: output: %s", label, err, tail(output))
+		return "", "", fmt.Errorf("deploy: %s command failed: %w: output: %s", label, err, tail(strings.TrimSpace(combined.String())))
 	}
-	return stdout.String(), nil
+	return out.String(), combined.String(), nil
+}
+
+// tailWriter keeps the last max bytes written to it, so a chatty command cannot grow foundry's
+// memory. It is safe for the concurrent writes of a child's stdout and stderr.
+type tailWriter struct {
+	mu  sync.Mutex
+	max int
+	buf []byte
+}
+
+func (w *tailWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.buf = append(w.buf, p...)
+	if len(w.buf) > 2*w.max {
+		w.buf = append([]byte(nil), w.buf[len(w.buf)-w.max:]...)
+	}
+	return len(p), nil
+}
+
+// String returns the last max bytes written, starting on a rune boundary.
+func (w *tailWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	b := w.buf
+	if len(b) > w.max {
+		b = b[len(b)-w.max:]
+	}
+	for len(b) > 0 && !utf8.RuneStart(b[0]) {
+		b = b[1:]
+	}
+	return string(b)
 }
 
 type deployLine struct {

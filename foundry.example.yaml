@@ -152,6 +152,7 @@ projects:
         # $FOUNDRY_ROLLBACK_ID is set by foundry to the release to roll back to.
         rollback: "vercel rollback $FOUNDRY_ROLLBACK_ID --yes"
       health_url: https://myapp.example.com/healthz   # must answer 2xx during verify_for; empty skips it
+      logs: tail -n 200 /path/to/app.log   # prints recent service logs; attached to failed releases and incidents
       verify_for: 10m                  # watch a release this long before calling it healthy (default 10m)
       timeout: 30m                     # fail a release still building after this long (default 30m)
       auto_rollback: true              # roll back on a failed verify window (default true)

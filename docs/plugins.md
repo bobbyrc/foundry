@@ -164,6 +164,13 @@ deploy:
   auto_rollback: true
 ```
 
+Evidence for incidents. A release keeps the tail of its deploy command's output (the `command` type
+keeps the last 4 KB of stdout and stderr). When a release fails, or a production problem opens an
+incident, foundry also runs the project's `deploy.logs` command (`sh -c`, in the project's clone, 30
+second limit) and keeps its last 8 KB, or the reason it failed. Both go into the incident's
+`## Evidence` section. A failing logs command is reported there and does not stop the release from
+being handled.
+
 ### `command`
 
 Runs shell commands (`sh -c`) in the project's local clone. Use it for any platform that has a CLI or
