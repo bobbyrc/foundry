@@ -8,6 +8,8 @@ export const UNAUTHORIZED_EVENT = 'foundry:unauthorized';
 
 const listeners = new Set<() => void>();
 let unauthorized = false;
+// The saved token is also kept in memory, so it works until the next reload when storage is blocked.
+let memoryToken: string | null = null;
 
 function emit(): void {
   for (const listener of listeners) listener();
@@ -16,14 +18,15 @@ function emit(): void {
 export function getToken(): string | null {
   try {
     const token = window.localStorage.getItem(TOKEN_KEY)?.trim();
-    return token ? token : null;
+    if (token) return token;
   } catch {
-    // Storage can be blocked (private window, disabled site data): treat as no token.
-    return null;
+    // Storage can be blocked (private window, disabled site data): fall back to memory.
   }
+  return memoryToken;
 }
 
 export function saveToken(token: string): void {
+  memoryToken = token.trim() || null;
   try {
     window.localStorage.setItem(TOKEN_KEY, token.trim());
   } catch {
@@ -74,6 +77,17 @@ export function subscribeAuth(listener: () => void): () => void {
 
 export function useUnauthorized(): boolean {
   return useSyncExternalStore(subscribeAuth, isUnauthorized);
+}
+
+/** Connected means a token is stored and the last API call was not rejected. */
+export function isConnected(): boolean {
+  return getToken() !== null && !unauthorized;
+}
+
+// The App watches this rather than useUnauthorized alone: saving the first token changes whether
+// it is connected but not the rejected flag, and React redraws only when the watched value changes.
+export function useConnected(): boolean {
+  return useSyncExternalStore(subscribeAuth, isConnected);
 }
 
 if (typeof window !== 'undefined') {
