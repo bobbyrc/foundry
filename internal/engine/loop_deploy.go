@@ -212,7 +212,11 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 		if err := deploy.CheckHealth(ctx, dp.HealthURL, deployHealthTimeout); err != nil {
 			if deployHealth.fail(d.ID) >= deployHealthAttempts {
 				deployHealth.pass(d.ID)
-				return e.failRelease(ctx, p, dep, d, "health check failing: "+err.Error(), true)
+				reason := fmt.Sprintf("health check failing at %s: %d consecutive failed checks", dp.HealthURL, deployHealthAttempts)
+				if d.VerifyingSince != nil {
+					reason += fmt.Sprintf(", %s after verification started", e.d.Now().Sub(*d.VerifyingSince).Round(time.Second))
+				}
+				return e.failRelease(ctx, p, dep, d, reason+": "+err.Error(), true)
 			}
 			return nil
 		}
