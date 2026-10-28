@@ -708,7 +708,12 @@ input[type='checkbox'] {
 }
 
 .table td {
-  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.table td .mono,
+.table td .id-chip {
+  white-space: nowrap;
 }
 
 /* ---- meta grid ---- */
