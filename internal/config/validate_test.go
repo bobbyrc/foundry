@@ -27,6 +27,9 @@ policies:
       - risk: extreme
         paths: ["[unclosed"]
       - risk: low
+    extra_rules:
+      - risk: extreme
+        paths: ["[unclosed"]
     gates:
       urgent: {auto_merge: true}
 projects:
@@ -58,6 +61,8 @@ self_project: ghost
 		"policies.bad.rules[0].risk",
 		"policies.bad.rules[0].paths[0]",
 		"policies.bad.rules[1]: must set paths, labels or kinds",
+		"policies.bad.extra_rules[0].risk",
+		"policies.bad.extra_rules[0].paths[0]",
 		"policies.bad.gates.urgent",
 		"projects.app.repo",
 		"projects.app.policy: unknown policy \"missing\"",

@@ -52,6 +52,17 @@ func DefaultGates() map[string]Gate {
 // slices.
 func DefaultRules() []Rule {
 	return []Rule{
+		// Foundry manages its own repository, so an agent's change to foundry's gates, agent
+		// prompts or environment allowlist must never auto-merge. These paths exist only in
+		// foundry's repo, so this rule is inert in every other project.
+		{
+			Risk:   domain.RiskHigh,
+			Reason: "foundry's own gates or agent instructions",
+			Paths: []string{
+				"internal/engine/prompts/**", "internal/policy/**", "internal/engine/loop_shepherd.go",
+				"internal/engine/helpers.go", "internal/config/defaults.go", "internal/sysproc/**",
+			},
+		},
 		{
 			Risk:   domain.RiskHigh,
 			Reason: "database schema or migration",

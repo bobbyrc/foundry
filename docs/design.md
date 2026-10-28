@@ -117,7 +117,10 @@ The supervisor owns every harness session:
 Risk is `low < medium < high`. Final risk = max(rules matched by the diff, agent's own rating).
 Default policy: auto-merge `low` after green CI and an approving reviewer run; `medium` and
 `high` need your approval. Default high-risk paths: migrations, auth, CI/deploy config, secrets,
-infra, dependency manifests with major bumps, `.foundry/`; default size limit 400 changed lines.
+infra, dependency manifests with major bumps, `.foundry/`, and foundry's own gates and agent
+prompts (in foundry's repo only); default size limit 400 changed lines. A policy's `extra_rules`
+add to these defaults, while `rules` replaces them, so use `extra_rules` unless you mean to drop
+the built-in protections.
 
 ### Deploy watch
 

@@ -23,7 +23,8 @@ func Evaluate(p config.Policy, in Input) Decision {
 		paths[i] = strings.TrimPrefix(f.Path, "./")
 	}
 
-	for _, rule := range p.Rules {
+	// ExtraRules apply on top of Rules (or the defaults), with the same matching.
+	for _, rule := range slices.Concat(p.Rules, p.ExtraRules) {
 		file, pathMatched, ok := matchRule(rule, paths, in)
 		if !ok {
 			continue

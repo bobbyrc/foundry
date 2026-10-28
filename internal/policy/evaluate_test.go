@@ -257,6 +257,29 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
+			name: "extra rules match alongside default rules",
+			policy: config.Policy{
+				Rules:      config.DefaultRules(),
+				ExtraRules: []config.Rule{{Paths: []string{"api/**"}, Risk: domain.RiskHigh, Reason: "public API"}},
+				Gates:      testGates(),
+			},
+			in: Input{
+				Kind: domain.KindFeature,
+				Files: []FileChange{
+					{Path: "api/openapi.go", Added: 2},
+					{Path: "db/migrations/001.sql", Added: 1},
+				},
+				AgentRisk: domain.RiskLow,
+			},
+			want: Decision{
+				Risk:            domain.RiskHigh,
+				Reasons:         []string{"database schema or migration (db/migrations/001.sql)", "public API (api/openapi.go)"},
+				RequireReview:   true,
+				RequireCI:       true,
+				RequireApproval: true,
+			},
+		},
+		{
 			name:   "missing gate requires approval and review and CI",
 			policy: config.Policy{Gates: map[string]config.Gate{}},
 			in:     Input{Kind: domain.KindFeature, AgentRisk: domain.RiskLow},

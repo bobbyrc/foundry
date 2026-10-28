@@ -48,20 +48,10 @@ func (c *Config) Validate() error {
 
 	for name, p := range c.Policies {
 		for i, r := range p.Rules {
-			prefix := fmt.Sprintf("policies.%s.rules[%d]", name, i)
-			switch r.Risk {
-			case domain.RiskLow, domain.RiskMedium, domain.RiskHigh:
-			default:
-				add("%s.risk: must be low, medium or high, not %q", prefix, r.Risk)
-			}
-			if len(r.Paths) == 0 && len(r.Labels) == 0 && len(r.Kinds) == 0 {
-				add("%s: must set paths, labels or kinds", prefix)
-			}
-			for j, pat := range r.Paths {
-				if !doublestar.ValidatePattern(pat) {
-					add("%s.paths[%d]: invalid glob %q", prefix, j, pat)
-				}
-			}
+			validateRule(add, fmt.Sprintf("policies.%s.rules[%d]", name, i), r)
+		}
+		for i, r := range p.ExtraRules {
+			validateRule(add, fmt.Sprintf("policies.%s.extra_rules[%d]", name, i), r)
 		}
 		if p.CIGrace.Duration < 0 {
 			add("policies.%s.ci_grace: must be 0 (default 3m) or greater", name)
@@ -172,4 +162,22 @@ func isTaskKind(kind string) bool {
 		return true
 	}
 	return false
+}
+
+// validateRule reports each problem with one policy rule. prefix is the rule's settings path,
+// such as "policies.default.rules[0]".
+func validateRule(add func(string, ...any), prefix string, r Rule) {
+	switch r.Risk {
+	case domain.RiskLow, domain.RiskMedium, domain.RiskHigh:
+	default:
+		add("%s.risk: must be low, medium or high, not %q", prefix, r.Risk)
+	}
+	if len(r.Paths) == 0 && len(r.Labels) == 0 && len(r.Kinds) == 0 {
+		add("%s: must set paths, labels or kinds", prefix)
+	}
+	for j, pat := range r.Paths {
+		if !doublestar.ValidatePattern(pat) {
+			add("%s.paths[%d]: invalid glob %q", prefix, j, pat)
+		}
+	}
 }

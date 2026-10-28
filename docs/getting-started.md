@@ -175,6 +175,10 @@ needs no CI. Foundry treats "no checks" as passing, so the reviewer is the only 
 change is usually rated `low` risk. If the agent and the policy both agree, the PR merges on its
 own after the reviewer approves. Otherwise it waits for you, as in step 8.
 
+To add your own risk rules to a policy, use `extra_rules`. Setting `rules` instead replaces the
+built-in protections (migrations, CI, auth, dependency manifests, foundry's own gates) and must
+then copy them back in.
+
 ## 8. Answer approvals
 
 A `medium` or `high` risk change does not merge on its own. The task moves to `awaiting_approval`,

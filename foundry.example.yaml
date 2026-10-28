@@ -78,15 +78,13 @@ routing:
 # on its own. A project refers to one by name; the one named "default" applies otherwise.
 policies:
   # Setting "default" here would replace the built-in one. Left out, it is added for you.
-  # When you set "rules", the built-in rules are NOT merged in: copy them if you want them.
   strict:
     max_lines: 200                     # a diff above this many changed lines is at least medium risk (default 400)
     max_files: 10                      # a diff touching more files than this is at least medium risk (default 20)
-    rules:
-      # Built-in high-risk rule, copied here because setting rules replaces the defaults.
-      - risk: high
-        reason: auth, secrets or security
-        paths: ["**/auth/**", "**/*auth*", "**/security/**", "**/*secret*", "**/.env*", "**/*.pem", "**/*.key"]
+    # "rules" REPLACES the built-in rules (migrations, CI/deploy, auth, dependency manifests,
+    # foundry's own gates) with the list you give. Setting it drops all of those protections
+    # unless you copy them. "extra_rules" is usually what you want: it adds to the built-in rules.
+    extra_rules:
       # An extra rule: changes to public API definitions need a human.
       - risk: high
         reason: public API contract

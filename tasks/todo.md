@@ -84,3 +84,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] EnsureClone leaves the clone checked out on the remote HEAD (main), not the project's default_branch — the orchestrator reading project.path saw only main's README. Keep the clone's checkout at origin/<default_branch> (detached) after each fetch
 - [ ] friction: semantic duplicates need judgment — periodically queue a triager task "consolidate duplicate friction issues" (close dupes with a link)
 - [ ] openapi.yaml + web/src/types.ts: add 'retro' to the loop names / loops config shape
+- [ ] OWNER: approve or reject dogfood PR #14 (retro's implementer-prompt change; high risk = foundry's own instructions). My approval attempt was refused as self-approval — correctly; it is yours. My read: safe and useful; one hint (GOMODCACHE→/tmp with GOPROXY=off) is slightly off.
+- [ ] OWNER: close duplicate friction issues #3 (dup of #5) and #6 (dup of #4), as the retro agent recommended
+- [ ] per-project `checks:` — commands foundry runs in the worktree after the agent and before commit/push (generic replacement for the cancelled Go-specific follow-ups); failure re-queues with the output
+- [ ] policy rule criterion `sources` + default rule: work foundry assigned itself (followup, retro) is at least medium — tonight 2 of 2 retro follow-ups had design problems (owner may relax)

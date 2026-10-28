@@ -74,11 +74,13 @@ type Agent struct {
 
 type Rule struct {
 	// Paths are doublestar globs matched against changed file paths.
-	Paths  []string    `yaml:"paths" json:"paths,omitempty"`
-	Labels []string    `yaml:"labels" json:"labels,omitempty"` // any label matches
-	Kinds  []string    `yaml:"kinds" json:"kinds,omitempty"`   // any task kind matches
-	Risk   domain.Risk `yaml:"risk" json:"risk"`
-	Reason string      `yaml:"reason" json:"reason"`
+	Paths  []string `yaml:"paths" json:"paths,omitempty"`
+	Labels []string `yaml:"labels" json:"labels,omitempty"` // any label matches
+	Kinds  []string `yaml:"kinds" json:"kinds,omitempty"`   // any task kind matches
+	// Sources matches the task source ("followup", "retro", "github_issue", "signal", ...).
+	Sources []string    `yaml:"sources" json:"sources,omitempty"`
+	Risk    domain.Risk `yaml:"risk" json:"risk"`
+	Reason  string      `yaml:"reason" json:"reason"`
 }
 
 type Gate struct {
@@ -91,8 +93,12 @@ type Policy struct {
 	// MaxLines: a diff with more added+deleted lines than this is at least medium risk.
 	MaxLines int `yaml:"max_lines" json:"max_lines"`
 	// MaxFiles: a diff touching more files than this is at least medium risk.
-	MaxFiles int    `yaml:"max_files" json:"max_files"`
-	Rules    []Rule `yaml:"rules" json:"rules"`
+	MaxFiles int `yaml:"max_files" json:"max_files"`
+	// Rules replaces the built-in default rules when set (an explicit empty list means none).
+	Rules []Rule `yaml:"rules" json:"rules"`
+	// ExtraRules are added to Rules (or to the defaults when Rules is unset). Prefer this:
+	// it keeps the built-in protections for migrations, CI, auth and foundry's own gates.
+	ExtraRules []Rule `yaml:"extra_rules" json:"extra_rules,omitempty"`
 	// CIGrace: after foundry pushes, a PR with no checks yet counts as CI pending (not "no CI")
 	// for this long, so a fast review cannot merge before CI registers. Default 3m.
 	CIGrace Duration `yaml:"ci_grace" json:"ci_grace"`
