@@ -29,9 +29,12 @@ type RunFilter struct {
 
 type EventFilter struct {
 	AfterID int64
-	Project string
-	TaskID  string
-	Limit   int // 0 = 500
+	// FromStart makes AfterID 0 mean "from the oldest event, ascending" instead of "the newest
+	// Limit events".
+	FromStart bool
+	Project   string
+	TaskID    string
+	Limit     int // 0 = 500
 }
 
 // Store is safe for concurrent use. List methods return newest first unless noted.
@@ -64,8 +67,8 @@ type Store interface {
 
 	// AppendEvent assigns ID and Time (if zero) and stores the event.
 	AppendEvent(ctx context.Context, e domain.Event) (domain.Event, error)
-	// ListEvents returns events with ID > AfterID; ascending when AfterID > 0, else the newest
-	// Limit events in ascending order.
+	// ListEvents returns events with ID > AfterID; ascending when AfterID > 0 or FromStart, else
+	// the newest Limit events in ascending order.
 	ListEvents(ctx context.Context, f EventFilter) ([]domain.Event, error)
 
 	CreateApproval(ctx context.Context, a domain.Approval) (domain.Approval, error)
