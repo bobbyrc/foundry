@@ -372,6 +372,7 @@ export interface Loops {
     label: string;
     min_count: number;
   };
+  retro: LoopSettings & { lookback: string };
 }
 
 export interface Config {

@@ -749,8 +749,8 @@ paths:
       tags: [loops]
       summary: Run one loop now.
       description: |
-        `name` is one of `issue_intake`, `pr_shepherd`, `deploy_watch`, `prod_watch` or
-        `friction`. An unknown name, or an unknown project, returns 400. The run is
+        `name` is one of `issue_intake`, `pr_shepherd`, `deploy_watch`, `prod_watch`,
+        `friction` or `retro`. An unknown name, or an unknown project, returns 400. The run is
         asynchronous, so the response carries no body.
       parameters:
         - name: name
@@ -1893,7 +1893,7 @@ components:
 
     Loops:
       type: object
-      required: [issue_intake, pr_shepherd, deploy_watch, prod_watch, friction]
+      required: [issue_intake, pr_shepherd, deploy_watch, prod_watch, friction, retro]
       properties:
         issue_intake:
           description: Turns open issues carrying `label` into tasks.
@@ -1944,3 +1944,17 @@ components:
                 min_count:
                   type: integer
                   description: Reports needed before filing. Default 1.
+        retro:
+          description: >-
+            Gives an improver agent the recent evidence of what went wrong (blocked and failed
+            tasks, friction, incidents, review findings). Enabled by default only for the
+            self project.
+          allOf:
+            - $ref: '#/components/schemas/Loop'
+            - type: object
+              required: [lookback]
+              properties:
+                lookback:
+                  allOf:
+                    - $ref: '#/components/schemas/Duration'
+                  description: Evidence window. Defaults to `every`.
