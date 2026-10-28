@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bobbyrc/foundry/internal/client"
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -165,6 +166,13 @@ func TestStatusNeedsYou(t *testing.T) {
 	assert.Contains(t, out, "needs DB credentials")
 	assert.Contains(t, out, "Running:")
 	assert.Contains(t, out, "run run-1")
+}
+
+func TestCostToday(t *testing.T) {
+	assert.Equal(t, "$7.53", costToday(client.Stats{CostTodayUSD: 7.53}))
+	assert.Equal(t, "$7.53 of $25.00 daily budget", costToday(client.Stats{CostTodayUSD: 7.53, DailyBudgetUSD: 25}))
+	assert.Equal(t, "$25.00 of $25.00 daily budget (budget reached — no new runs until midnight)",
+		costToday(client.Stats{CostTodayUSD: 25, DailyBudgetUSD: 25}))
 }
 
 func TestStatusJSON(t *testing.T) {

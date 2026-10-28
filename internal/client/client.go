@@ -69,6 +69,7 @@ type Stats struct {
 	ActiveRuns       int            `json:"active_runs"`
 	ApprovalsPending int            `json:"approvals_pending"`
 	CostTodayUSD     float64        `json:"cost_today_usd"`
+	DailyBudgetUSD   float64        `json:"daily_budget_usd"`
 	Paused           bool           `json:"paused"`
 }
 

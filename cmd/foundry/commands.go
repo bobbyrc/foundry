@@ -90,6 +90,18 @@ func cmdStatus(e *env, args []string) error {
 	return writeStatus(e.out, snap)
 }
 
+// costToday renders today's cost, against the daily budget when one is set.
+func costToday(s client.Stats) string {
+	out := fmt.Sprintf("$%.2f", s.CostTodayUSD)
+	if s.DailyBudgetUSD > 0 {
+		out += fmt.Sprintf(" of $%.2f daily budget", s.DailyBudgetUSD)
+		if s.CostTodayUSD >= s.DailyBudgetUSD {
+			out += " (budget reached — no new runs until midnight)"
+		}
+	}
+	return out
+}
+
 func writeStatus(w io.Writer, s statusSnapshot) error {
 	if s.Control.Paused {
 		fmt.Fprintln(w, "Factory: PAUSED. No runs start and no loops act until `foundry resume`.")
@@ -97,8 +109,8 @@ func writeStatus(w io.Writer, s statusSnapshot) error {
 		fmt.Fprintln(w, "Factory: running.")
 	}
 	fmt.Fprintf(w, "Tasks: %s\n", joinNonZero(s.Stats.TasksByStatus))
-	fmt.Fprintf(w, "Active runs: %d   Pending approvals: %d   Cost today: $%.2f\n\n",
-		s.Stats.ActiveRuns, s.Stats.ApprovalsPending, s.Stats.CostTodayUSD)
+	fmt.Fprintf(w, "Active runs: %d   Pending approvals: %d   Cost today: %s\n\n",
+		s.Stats.ActiveRuns, s.Stats.ApprovalsPending, costToday(s.Stats))
 
 	fmt.Fprintln(w, "Needs you:")
 	n := 0
