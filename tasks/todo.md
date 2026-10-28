@@ -111,7 +111,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] closed fixed friction issues #25 (CI/web build) and #27 (nohup service killed)
 - [x] factory queue: #28 (health-failure reason names URL, count, elapsed; spec in the body) and #33 (intake includes OWNER/MEMBER/COLLABORATOR comments; public repo, so others are ignored)
 - [ ] OWNER: PR #19 — recommend REJECT: superseded by the example on init (its example put GH_TOKEN in inherit_env, handing agents foundry's GitHub token). It also conflicts with dogfood (foundry.example.yaml); approve → the factory must rebase it first, or reject
-- [ ] OWNER: friction #32 — the dogfood release scripts live outside the repo (scratchpad), so agents can't fix them by PR; decide whether a staging setup belongs in the repo
+- [x] friction #32: the dogfood setup now lives in examples/dogfood/ (config, release and observer scripts). The scripts run from foundry's clone, so agents can change them by PR (rated high). The live daemon runs on it (scratchpad/dogfood/run-daemon.sh)
 - [x] factory merged #34 (#33: intake includes OWNER/MEMBER/COLLABORATOR comments) and #35 (#28: health-failure reason names URL, count, elapsed). Both auto-merged at low risk, released and verified healthy on staging, and their issues closed automatically
 - [x] defect review of 47ee9be..b167957 (two fresh reviewers) → fixed: wildcard bind address broke the CLI, foundry open and orchestrator chat (Host guard 421) → LocalURL; public_url validated; exec intake over 1 MB is an error; secrets redacted from deploy/logs evidence and failure notes; deploy stdout bounded to a 64 KB tail; issue outcome comments serialised (no double post)
 - [x] SECURITY: checks ran with foundry's full env (GH_TOKEN), and a check such as `go test` runs agent-written code. Checks and the new `setup` commands now run with the agent's environment
@@ -127,4 +127,6 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] orchestrator chat verified live (56s, correct counts; it repeated stale incident diagnoses, which resolved once the blocked tasks did)
 - [x] PR #26 (Codex cost estimate): an independent review found flaky tests (reproduced: 2 of 120 runs failed under load) and unchecked .inf/.nan prices. Fixed both on the PR branch and merged dogfood into it (full suite and 57 web tests pass). foundry re-reviews it, then it returns to the owner for approval. Recommend APPROVE
 - [ ] OWNER: PR #14 — recommend REJECT as written: its Go cache advice belongs in project env/setup, and GOMODCACHE=/tmp with GOPROXY=off breaks module resolution. Its rule "never report a skipped check as passed; rate it medium; file friction" is worth adding to the implementer prompt by hand
+- [ ] verify: #42 (docs) is the first release through the in-repo release script; then close friction #32
+- [ ] OWNER: the dogfood daemon's data and clone live in a session scratch dir under /private/tmp. To keep it, follow examples/dogfood/README.md with DOGFOOD=~/.local/share/foundry-dogfood (or copy the scratch dir there)
 
