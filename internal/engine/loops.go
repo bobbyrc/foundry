@@ -26,8 +26,11 @@ const (
 // loopNames lists every loop, in the order they start.
 var loopNames = []string{loopIssueIntake, loopPRShepherd, loopDeployWatch, loopProdWatch, loopFriction}
 
-// loopWakeInterval is how often each loop checks which projects are due.
-const loopWakeInterval = 5 * time.Second
+// loopWakeMax and loopWakeMin bound how often a loop checks which projects are due.
+const (
+	loopWakeMax = 5 * time.Second
+	loopWakeMin = time.Second
+)
 
 // loopKickBuffer is how many kicks a loop can hold before further kicks are dropped.
 const loopKickBuffer = 64
@@ -72,17 +75,32 @@ func (e *Engine) startLoops(ctx context.Context) {
 	}
 }
 
-// loopForever wakes every loopWakeInterval or when a project is kicked, and runs the loop for
-// each project that is due.
+// loopWakeInterval returns how long loop name sleeps between checks: the shortest interval
+// configured for it across projects, clamped to [loopWakeMin, loopWakeMax]. It reads the current
+// config, so a reload applies on the next wake.
+func (e *Engine) loopWakeInterval(name string) time.Duration {
+	cfg := e.Config()
+	wake := loopWakeMax
+	for _, project := range cfg.ProjectNames() {
+		s := loopSettingsFor(cfg.LoopsFor(project), name)
+		if s.On() && s.Every.Duration < wake {
+			wake = s.Every.Duration
+		}
+	}
+	return max(wake, loopWakeMin)
+}
+
+// loopForever wakes every loopWakeInterval(name) or when a project is kicked, and runs the loop
+// for each project that is due.
 func (e *Engine) loopForever(ctx context.Context, name string, kicks <-chan string) {
-	ticker := time.NewTicker(loopWakeInterval)
-	defer ticker.Stop()
+	timer := time.NewTimer(e.loopWakeInterval(name))
+	defer timer.Stop()
 	for {
 		kicked := map[string]bool{}
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
 		case project := <-kicks:
 			kicked[project] = true
 		}
@@ -95,6 +113,7 @@ func (e *Engine) loopForever(ctx context.Context, name string, kicks <-chan stri
 			}
 		}
 		e.loopTick(ctx, name, kicked)
+		timer.Reset(e.loopWakeInterval(name))
 	}
 }
 

@@ -440,3 +440,43 @@ func TestStartLoopsStartsNothingAfterShutdown(t *testing.T) {
 		t.Fatalf("a loop started after shutdown and consumed the kick: %d left, want 1", n)
 	}
 }
+
+// A loop configured below the old fixed 5s wake runs at its own interval with no kicks.
+func TestLoopHonoursIntervalBelowFiveSeconds(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", `loops:
+  pr_shepherd: {every: 1s}
+  deploy_watch: {enabled: false}
+  prod_watch: {enabled: false}
+  issue_intake: {enabled: false}
+  friction: {enabled: false}
+`))
+	if got := env.e.loopWakeInterval(loopPRShepherd); got != time.Second {
+		t.Fatalf("wake interval = %v, want 1s", got)
+	}
+	if got := env.e.loopWakeInterval(loopDeployWatch); got != loopWakeMax {
+		t.Fatalf("wake interval of a disabled loop = %v, want %v", got, loopWakeMax)
+	}
+	env.e.d.Now = time.Now
+
+	ctx, cancel := context.WithCancel(env.ctx)
+	env.e.startLoops(ctx)
+	seen := map[time.Time]bool{}
+	deadline := time.Now().Add(3500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		st, err := env.st.GetLoopState(env.ctx, loopPRShepherd, "demo")
+		if err != nil {
+			t.Fatalf("loop state: %v", err)
+		}
+		if !st.LastRunAt.IsZero() {
+			seen[st.LastRunAt] = true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	cancel()
+	env.e.wg.Wait()
+
+	// Runs land at about 1s, 2s and 3s; a fixed 5s wake would record none.
+	if len(seen) < 2 {
+		t.Fatalf("saw %d pr_shepherd runs in 3.5s, want at least 2", len(seen))
+	}
+}
