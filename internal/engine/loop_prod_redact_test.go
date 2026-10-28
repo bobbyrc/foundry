@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // An observer signal whose title, culprit or URL carries a project secret becomes an incident and

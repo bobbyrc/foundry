@@ -5,28 +5,28 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/client"
+	"github.com/bobbyrc/onlet/internal/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestProjectPauseAndResumePrintState(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/projects/foundry/pause", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/projects/onlet/pause", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, client.ProjectControl{Paused: true, PausedBy: "owner"})
 	})
-	mux.HandleFunc("POST /api/v1/projects/foundry/resume", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/projects/onlet/resume", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, client.ProjectControl{})
 	})
 	fakeAPI(t, mux)
 
-	code, out, errOut := runCLI("project", "pause", "foundry")
+	code, out, errOut := runCLI("project", "pause", "onlet")
 	require.Equal(t, 0, code, errOut)
-	assert.Equal(t, "project foundry paused (owner)\n", out)
+	assert.Equal(t, "project onlet paused (owner)\n", out)
 
-	code, out, errOut = runCLI("project", "resume", "foundry")
+	code, out, errOut = runCLI("project", "resume", "onlet")
 	require.Equal(t, 0, code, errOut)
-	assert.Equal(t, "project foundry resumed\n", out)
+	assert.Equal(t, "project onlet resumed\n", out)
 }
 
 func TestProjectPauseSurfacesServerErrors(t *testing.T) {
@@ -38,7 +38,7 @@ func TestProjectPauseSurfacesServerErrors(t *testing.T) {
 
 	code, _, errOut := runCLI("project", "pause", "nope")
 	assert.Equal(t, 1, code)
-	assert.Equal(t, "foundry: unknown project nope\n", errOut)
+	assert.Equal(t, "onlet: unknown project nope\n", errOut)
 }
 
 func TestProjectUsageErrors(t *testing.T) {

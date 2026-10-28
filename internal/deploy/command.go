@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/foundry/internal/sysproc"
+	"github.com/bobbyrc/onlet/internal/sysproc"
 )
 
 // outputTail is how many trailing bytes of a failed command's output go into its error.
@@ -68,12 +68,12 @@ func newCommandDeployer(cfg Config) (Deployer, error) {
 	}, nil
 }
 
-// Deploy runs the deploy command with FOUNDRY_REF set. The last stdout line may be a JSON object
+// Deploy runs the deploy command with ONLET_REF set. The last stdout line may be a JSON object
 // {"id","url","state"} or a bare URL; without either the ID is generated. Without a status command
 // the deploy is treated as synchronous and recorded as ready. The Handle carries the tail of the
 // command's output (the tail of stdout, then stderr) as Output.
 func (d *commandDeployer) Deploy(ctx context.Context, ref string) (Handle, error) {
-	stdout, output, err := d.runFiles(ctx, "deploy", d.deployCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_REF="+ref)
+	stdout, output, err := d.runFiles(ctx, "deploy", d.deployCmd, sysproc.WaitKeepOnSuccess, "ONLET_REF="+ref)
 	if err != nil {
 		return Handle{}, err
 	}
@@ -90,7 +90,7 @@ func (d *commandDeployer) Deploy(ctx context.Context, ref string) (Handle, error
 	return Handle{ID: id, URL: res.URL, Output: output}, nil
 }
 
-// Status runs the status command with FOUNDRY_DEPLOY_ID set, or without one returns the remembered
+// Status runs the status command with ONLET_DEPLOY_ID set, or without one returns the remembered
 // status of a deployment made by this process (unknown IDs count as ready).
 func (d *commandDeployer) Status(ctx context.Context, id string) (Status, error) {
 	if d.statusCmd == "" {
@@ -101,19 +101,19 @@ func (d *commandDeployer) Status(ctx context.Context, id string) (Status, error)
 		}
 		return Status{State: StateReady}, nil
 	}
-	out, _, err := d.run(ctx, "status", d.statusCmd, sysproc.Wait, "FOUNDRY_DEPLOY_ID="+id)
+	out, _, err := d.run(ctx, "status", d.statusCmd, sysproc.Wait, "ONLET_DEPLOY_ID="+id)
 	if err != nil {
 		return Status{}, err
 	}
 	return parseStatusLine(lastLine(out))
 }
 
-// Rollback runs the rollback command with FOUNDRY_ROLLBACK_ID and FOUNDRY_ROLLBACK_REF set.
+// Rollback runs the rollback command with ONLET_ROLLBACK_ID and ONLET_ROLLBACK_REF set.
 func (d *commandDeployer) Rollback(ctx context.Context, id, ref string) error {
 	if d.rollbackCmd == "" {
 		return errors.New("deploy: no rollback command configured")
 	}
-	_, _, err := d.runFiles(ctx, "rollback", d.rollbackCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_ROLLBACK_ID="+id, "FOUNDRY_ROLLBACK_REF="+ref)
+	_, _, err := d.runFiles(ctx, "rollback", d.rollbackCmd, sysproc.WaitKeepOnSuccess, "ONLET_ROLLBACK_ID="+id, "ONLET_ROLLBACK_REF="+ref)
 	return err
 }
 
@@ -145,10 +145,10 @@ func (d *commandDeployer) run(ctx context.Context, label, command string, wait f
 
 // runFiles executes command like run, but sends its stdout and stderr to two temporary files
 // instead of pipes, and waits with sysproc.WaitKeepOnSuccess. Why files: a pipe ties the command
-// to foundry. Once a deploy returns, foundry stops reading the pipe, so a service the deploy left
+// to onlet. Once a deploy returns, onlet stops reading the pipe, so a service the deploy left
 // running gets SIGPIPE on its next write and dies. A file has no reader that can go away: a
 // leftover process keeps a valid descriptor to an unlinked file and can write without blocking.
-// foundry reads each file once, up to its size when the command exits, so later writes by
+// onlet reads each file once, up to its size when the command exits, so later writes by
 // leftover processes are never read. The files are removed before runFiles returns.
 //
 // It returns the last deployStdoutTail bytes of stdout, which the caller parses (its last
@@ -159,12 +159,12 @@ func (d *commandDeployer) runFiles(ctx context.Context, label, command string, w
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 
-	outFile, err := os.CreateTemp("", "foundry-"+label+"-stdout-*")
+	outFile, err := os.CreateTemp("", "onlet-"+label+"-stdout-*")
 	if err != nil {
 		return "", "", fmt.Errorf("deploy: %s command: create stdout file: %w", label, err)
 	}
 	defer removeTemp(outFile)
-	errFile, err := os.CreateTemp("", "foundry-"+label+"-stderr-*")
+	errFile, err := os.CreateTemp("", "onlet-"+label+"-stderr-*")
 	if err != nil {
 		return "", "", fmt.Errorf("deploy: %s command: create stderr file: %w", label, err)
 	}
@@ -225,7 +225,7 @@ func removeTemp(f *os.File) {
 	_ = os.Remove(f.Name())
 }
 
-// tailWriter keeps the last max bytes written to it, so a chatty command cannot grow foundry's
+// tailWriter keeps the last max bytes written to it, so a chatty command cannot grow onlet's
 // memory. It is safe for the concurrent writes of a child's stdout and stderr.
 type tailWriter struct {
 	mu      sync.Mutex

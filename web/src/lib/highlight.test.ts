@@ -3,13 +3,13 @@ import { tokenizeJson } from './highlight';
 
 describe('tokenizeJson', () => {
   it('classifies keys, strings, numbers and literals', () => {
-    const tokens = tokenizeJson('{\n  "port": 7777,\n  "name": "foundry",\n  "on": true\n}');
+    const tokens = tokenizeJson('{\n  "port": 7777,\n  "name": "onlet",\n  "on": true\n}');
     const kinds = tokens.filter((t) => t.kind !== 'text').map((t) => [t.kind, t.text]);
     expect(kinds).toEqual([
       ['key', '"port"'],
       ['number', '7777'],
       ['key', '"name"'],
-      ['string', '"foundry"'],
+      ['string', '"onlet"'],
       ['key', '"on"'],
       ['literal', 'true'],
     ]);

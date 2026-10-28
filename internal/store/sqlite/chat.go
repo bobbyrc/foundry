@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 var conversations = entity[domain.Conversation]{

@@ -61,7 +61,7 @@ func fakeRunner(t *testing.T, respond func(name string, args ...string) (string,
 // writeServiceConfig writes a config whose data_dir is dataDir and returns its path.
 func writeServiceConfig(t *testing.T, dataDir string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "foundry.yaml")
+	path := filepath.Join(t.TempDir(), "onlet.yaml")
 	body := "server:\n  data_dir: " + strconv.Quote(dataDir) + "\n"
 	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 	return path
@@ -69,9 +69,9 @@ func writeServiceConfig(t *testing.T, dataDir string) string {
 
 func TestRenderPlistContent(t *testing.T) {
 	out, err := renderPlist(plistSpec{
-		Args:    []string{"/opt/foundry & co/foundry", "serve", "--config", "/etc/<cfg>.yaml"},
+		Args:    []string{"/opt/onlet & co/onlet", "serve", "--config", "/etc/<cfg>.yaml"},
 		Path:    "/opt/homebrew/bin:/usr/bin",
-		LogPath: "/data/a&b/foundry.log",
+		LogPath: "/data/a&b/onlet.log",
 	})
 	require.NoError(t, err)
 
@@ -85,15 +85,15 @@ func TestRenderPlistContent(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	assert.Contains(t, out, "<key>Label</key>\n\t<string>io.foundry.serve</string>")
+	assert.Contains(t, out, "<key>Label</key>\n\t<string>io.onlet.serve</string>")
 	assert.Contains(t, out, "<key>KeepAlive</key>\n\t<true/>")
 	assert.Contains(t, out, "<key>RunAtLoad</key>\n\t<true/>")
 	assert.Contains(t, out, "<key>ThrottleInterval</key>\n\t<integer>10</integer>")
 	assert.Contains(t, out, "<key>PATH</key>\n\t\t<string>/opt/homebrew/bin:/usr/bin</string>")
-	assert.Contains(t, out, "<string>/opt/foundry &amp; co/foundry</string>")
+	assert.Contains(t, out, "<string>/opt/onlet &amp; co/onlet</string>")
 	assert.Contains(t, out, "<string>/etc/&lt;cfg&gt;.yaml</string>")
-	assert.Contains(t, out, "<key>StandardOutPath</key>\n\t<string>/data/a&amp;b/foundry.log</string>")
-	assert.Contains(t, out, "<key>StandardErrorPath</key>\n\t<string>/data/a&amp;b/foundry.log</string>")
+	assert.Contains(t, out, "<key>StandardOutPath</key>\n\t<string>/data/a&amp;b/onlet.log</string>")
+	assert.Contains(t, out, "<key>StandardErrorPath</key>\n\t<string>/data/a&amp;b/onlet.log</string>")
 	assert.Contains(t, out, "\t\t<string>serve</string>\n\t\t<string>--config</string>")
 }
 
@@ -106,10 +106,10 @@ func TestInstallWritesPlistAndBootstraps(t *testing.T) {
 	code, out, errOut := runCLI("service", "install", "--config", cfg)
 	require.Equal(t, 0, code, errOut)
 
-	plist := filepath.Join(plistDir, "io.foundry.serve.plist")
+	plist := filepath.Join(plistDir, "io.onlet.serve.plist")
 	body, err := os.ReadFile(plist)
 	require.NoError(t, err)
-	exe, err := foundryExecutable()
+	exe, err := onletExecutable()
 	require.NoError(t, err)
 	absCfg, err := filepath.Abs(cfg)
 	require.NoError(t, err)
@@ -118,12 +118,12 @@ func TestInstallWritesPlistAndBootstraps(t *testing.T) {
 	assert.Contains(t, string(body), "<string>"+xmlEscape(absCfg)+"</string>")
 	assert.Contains(t, string(body), "<key>KeepAlive</key>")
 	assert.Contains(t, string(body), "<string>"+xmlEscape(os.Getenv("PATH"))+"</string>")
-	assert.Contains(t, string(body), "<string>"+xmlEscape(filepath.Join(dataDir, "foundry.log"))+"</string>")
+	assert.Contains(t, string(body), "<string>"+xmlEscape(filepath.Join(dataDir, "onlet.log"))+"</string>")
 	assert.Contains(t, string(body), "a&amp;b", "data dir with & must be escaped in the plist")
 	assert.DirExists(t, dataDir, "launchd opens the log file, so the data dir must exist")
 
 	assert.Equal(t, []runCall{{name: "launchctl", args: []string{"bootstrap", "gui/501", plist}}}, *calls)
-	assert.Contains(t, out, "installed io.foundry.serve")
+	assert.Contains(t, out, "installed io.onlet.serve")
 }
 
 func TestInstallTwiceKickstarts(t *testing.T) {
@@ -133,16 +133,16 @@ func TestInstallTwiceKickstarts(t *testing.T) {
 
 	code, _, errOut := runCLI("service", "install", "--config", cfg)
 	require.Equal(t, 0, code, errOut)
-	before, err := os.ReadFile(filepath.Join(plistDir, "io.foundry.serve.plist"))
+	before, err := os.ReadFile(filepath.Join(plistDir, "io.onlet.serve.plist"))
 	require.NoError(t, err)
 	*calls = nil
 
 	code, out, errOut := runCLI("service", "install", "--config", cfg)
 	require.Equal(t, 0, code, errOut)
-	assert.Equal(t, []runCall{{name: "launchctl", args: []string{"kickstart", "-k", "gui/501/io.foundry.serve"}}}, *calls)
+	assert.Equal(t, []runCall{{name: "launchctl", args: []string{"kickstart", "-k", "gui/501/io.onlet.serve"}}}, *calls)
 	assert.Contains(t, out, "already installed")
 
-	after, err := os.ReadFile(filepath.Join(plistDir, "io.foundry.serve.plist"))
+	after, err := os.ReadFile(filepath.Join(plistDir, "io.onlet.serve.plist"))
 	require.NoError(t, err)
 	assert.Equal(t, before, after, "a second install must not rewrite the plist")
 }
@@ -157,7 +157,7 @@ func TestInstallFailedBootstrapRemovesPlist(t *testing.T) {
 	code, _, errOut := runCLI("service", "install", "--config", cfg)
 	assert.Equal(t, 1, code)
 	assert.Contains(t, errOut, "Bootstrap failed")
-	assert.NoFileExists(t, filepath.Join(plistDir, "io.foundry.serve.plist"))
+	assert.NoFileExists(t, filepath.Join(plistDir, "io.onlet.serve.plist"))
 }
 
 func TestInstallNeedsLoadableConfig(t *testing.T) {
@@ -167,8 +167,8 @@ func TestInstallNeedsLoadableConfig(t *testing.T) {
 
 	code, _, errOut := runCLI("service", "install", "--config", missing)
 	assert.Equal(t, 1, code)
-	assert.Contains(t, errOut, "foundry init")
-	assert.NoFileExists(t, filepath.Join(plistDir, "io.foundry.serve.plist"))
+	assert.Contains(t, errOut, "onlet init")
+	assert.NoFileExists(t, filepath.Join(plistDir, "io.onlet.serve.plist"))
 	assert.Empty(t, *calls)
 }
 
@@ -184,8 +184,8 @@ func TestUninstallBootsOutAndRemoves(t *testing.T) {
 	})
 	code, out, errOut := runCLI("service", "uninstall")
 	require.Equal(t, 0, code, errOut)
-	assert.Equal(t, []runCall{{name: "launchctl", args: []string{"bootout", "gui/501/io.foundry.serve"}}}, *calls)
-	assert.NoFileExists(t, filepath.Join(plistDir, "io.foundry.serve.plist"))
+	assert.Equal(t, []runCall{{name: "launchctl", args: []string{"bootout", "gui/501/io.onlet.serve"}}}, *calls)
+	assert.NoFileExists(t, filepath.Join(plistDir, "io.onlet.serve.plist"))
 	assert.Contains(t, out, "uninstalled")
 }
 
@@ -202,13 +202,13 @@ func TestUninstallKeepsPlistOnRealBootoutError(t *testing.T) {
 	code, _, errOut = runCLI("service", "uninstall")
 	assert.Equal(t, 1, code)
 	assert.Contains(t, errOut, "Operation not permitted")
-	assert.FileExists(t, filepath.Join(plistDir, "io.foundry.serve.plist"))
+	assert.FileExists(t, filepath.Join(plistDir, "io.onlet.serve.plist"))
 }
 
 func TestUninstallWhenNotInstalled(t *testing.T) {
 	stubHost(t)
 	fakeRunner(t, func(name string, args ...string) (string, error) {
-		return "Could not find service \"io.foundry.serve\" in domain for port", errors.New("exit status 113")
+		return "Could not find service \"io.onlet.serve\" in domain for port", errors.New("exit status 113")
 	})
 
 	code, out, errOut := runCLI("service", "uninstall")
@@ -232,7 +232,7 @@ func TestStatusStates(t *testing.T) {
 
 	// Running: launchctl print reports a pid.
 	fakeRunner(t, func(name string, args ...string) (string, error) {
-		return "gui/501/io.foundry.serve = {\n\tstate = running\n\tpid = 4242\n}\n", nil
+		return "gui/501/io.onlet.serve = {\n\tstate = running\n\tpid = 4242\n}\n", nil
 	})
 	code, out, _ = runCLI("service", "status", "--config", cfg)
 	require.Equal(t, 0, code)
@@ -247,7 +247,7 @@ func TestStatusStates(t *testing.T) {
 	code, out, _ = runCLI("service", "status", "--config", cfg)
 	require.Equal(t, 0, code)
 	assert.Contains(t, out, "installed, not running\n")
-	assert.Contains(t, out, "log: "+filepath.Join(dataDir, "foundry.log")+"\n")
+	assert.Contains(t, out, "log: "+filepath.Join(dataDir, "onlet.log")+"\n")
 }
 
 func TestServiceRefusesNonDarwin(t *testing.T) {
@@ -265,7 +265,7 @@ func TestServiceUsageErrors(t *testing.T) {
 	stubHost(t)
 	code, _, errOut := runCLI("service")
 	assert.Equal(t, 2, code)
-	assert.Contains(t, errOut, "usage: foundry service")
+	assert.Contains(t, errOut, "usage: onlet service")
 
 	code, _, errOut = runCLI("service", "restart")
 	assert.Equal(t, 2, code)

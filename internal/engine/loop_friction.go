@@ -8,9 +8,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/scm"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/scm"
 )
 
 // frictionMatchThreshold is the Jaccard similarity of two titles' token sets at which they count
@@ -183,7 +183,7 @@ func (e *Engine) fileFriction(ctx context.Context, s scm.SCM, p *config.Project,
 		if loops.Friction.AutoQueue {
 			labels = append(labels, loops.IssueIntake.Label)
 		}
-		body := f.Body + fmt.Sprintf("\n\n---\nReported by foundry agents %d time(s); first in run `%s`.", f.Count, f.RunID)
+		body := f.Body + fmt.Sprintf("\n\n---\nReported by onlet agents %d time(s); first in run `%s`.", f.Count, f.RunID)
 		issue, err := s.CreateIssue(ctx, scm.IssueSpec{Title: f.Title, Body: body, Labels: labels})
 		if err != nil {
 			return fmt.Errorf("create issue: %w", err)

@@ -18,16 +18,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/events"
-	"github.com/bobbyrc/foundry/internal/harness"
-	hfake "github.com/bobbyrc/foundry/internal/harness/fake"
-	"github.com/bobbyrc/foundry/internal/scm"
-	scmfake "github.com/bobbyrc/foundry/internal/scm/fake"
-	"github.com/bobbyrc/foundry/internal/store"
-	"github.com/bobbyrc/foundry/internal/store/sqlite"
-	"github.com/bobbyrc/foundry/internal/workspace"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/events"
+	"github.com/bobbyrc/onlet/internal/harness"
+	hfake "github.com/bobbyrc/onlet/internal/harness/fake"
+	"github.com/bobbyrc/onlet/internal/scm"
+	scmfake "github.com/bobbyrc/onlet/internal/scm/fake"
+	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onlet/internal/store/sqlite"
+	"github.com/bobbyrc/onlet/internal/workspace"
 )
 
 // rtOpts configures rtNewEngine. Zero values give one project "demo", limits that suit tests,
@@ -138,7 +138,7 @@ agents:
 			}
 			return harness.New(harness.Config{Name: name, Type: h.Type, Command: h.Command, Args: h.Args, Env: h.Env})
 		},
-		AgentEnv:      map[string]string{"FOUNDRY_API": "http://127.0.0.1:1", "FOUNDRY_TOKEN": "test"},
+		AgentEnv:      map[string]string{"ONLET_API": "http://127.0.0.1:1", "ONLET_TOKEN": "test"},
 		SchedulerTick: 50 * time.Millisecond,
 	})
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestRunnerCommitPublishesPR(t *testing.T) {
 
 	got := env.waitStatus(task.ID, domain.TaskReview)
 	require.NotZero(t, got.PRNumber)
-	assert.Equal(t, "foundry/"+task.ID[len(task.ID)-8:]+"-add-greeting", got.Branch)
+	assert.Equal(t, "onlet/"+task.ID[len(task.ID)-8:]+"-add-greeting", got.Branch)
 
 	pr, ok := env.scm.PRs[got.PRNumber]
 	require.True(t, ok, "fake SCM has the PR")
@@ -375,7 +375,7 @@ func TestRunnerFrictionGoesToSelfProject(t *testing.T) {
 			return harness.Result{IsError: true}, err
 		}
 		body := `{"status":"no_changes","summary":"nothing","friction":[` +
-			`{"title":"Docs are wrong","body":"b","target":"foundry"},` +
+			`{"title":"Docs are wrong","body":"b","target":"onlet"},` +
 			`{"title":"Flaky test","body":"c","target":"project"}]}`
 		if err := os.WriteFile(filepath.Join(dir, domain.ResultFile), []byte(body), 0o644); err != nil {
 			return harness.Result{IsError: true}, err
@@ -570,7 +570,7 @@ func TestRunnerPublishStopsWhenTaskMovedOn(t *testing.T) {
 	task := ctTask(t, e, "cancelled mid-run")
 	ctSetTask(t, r, task.ID, func(x *domain.Task) { x.Status = domain.TaskCancelled })
 
-	ws, err := e.d.Workspaces.Prepare(ctx, e.repoFor(p), "foundry/late-publish", "run-late")
+	ws, err := e.d.Workspaces.Prepare(ctx, e.repoFor(p), "onlet/late-publish", "run-late")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(ws.Dir, "late.txt"), []byte("late\n"), 0o644))
 	rtGit(t, ws.Dir, "add", "late.txt")
@@ -684,7 +684,7 @@ func TestCreateTaskRoutesByProjectRouting(t *testing.T) {
 	assert.Equal(t, "implementer", global.Role, "kinds the project does not route use the global routing")
 }
 
-// Publishing records when foundry pushed the branch, for the CI grace period.
+// Publishing records when onlet pushed the branch, for the CI grace period.
 func TestRunnerPublishRecordsPushTime(t *testing.T) {
 	env := rtNewEngine(t, rtOpts{})
 	task := env.create(domain.Task{Title: "Add greeting", Body: "[fake:commit]"})

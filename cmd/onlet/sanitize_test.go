@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/client"
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/client"
+	"github.com/bobbyrc/onlet/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -111,7 +111,7 @@ func TestErrorMessagesFromTheServerAreCleaned(t *testing.T) {
 
 	code, _, errOut := runCLI("task", "cancel", "t-1")
 	assert.Equal(t, 1, code)
-	assert.Equal(t, "foundry: busy\n", errOut)
+	assert.Equal(t, "onlet: busy\n", errOut)
 }
 
 func TestChatReplyKeepsLinesAndDropsEscapes(t *testing.T) {

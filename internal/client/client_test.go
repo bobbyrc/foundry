@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,7 +36,7 @@ func TestCreateTaskSendsBodyAndDecodesTask(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		var in NewTask
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&in))
-		assert.Equal(t, "foundry", in.Project)
+		assert.Equal(t, "onlet", in.Project)
 		assert.Equal(t, "feature", in.Kind)
 		assert.Equal(t, 2, in.Priority)
 		w.WriteHeader(http.StatusCreated)
@@ -45,7 +45,7 @@ func TestCreateTaskSendsBodyAndDecodesTask(t *testing.T) {
 	defer srv.Close()
 
 	task, err := New(srv.URL, "tok").CreateTask(context.Background(), NewTask{
-		Project: "foundry", Kind: "feature", Title: "Add thing", Priority: 2, Source: "api",
+		Project: "onlet", Kind: "feature", Title: "Add thing", Priority: 2, Source: "api",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "t-1", task.ID)
@@ -83,7 +83,7 @@ func TestListTasksQuery(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		assert.Equal(t, "queued,running", q.Get("status"))
-		assert.Equal(t, "foundry", q.Get("project"))
+		assert.Equal(t, "onlet", q.Get("project"))
 		assert.Equal(t, "25", q.Get("limit"))
 		assert.Empty(t, q.Get("kind"))
 		_ = json.NewEncoder(w).Encode([]domain.Task{{ID: "t-1"}})
@@ -91,7 +91,7 @@ func TestListTasksQuery(t *testing.T) {
 	defer srv.Close()
 
 	tasks, err := New(srv.URL, "tok").ListTasks(context.Background(), TaskFilter{
-		Project: "foundry", Status: []string{"queued", "running"}, Limit: 25,
+		Project: "onlet", Status: []string{"queued", "running"}, Limit: 25,
 	})
 	require.NoError(t, err)
 	require.Len(t, tasks, 1)
@@ -187,7 +187,7 @@ func TestPauseAndResumeProjectCallProjectRoutes(t *testing.T) {
 func TestProjectsDecodesPausedBy(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/v1/projects", r.URL.Path)
-		_, _ = io.WriteString(w, `[{"name":"foundry","paused":true,"paused_by":"config"}]`)
+		_, _ = io.WriteString(w, `[{"name":"onlet","paused":true,"paused_by":"config"}]`)
 	}))
 	defer srv.Close()
 

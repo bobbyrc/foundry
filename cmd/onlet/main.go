@@ -1,4 +1,4 @@
-// Command foundry is one binary with two jobs: `foundry serve` runs the daemon (API, web UI and
+// Command onlet is one binary with two jobs: `onlet serve` runs the daemon (API, web UI and
 // the engine that runs agents), and every other command is a client of the daemon's HTTP API.
 package main
 
@@ -17,8 +17,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/foundry/internal/client"
-	"github.com/bobbyrc/foundry/internal/config"
+	"github.com/bobbyrc/onlet/internal/client"
+	"github.com/bobbyrc/onlet/internal/config"
 )
 
 // version is set by the release build with -ldflags "-X main.version=...".
@@ -47,7 +47,7 @@ type command struct {
 func commandList() []command {
 	return []command{
 		{"serve", "run the daemon: API, web UI and engine", cmdServe},
-		{"init", "write a starter foundry.yaml", cmdInit},
+		{"init", "write a starter onlet.yaml", cmdInit},
 		{"token", "print the API token", cmdToken},
 		{"open", "open the web UI in a browser (sign in there)", cmdOpen},
 		{"status", "what is running, and what needs you", cmdStatus},
@@ -69,7 +69,7 @@ func commandList() []command {
 		{"chat", "message the orchestrator and print its reply", cmdChat},
 		{"service", "install, uninstall or check the launchd service that keeps serve running", cmdService},
 		{"doctor", "check the setup: config, git, gh, harness CLIs, projects and the daemon", cmdDoctor},
-		{"version", "print the foundry version", cmdVersion},
+		{"version", "print the onlet version", cmdVersion},
 	}
 }
 
@@ -93,7 +93,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err := c.run(e, args[1:])
 		return exitCode(e, err)
 	}
-	fmt.Fprintf(stderr, "foundry: unknown command %q\n\n", args[0])
+	fmt.Fprintf(stderr, "onlet: unknown command %q\n\n", args[0])
 	usage(stderr)
 	return 2
 }
@@ -106,17 +106,17 @@ func exitCode(e *env, err error) int {
 	}
 	var ue *usageError
 	if errors.As(err, &ue) {
-		fmt.Fprintf(e.errOut, "foundry: %s\n", cleanText(ue.msg))
+		fmt.Fprintf(e.errOut, "onlet: %s\n", cleanText(ue.msg))
 		return 2
 	}
-	fmt.Fprintf(e.errOut, "foundry: %s\n", cleanText(err.Error()))
+	fmt.Fprintf(e.errOut, "onlet: %s\n", cleanText(err.Error()))
 	return 1
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "foundry: a personal software factory.")
+	fmt.Fprintln(w, "onlet: a personal software factory.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Usage: foundry <command> [flags] [arguments]")
+	fmt.Fprintln(w, "Usage: onlet <command> [flags] [arguments]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
@@ -126,22 +126,22 @@ func usage(w io.Writer) {
 	fmt.Fprintf(tw, "  %s\t%s\n", "help", "show this help")
 	_ = tw.Flush()
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, `Run "foundry <command> -h" for a command's flags; for task, run and project, put the verb first: "foundry task create -h".`)
-	fmt.Fprintln(w, "Environment: FOUNDRY_CONFIG (config file), FOUNDRY_API (server URL),")
-	fmt.Fprintln(w, "FOUNDRY_TOKEN (API token). Without them the config file's server address and")
+	fmt.Fprintln(w, `Run "onlet <command> -h" for a command's flags; for task, run and project, put the verb first: "onlet task create -h".`)
+	fmt.Fprintln(w, "Environment: ONLET_CONFIG (config file), ONLET_API (server URL),")
+	fmt.Fprintln(w, "ONLET_TOKEN (API token). Without them the config file's server address and")
 	fmt.Fprintln(w, "data_dir are used.")
 }
 
 // Usage text for the commands whose first argument is a verb. They print it for -h, -help, --help
 // and help, and exit 0, as service does.
 const (
-	taskHelp = "usage: foundry task create|list|show|cancel|retry [flags] [arguments]\n" +
-		"Run \"foundry task <verb> -h\" for a verb's flags."
-	runHelp = "usage: foundry run list|show|cancel|logs [flags] [arguments]\n" +
-		"Run \"foundry run <verb> -h\" for a verb's flags."
-	projectHelp = "usage: foundry project add|pause|resume NAME [flags]\n" +
-		"Run \"foundry project <verb> -h\" for a verb's flags."
-	loopHelp = "usage: foundry loop run NAME [--project P]"
+	taskHelp = "usage: onlet task create|list|show|cancel|retry [flags] [arguments]\n" +
+		"Run \"onlet task <verb> -h\" for a verb's flags."
+	runHelp = "usage: onlet run list|show|cancel|logs [flags] [arguments]\n" +
+		"Run \"onlet run <verb> -h\" for a verb's flags."
+	projectHelp = "usage: onlet project add|pause|resume NAME [flags]\n" +
+		"Run \"onlet project <verb> -h\" for a verb's flags."
+	loopHelp = "usage: onlet loop run NAME [--project P]"
 )
 
 // isHelpFlag reports whether arg asks for help: -h, -help or --help.
@@ -160,7 +160,7 @@ func usagef(format string, args ...any) error {
 
 // newFlagSet returns a flag set for one command that reports errors to e.errOut.
 func newFlagSet(name string, e *env) *flag.FlagSet {
-	fs := flag.NewFlagSet("foundry "+name, flag.ContinueOnError)
+	fs := flag.NewFlagSet("onlet "+name, flag.ContinueOnError)
 	fs.SetOutput(e.errOut)
 	return fs
 }
@@ -188,43 +188,43 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 // requireArgs fails with a usage error unless exactly n positional arguments were given.
 func requireArgs(args []string, n int, usageLine string) error {
 	if len(args) != n {
-		return usagef("usage: foundry %s", usageLine)
+		return usagef("usage: onlet %s", usageLine)
 	}
 	return nil
 }
 
-// configPath resolves the config file: the --config flag, then $FOUNDRY_CONFIG, then
-// ~/.config/foundry/foundry.yaml.
+// configPath resolves the config file: the --config flag, then $ONLET_CONFIG, then
+// ~/.config/onlet/onlet.yaml.
 func configPath(flagValue string) (string, error) {
 	if flagValue != "" {
 		return flagValue, nil
 	}
-	if v := os.Getenv("FOUNDRY_CONFIG"); v != "" {
+	if v := os.Getenv("ONLET_CONFIG"); v != "" {
 		return v, nil
 	}
 	dir, err := userConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "foundry.yaml"), nil
+	return filepath.Join(dir, "onlet.yaml"), nil
 }
 
-// userConfigDir is ~/.config/foundry, where the config file and secrets.env live.
+// userConfigDir is ~/.config/onlet, where the config file and secrets.env live.
 func userConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("find home directory: %w", err)
 	}
-	return filepath.Join(home, ".config", "foundry"), nil
+	return filepath.Join(home, ".config", "onlet"), nil
 }
 
 // loadConfig loads the config file at path. A missing file is reported with the hint to run
-// `foundry init`.
+// `onlet init`.
 func loadConfig(path string) (*config.Config, error) {
 	cfg, err := config.Load(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("no config at %s: run `foundry init` to create one", path)
+			return nil, fmt.Errorf("no config at %s: run `onlet init` to create one", path)
 		}
 		return nil, err
 	}
@@ -241,9 +241,9 @@ func optionalConfig(path string) *config.Config {
 	return cfg
 }
 
-// apiBaseURL is $FOUNDRY_API, else the config's server address, else the default port.
+// apiBaseURL is $ONLET_API, else the config's server address, else the default port.
 func apiBaseURL(cfg *config.Config) string {
-	if v := os.Getenv("FOUNDRY_API"); v != "" {
+	if v := os.Getenv("ONLET_API"); v != "" {
 		return v
 	}
 	if cfg != nil {
@@ -252,9 +252,9 @@ func apiBaseURL(cfg *config.Config) string {
 	return defaultAPIBase
 }
 
-// apiToken is $FOUNDRY_TOKEN, else the token file in the config's data directory.
+// apiToken is $ONLET_TOKEN, else the token file in the config's data directory.
 func apiToken(cfg *config.Config) (string, error) {
-	if v := os.Getenv("FOUNDRY_TOKEN"); v != "" {
+	if v := os.Getenv("ONLET_TOKEN"); v != "" {
 		return v, nil
 	}
 	if cfg != nil {
@@ -262,7 +262,7 @@ func apiToken(cfg *config.Config) (string, error) {
 			return t, nil
 		}
 	}
-	return "", errors.New("no token: set FOUNDRY_TOKEN or run on the machine running foundry serve")
+	return "", errors.New("no token: set ONLET_TOKEN or run on the machine running onlet serve")
 }
 
 // readToken returns the trimmed contents of <dataDir>/token.
@@ -332,7 +332,7 @@ func table(w io.Writer, headers []string, rows [][]string) {
 	_ = tw.Flush()
 }
 
-// pausedColumn is the PAUSED cell of `foundry projects`: "config" or "owner" for the one who paused
+// pausedColumn is the PAUSED cell of `onlet projects`: "config" or "owner" for the one who paused
 // the project, "-" when it runs. A paused project that names no pauser shows "yes".
 func pausedColumn(p client.ProjectView) string {
 	switch {

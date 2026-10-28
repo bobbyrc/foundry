@@ -1,4 +1,4 @@
-// Package api is foundry's HTTP surface: the JSON API under /api/v1, the event stream, and the
+// Package api is onlet's HTTP surface: the JSON API under /api/v1, the event stream, and the
 // embedded web UI. Handlers read from the store and act through a Controller.
 package api
 
@@ -12,9 +12,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/bobbyrc/foundry/internal/auth"
-	"github.com/bobbyrc/foundry/internal/events"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/auth"
+	"github.com/bobbyrc/onlet/internal/events"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // Options configures NewServer.
@@ -55,7 +55,7 @@ type server struct {
 	configMu sync.Mutex
 }
 
-// NewServer returns the handler for every foundry HTTP route.
+// NewServer returns the handler for every onlet HTTP route.
 func NewServer(o Options) http.Handler {
 	if o.Logger == nil {
 		o.Logger = slog.Default()

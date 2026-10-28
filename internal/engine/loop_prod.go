@@ -7,10 +7,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/notify"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/notify"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // prodRegressionGrace is how long after a task finished a signal must still be seen before it

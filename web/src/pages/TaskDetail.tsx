@@ -51,7 +51,7 @@ export function TaskDetail() {
       />
       {task.status === 'blocked' ? <Callout title="Blocked">{task.blocked_reason || 'No reason was recorded.'}</Callout> : null}
       {queuedInPausedProject ? (
-        <Callout tone="muted">This project is paused in foundry.yaml, so queued work will not start.</Callout>
+        <Callout tone="muted">This project is paused in onlet.yaml, so queued work will not start.</Callout>
       ) : null}
 
       <dl className="meta">

@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // retroSectionLimit caps each evidence section at its newest items.
@@ -28,7 +28,7 @@ const retroReasonLimit = 300
 const retroInstruction = "Look at the evidence below. Fix the single most valuable underlying " +
 	"problem (root cause, small and safe), and file followups for the rest. Consolidate duplicate " +
 	"friction issues: for issues that describe the same problem, name the pair (the one to keep and " +
-	"the duplicate) in your summary; do not call the GitHub API, because foundry closes nothing " +
+	"the duplicate) in your summary; do not call the GitHub API, because onlet closes nothing " +
 	"itself. If nothing is worth changing, report no_changes and say why."
 
 // retroLoop once a day gives the improver agent the evidence of what slowed the factory down
@@ -106,7 +106,7 @@ func (e *Engine) retroEvidence(ctx context.Context, project string, since time.T
 	return strings.TrimRight(b.String(), "\n") + "\n", nil
 }
 
-// retroWithoutSelfWork drops the retrospectives foundry filed, and the work they spawned (their
+// retroWithoutSelfWork drops the retrospectives onlet filed, and the work they spawned (their
 // follow-ups and reviews, and theirs in turn). Otherwise a retro's own problems would make the
 // next day's retro due, so the factory would retrospect on its retrospectives forever.
 func retroWithoutSelfWork(tasks []domain.Task) []domain.Task {

@@ -47,7 +47,7 @@ func healthyDaemon(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	t.Setenv("FOUNDRY_API", srv.URL)
+	t.Setenv("ONLET_API", srv.URL)
 }
 
 // doctorFixture is a temp data dir, a clone that exists, and a config that uses them. The
@@ -70,8 +70,8 @@ func newDoctorFixture(t *testing.T, extra string) doctorFixture {
 	body := "server:\n" +
 		"  data_dir: " + strconv.Quote(f.dataDir) + "\n" +
 		"projects:\n" +
-		"  foundry:\n" +
-		"    repo: \"bobbyrc/foundry\"\n" +
+		"  onlet:\n" +
+		"    repo: \"bobbyrc/onlet\"\n" +
 		"    path: " + strconv.Quote(f.clone) + "\n" +
 		"  fresh:\n" +
 		"    repo: \"bobbyrc/fresh\"\n" +
@@ -84,7 +84,7 @@ func newDoctorFixture(t *testing.T, extra string) doctorFixture {
 		"  tool:\n" +
 		"    type: exec\n" +
 		"    command: [\"/bin/sh\"]\n" + extra
-	f.cfg = filepath.Join(root, "foundry.yaml")
+	f.cfg = filepath.Join(root, "onlet.yaml")
 	require.NoError(t, os.WriteFile(f.cfg, []byte(body), 0o600))
 	return f
 }
@@ -116,8 +116,8 @@ func TestDoctorAllHealthy(t *testing.T) {
 	assertLine(t, out, "ok", "harness claude: claude (2.1.0 (Claude Code))")
 	assertLine(t, out, "ok", "harness codex: codex (codex-cli 0.9.0)")
 	assertLine(t, out, "ok", "harness tool: /bin/sh (found)")
-	assertLine(t, out, "ok", "project foundry: repo bobbyrc/foundry")
-	assertLine(t, out, "ok", "project foundry: clone at "+f.clone)
+	assertLine(t, out, "ok", "project onlet: repo bobbyrc/onlet")
+	assertLine(t, out, "ok", "project onlet: clone at "+f.clone)
 	assertLine(t, out, "ok", "project fresh: no clone at")
 	assertLine(t, out, "ok", "it will be cloned there")
 	assertLine(t, out, "warn", "project notes: repo \"/Users/me/notes\" is not owner/name")
@@ -194,7 +194,7 @@ func TestDoctorReportsBrokenConfigAndStillChecksDaemon(t *testing.T) {
 	code, out, _ := runCLI("doctor", "--config", missing)
 	assert.Equal(t, 1, code)
 	assertLine(t, out, "FAIL", "config: ")
-	assertLine(t, out, "FAIL", "foundry init")
+	assertLine(t, out, "FAIL", "onlet init")
 	assertLine(t, out, "ok", "git: git version 2.45.0")
 	assertLine(t, out, "ok", "daemon: running at")
 }
@@ -204,7 +204,7 @@ func TestDoctorWarnsWhenDaemonIsDown(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	down := srv.URL
 	srv.Close()
-	t.Setenv("FOUNDRY_API", down)
+	t.Setenv("ONLET_API", down)
 
 	f := newDoctorFixture(t, "")
 	toolRunner(t, nil)
@@ -212,7 +212,7 @@ func TestDoctorWarnsWhenDaemonIsDown(t *testing.T) {
 	code, out, _ := runCLI("doctor", "--config", f.cfg)
 	assert.Equal(t, 0, code, "a daemon that is not running is a warning, not a failure")
 	assertLine(t, out, "warn", "daemon: not reachable at "+down)
-	assertLine(t, out, "warn", "foundry service install")
+	assertLine(t, out, "warn", "onlet service install")
 }
 
 func TestDoctorReadsHealthJSON(t *testing.T) {
@@ -224,7 +224,7 @@ func TestDoctorReadsHealthJSON(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	t.Setenv("FOUNDRY_API", srv.URL)
+	t.Setenv("ONLET_API", srv.URL)
 
 	f := newDoctorFixture(t, "")
 	toolRunner(t, nil)
@@ -239,8 +239,8 @@ func TestDoctorChecksProjectOnlyRoleHarnesses(t *testing.T) {
 	raw, err := os.ReadFile(f.cfg)
 	require.NoError(t, err)
 	// The project adds a role that only it has, on the harness whose CLI is missing.
-	body := strings.Replace(string(raw), "    repo: \"bobbyrc/foundry\"\n",
-		"    repo: \"bobbyrc/foundry\"\n    agents:\n      scout:\n        harness: broken\n        prompt: builtin:implementer\n", 1)
+	body := strings.Replace(string(raw), "    repo: \"bobbyrc/onlet\"\n",
+		"    repo: \"bobbyrc/onlet\"\n    agents:\n      scout:\n        harness: broken\n        prompt: builtin:implementer\n", 1)
 	require.NotEqual(t, string(raw), body)
 	require.NoError(t, os.WriteFile(f.cfg, []byte(body), 0o600))
 	toolRunner(t, nil)
@@ -248,5 +248,5 @@ func TestDoctorChecksProjectOnlyRoleHarnesses(t *testing.T) {
 	code, out, _ := runCLI("doctor", "--config", f.cfg)
 	assert.Equal(t, 1, code, out)
 	assertLine(t, out, "FAIL", "harness broken: /nonexistent/tool-xyz not runnable")
-	assertLine(t, out, "FAIL", "agents scout (project foundry) use it")
+	assertLine(t, out, "FAIL", "agents scout (project onlet) use it")
 }

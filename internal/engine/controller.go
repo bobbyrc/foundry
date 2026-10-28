@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/api"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/notify"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/api"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/notify"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // Engine is the API's controller: every owner action goes through these methods.
@@ -18,13 +18,13 @@ var _ api.Controller = (*Engine)(nil)
 
 // CreateTask queues a task from an owner or API client. Client-supplied identity and run
 // state (ID, status, attempts, branch, PR and SHA fields, risk, timestamps) are discarded.
-// Review tasks are created by foundry when a pull request is ready, never by a client.
+// Review tasks are created by onlet when a pull request is ready, never by a client.
 func (e *Engine) CreateTask(ctx context.Context, t domain.Task) (domain.Task, error) {
 	switch t.Kind {
 	case "", domain.KindFeature, domain.KindBugfix, domain.KindIssue, domain.KindIncident,
 		domain.KindChore, domain.KindImprove, domain.KindQuestion:
 	case domain.KindReview:
-		return domain.Task{}, fmt.Errorf("%w: review tasks are created by foundry", api.ErrInvalid)
+		return domain.Task{}, fmt.Errorf("%w: review tasks are created by onlet", api.ErrInvalid)
 	default:
 		return domain.Task{}, fmt.Errorf("%w: unknown task kind %q", api.ErrInvalid, t.Kind)
 	}
@@ -221,7 +221,7 @@ func (e *Engine) DecideApproval(ctx context.Context, id string, approve bool, no
 	if cur.HeadSHA == "" {
 		// Without the head the approval cannot say what it covers, so it must not merge. The
 		// approval stays pending; the task goes back to review, where the shepherd re-requests it.
-		const msg = "approval has no head commit; foundry will re-check it"
+		const msg = "approval has no head commit; onlet will re-check it"
 		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskAwaitingApproval}, msg,
 			func(x *domain.Task) error {
 				x.Status = domain.TaskReview
@@ -246,7 +246,7 @@ func (e *Engine) DecideApproval(ctx context.Context, id string, approve bool, no
 	}
 	if pr.HeadSHA != cur.HeadSHA {
 		// The reviewed code is no longer what would merge: the approval does not cover it.
-		const msg = "the pull request changed after this approval was requested; foundry will re-check it"
+		const msg = "the pull request changed after this approval was requested; onlet will re-check it"
 		a, err := e.recordDecision(ctx, id, domain.ApprovalRejected, msg)
 		if err != nil {
 			return a, err
@@ -314,13 +314,13 @@ func (e *Engine) SetPaused(ctx context.Context, paused bool) error {
 
 // SetProjectPaused pauses or resumes one project at runtime, persisted across restarts. Pausing
 // does not cancel running runs; nothing new starts for the project. A project paused in
-// foundry.yaml cannot be resumed here: the file is the source of that pause.
+// onlet.yaml cannot be resumed here: the file is the source of that pause.
 func (e *Engine) SetProjectPaused(ctx context.Context, name string, paused bool) error {
 	if e.Config().Projects[name] == nil {
 		return fmt.Errorf("%w: unknown project %q", api.ErrInvalid, name)
 	}
 	if !paused && e.Config().Projects[name].Paused {
-		return fmt.Errorf("%w: project %q is paused in foundry.yaml; edit the file to resume", api.ErrConflict, name)
+		return fmt.Errorf("%w: project %q is paused in onlet.yaml; edit the file to resume", api.ErrConflict, name)
 	}
 	cursor := ""
 	msg := fmt.Sprintf("project %s resumed", name)

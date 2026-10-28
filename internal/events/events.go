@@ -1,11 +1,11 @@
-// Package events records what happens in foundry and fans it out to live subscribers (the SSE
+// Package events records what happens in onlet and fans it out to live subscribers (the SSE
 // stream behind every client).
 package events
 
 import (
 	"context"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // Bus persists events and delivers them to subscribers.

@@ -7,7 +7,7 @@ related_targets: ["web/src/components/Shell.tsx","web/src/styles.css"]
 
 ## Scope
 
-Foundry web UI Overview (`/`), the first surface of a replacement visual world that then rolls
+Onlet web UI Overview (`/`), the first surface of a replacement visual world that then rolls
 out to every page. Mode: Operate. Users: a developer checking in from a phone, or keeping the
 control room open on a second monitor. Job: see in one glance what needs them, decide approvals
 and blocked tasks with the gate evidence in view, and watch live work. Constraints: same-origin

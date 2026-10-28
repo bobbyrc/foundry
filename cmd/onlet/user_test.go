@@ -13,17 +13,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/auth"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store/sqlite"
+	"github.com/bobbyrc/onlet/internal/auth"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store/sqlite"
 )
 
 func TestUserResetPasswordPrintsWorkingPassword(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "foundry.yaml")
+	cfgPath := filepath.Join(dir, "onlet.yaml")
 	require.NoError(t, os.WriteFile(cfgPath, []byte(fmt.Sprintf("server:\n  data_dir: %s\n", dir)), 0o600))
 
-	st, err := sqlite.Open(filepath.Join(dir, "foundry.db"))
+	st, err := sqlite.Open(filepath.Join(dir, "onlet.db"))
 	require.NoError(t, err)
 	hash, err := auth.HashPassword("the old password!!")
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestUserResetPasswordPrintsWorkingPassword(t *testing.T) {
 	require.NotNil(t, m, "output: %q", out.String())
 	password := m[1]
 
-	st, err = sqlite.Open(filepath.Join(dir, "foundry.db"))
+	st, err = sqlite.Open(filepath.Join(dir, "onlet.db"))
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
 	u, err := st.GetUser(context.Background(), "alice")
@@ -51,7 +51,7 @@ func TestUserResetPasswordPrintsWorkingPassword(t *testing.T) {
 
 func TestUserResetPasswordUnknownUser(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "foundry.yaml")
+	cfgPath := filepath.Join(dir, "onlet.yaml")
 	require.NoError(t, os.WriteFile(cfgPath, []byte(fmt.Sprintf("server:\n  data_dir: %s\n", dir)), 0o600))
 
 	var out, errOut bytes.Buffer

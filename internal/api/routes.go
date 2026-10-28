@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bobbyrc/foundry/internal/auth"
+	"github.com/bobbyrc/onlet/internal/auth"
 )
 
 // apiRoutes mounts the routes that need a principal. Each route names the action it needs

@@ -4,7 +4,7 @@ import type { LoopView } from '../types';
 
 const loop = (extra: Partial<LoopView> = {}): LoopView => ({
   name: 'pr_shepherd',
-  project: 'foundry',
+  project: 'onlet',
   enabled: true,
   every: '5m',
   last_run_at: '2026-10-27T12:00:00Z',
@@ -14,9 +14,9 @@ const loop = (extra: Partial<LoopView> = {}): LoopView => ({
 
 describe('repoUrl', () => {
   it('links owner/name only', () => {
-    expect(repoUrl('bobbyrc/foundry')).toBe('https://github.com/bobbyrc/foundry');
+    expect(repoUrl('bobbyrc/onlet')).toBe('https://github.com/bobbyrc/onlet');
     expect(repoUrl('https://example.com/x/y')).toBeUndefined();
-    expect(repoUrl('foundry')).toBeUndefined();
+    expect(repoUrl('onlet')).toBeUndefined();
     expect(repoUrl('')).toBeUndefined();
   });
 });
@@ -43,9 +43,9 @@ describe('loopHealth', () => {
 
 describe('normaliseProject', () => {
   const base: RawProjectView = {
-    name: 'foundry',
-    repo: 'bobbyrc/foundry',
-    path: '/repos/foundry',
+    name: 'onlet',
+    repo: 'bobbyrc/onlet',
+    path: '/repos/onlet',
     default_branch: 'main',
     policy: 'default',
     paused: false,

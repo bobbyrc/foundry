@@ -55,7 +55,7 @@ export function useProjects() {
   });
 }
 
-/** Names of the projects paused in foundry.yaml. Their queued tasks do not start. */
+/** Names of the projects paused in onlet.yaml. Their queued tasks do not start. */
 export function usePausedProjects(): string[] {
   const projects = useProjects();
   return useMemo(() => (projects.data ?? []).filter((p) => p.paused).map((p) => p.name), [projects.data]);

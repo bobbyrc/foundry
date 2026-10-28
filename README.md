@@ -1,12 +1,15 @@
-# foundry
+# onlet
 
-Foundry is a personal software factory. It is a local daemon (a background program that keeps
+> Renamed from **foundry** on 2026-10-28. Upgrading an existing install: see
+> [docs/renamed-from-foundry.md](docs/renamed-from-foundry.md).
+
+Onlet is a personal software factory. It is a local daemon (a background program that keeps
 running) that hands work to coding agents: Claude Code and Codex today, and any other agent CLI
 through a plugin. For each piece of work it runs the agent in its own git checkout, opens a pull
 request, waits for CI and an agent review, and applies a risk policy that decides whether the change
 may merge without you. After a merge it can deploy, check the deploy, and roll back if the check
 fails. It also watches production for errors and files the problems it finds as issues. You steer it
-by chat, from a web UI, or with the `foundry` command.
+by chat, from a web UI, or with the `onlet` command.
 
 ## Terms used below
 
@@ -25,11 +28,11 @@ by chat, from a web UI, or with the `foundry` command.
 
 ## How a task flows
 
-1. A task is created from chat, the CLI, the web UI, a GitHub issue with the `foundry` label, a
+1. A task is created from chat, the CLI, the web UI, a GitHub issue with the `onlet` label, a
    production error, or a friction report. It waits as `queued`.
 2. The scheduler starts a run. The agent works in the worktree and writes its report. Agents never
-   commit; foundry does.
-3. If the run changed code, foundry commits it, pushes a `foundry/...` branch and opens a PR. The
+   commit; onlet does.
+3. If the run changed code, onlet commits it, pushes a `onlet/...` branch and opens a PR. The
    task moves to `review`.
 4. The PR shepherd (the loop that moves PRs along) waits for CI, starts a `reviewer` run when the
    policy requires one, and then asks the policy. `low` risk merges automatically once the reviewer
@@ -39,7 +42,7 @@ by chat, from a web UI, or with the `foundry` command.
    minutes) checks the release. A failed check rolls back, opens an `incident` task and notifies you.
 6. The task becomes `done`.
 
-What waits for you: approvals (`foundry approvals`, then `foundry approve`) and `blocked` tasks. A
+What waits for you: approvals (`onlet approvals`, then `onlet approve`) and `blocked` tasks. A
 task is blocked when a tool call is denied, when a run stalls, when the agent reports that it needs a
 human, or when it has used up `max_attempts`. Retry it with a note, or cancel it.
 
@@ -51,21 +54,21 @@ human, or when it has used up `max_attempts`. Retry it with a note, or cancel it
   does, and it uses the CLI.
 - **People sign in; config and users change only through them.** The web UI signs people in with
   a username and password (roles: viewer reads, operator also acts on work, owner also edits
-  `foundry.yaml` and manages users). The API token, which the CLI and the orchestrator hold, can
+  `onlet.yaml` and manages users). The API token, which the CLI and the orchestrator hold, can
   read and act but can never edit the config or users, so an agent cannot rewrite its own policy
   or environment. The first visit to a new instance creates the owner account, so create it
-  before you make foundry reachable from other machines. Behind an HTTPS proxy, set
+  before you make onlet reachable from other machines. Behind an HTTPS proxy, set
   `server.public_url` to the `https://` address so the session cookie is marked Secure. This
-  boundary is the API's: agents still run as your user, so one that can write `foundry.yaml` or
+  boundary is the API's: agents still run as your user, so one that can write `onlet.yaml` or
   the database file directly is limited only by its harness until agents are isolated (see
   [docs/proposals/agent-isolation.md](docs/proposals/agent-isolation.md)).
 - **Agents get a small environment.** An agent sees an allowlist (`PATH`, `HOME`, `USER`, `LANG`,
-  ...), not foundry's own environment, so `GH_TOKEN` and provider tokens do not reach it. To pass
+  ...), not onlet's own environment, so `GH_TOKEN` and provider tokens do not reach it. To pass
   one through, name it in the harness's `inherit_env` list. Agents still run as your user and can
   read what your user can read; isolating them is an open decision, see
   [docs/proposals/agent-isolation.md](docs/proposals/agent-isolation.md).
 - **Self-assigned work waits for you.** Follow-up and retro tasks (task sources `followup` and
-  `retro`) are rated at least `medium` by a built-in policy rule, and so is any change to foundry's
+  `retro`) are rated at least `medium` by a built-in policy rule, and so is any change to onlet's
   own gates and agent instructions (`high`). Add rules with a policy's `extra_rules`. Setting
   `rules` instead **replaces** all the built-in rules, so copy back any you want to keep.
 - **Daily budget.** `limits.daily_budget_usd` stops new task runs once today's reported cost
@@ -79,23 +82,23 @@ human, or when it has used up `max_attempts`. Retry it with a note, or cancel it
   approval is withdrawn and the PR is checked again.
 - **Denials and stalls stop, they do not retry.** A denied tool call, or no output for
   `limits.stall_timeout` (default 15 minutes), ends the run and blocks the task with the reason.
-- **Pause switch.** `foundry pause` stops new runs and loop actions. Running agents finish. A
-  single project pauses with `foundry project pause NAME` (`resume` undoes it) or on the web UI's
-  Projects page; this survives restarts, but a `paused: true` in `foundry.yaml` can only be cleared
+- **Pause switch.** `onlet pause` stops new runs and loop actions. Running agents finish. A
+  single project pauses with `onlet project pause NAME` (`resume` undoes it) or on the web UI's
+  Projects page; this survives restarts, but a `paused: true` in `onlet.yaml` can only be cleared
   in the file. While paused, the `deploy_watch` and `prod_watch` loops keep running, so a release
   already in flight is still health-checked and rolled back.
 - **Project setup and checks.** A project's `setup` commands run in each fresh worktree before the
   agent starts (install dependencies). Its `checks` (name, `run` shell command, optional `timeout`,
-  default 10m) run after the agent finishes and before foundry commits and pushes. A failing check
+  default 10m) run after the agent finishes and before onlet commits and pushes. A failing check
   re-queues the task with its output, like a CI failure, without spending a CI run. Both run with
-  the agent's environment, not foundry's, because they execute code the agent may have written.
+  the agent's environment, not onlet's, because they execute code the agent may have written.
   A policy's `require_checks: true` makes a PR with no CI checks wait (then block after 30 minutes)
   instead of counting as "no CI"; use it for repositories that always run CI.
 - **Evidence is redacted, agent text cannot ping.** Deploy output, service logs, loop errors and
   production signals have secret values (env vars named like `*_TOKEN`, `*_SECRET`, `*_KEY`, and
   URLs with credentials) replaced with `***` before they are stored or shown to an agent. Agent text
   posted to GitHub has its @mentions neutralised, so an agent cannot notify people.
-- **Local API.** It listens on `127.0.0.1:7777`. Every call needs the bearer token from `foundry token`.
+- **Local API.** It listens on `127.0.0.1:7777`. Every call needs the bearer token from `onlet token`.
   Requests whose Host header is not local or configured are refused (DNS-rebinding guard).
 - **Known limit with Codex.** Claude Code reports refused tool calls in machine-readable form.
   Codex reports sandbox refusals only in prose. For Codex, "a denial stops the task" therefore relies
@@ -111,15 +114,15 @@ and logged in.
 # Builds the web UI, then the binary with it embedded and the version stamped (OUT=path to relocate).
 mise exec -- scripts/build.sh
 
-# Manual fallback: (cd web && npm ci && npm run build) && go build -o foundry ./cmd/foundry
-./foundry init --project myproject --repo you/myproject   # writes ~/.config/foundry/foundry.yaml
-./foundry doctor     # checks your setup: config, git, gh, harness CLIs, daemon
-./foundry serve      # run the daemon; leave it running in its own terminal
-./foundry open       # open the web UI in your browser (second terminal)
-./foundry chat "What is running right now?"
+# Manual fallback: (cd web && npm ci && npm run build) && go build -o onlet ./cmd/onlet
+./onlet init --project myproject --repo you/myproject   # writes ~/.config/onlet/onlet.yaml
+./onlet doctor     # checks your setup: config, git, gh, harness CLIs, daemon
+./onlet serve      # run the daemon; leave it running in its own terminal
+./onlet open       # open the web UI in your browser (second terminal)
+./onlet chat "What is running right now?"
 ```
 
-Put `foundry` on your PATH to drop the `./`. Before you point foundry at a real repository, follow
+Put `onlet` on your PATH to drop the `./`. Before you point onlet at a real repository, follow
 [docs/getting-started.md](docs/getting-started.md): it starts with a throwaway repository and a
 paused project.
 
@@ -127,13 +130,13 @@ To use the web UI on a phone, add it to the home screen; see [docs/ui.md](docs/u
 
 ### Commands
 
-Run `foundry <command> -h` for a command's flags. For `task`, `run` and `project`, put the verb first,
-as in `foundry task create -h`.
+Run `onlet <command> -h` for a command's flags. For `task`, `run` and `project`, put the verb first,
+as in `onlet task create -h`.
 
 | Command | What it does |
 |---------|--------------|
 | `serve` | run the daemon: API, web UI and engine |
-| `init` | write a starter foundry.yaml |
+| `init` | write a starter onlet.yaml |
 | `token` | print the API token |
 | `open` | open the web UI (sign in there) |
 | `status` | what is running, and what needs you |
@@ -155,33 +158,33 @@ as in `foundry task create -h`.
 | `chat` | message the orchestrator and print its reply |
 | `service` | install, uninstall or check the launchd service that keeps serve running |
 | `doctor` | check the setup: config, git, gh, harness CLIs, projects and the daemon |
-| `version` | print the foundry version |
+| `version` | print the onlet version |
 
 ### Run it as a service
 
-On macOS, `foundry service install` keeps the daemon running in the background and restarts it if it
+On macOS, `onlet service install` keeps the daemon running in the background and restarts it if it
 crashes. It uses launchd, the macOS service manager, which reads a plist file (an XML settings file)
-from `~/Library/LaunchAgents`. The daemon's log is `foundry.log` in the config's data directory
-(`server.data_dir`, `~/.local/share/foundry` by default).
+from `~/Library/LaunchAgents`. The daemon's log is `onlet.log` in the config's data directory
+(`server.data_dir`, `~/.local/share/onlet` by default).
 
 ```sh
-./foundry service install     # write the plist, start the daemon, keep it alive
-./foundry service status      # running (with pid) or installed/not installed, and the log path
-./foundry service uninstall   # stop the daemon and remove the plist
+./onlet service install     # write the plist, start the daemon, keep it alive
+./onlet service status      # running (with pid) or installed/not installed, and the log path
+./onlet service uninstall   # stop the daemon and remove the plist
 ```
 
-Run `service install` once, and do not also keep `foundry serve` running in a terminal: two daemons
+Run `service install` once, and do not also keep `onlet serve` running in a terminal: two daemons
 cannot both listen on the same address.
 
 launchd starts the daemon without your shell's environment. `service install` therefore records,
 in the plist, the `PATH` of the shell you run it from and every variable your config references
 as `${NAME}`. The plist is readable only by you, because those values can be secrets. Install
-from a shell where `foundry serve` works. To change a recorded value, run `service uninstall`
+from a shell where `onlet serve` works. To change a recorded value, run `service uninstall`
 and then `service install` again.
 
 ### Retro loop and friction
 
-Agents list anything that slowed them down as `friction`. Foundry files it as a GitHub issue and
+Agents list anything that slowed them down as `friction`. Onlet files it as a GitHub issue and
 dedupes by title: a near-duplicate of an open issue becomes a comment on that issue. The retro loop
 (`loops.retro`, every 24h) hands the last day's blocked and failed tasks, friction, incidents and
 review rejections to the `improver` role as one task. It is on by default only for the project named
@@ -190,9 +193,9 @@ by `self_project`; set `enabled: true` or `false` to override.
 ## Repository layout
 
 ```text
-cmd/foundry/      one binary: `foundry serve` (daemon) and the CLI commands (API client)
+cmd/onlet/      one binary: `onlet serve` (daemon) and the CLI commands (API client)
 internal/domain/  shared types: Task, Run, Event, Approval, Deployment, Signal, Friction, outbox
-internal/config/  foundry.yaml schema, loading, defaults, validation
+internal/config/  onlet.yaml schema, loading, defaults, validation
 internal/store/   Store interface; store/sqlite implementation (SQLite, no cgo)
 internal/events/  event bus: stores events and fans them out to SSE subscribers
 internal/harness/ Harness interface and registry; claude/, codex/, exec/, fake/
@@ -216,5 +219,5 @@ docs/             design, API, UI and plugin documentation
 - [docs/api.md](docs/api.md): the HTTP API and event stream.
 - [docs/ui.md](docs/ui.md): the web UI pages and design.
 - [docs/plugins.md](docs/plugins.md): writing harnesses, deployers, observers and notifiers.
-- [foundry.example.yaml](foundry.example.yaml): every config option, annotated.
-- [examples/dogfood/README.md](examples/dogfood/README.md): run foundry on its own repo, with a local staging release.
+- [onlet.example.yaml](onlet.example.yaml): every config option, annotated.
+- [examples/dogfood/README.md](examples/dogfood/README.md): run onlet on its own repo, with a local staging release.

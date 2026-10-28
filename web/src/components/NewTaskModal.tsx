@@ -70,7 +70,7 @@ export function NewTaskModal({ open, onClose, defaultProject }: { open: boolean;
         <Field label="Body" hint="Markdown is supported.">
           <textarea rows={6} value={body} onChange={(event) => setBody(event.target.value)} />
         </Field>
-        <Field label="Role" hint="Leave on routing default to let foundry pick the agent.">
+        <Field label="Role" hint="Leave on routing default to let onlet pick the agent.">
           <select value={role} onChange={(event) => setRole(event.target.value)}>
             <option value="">Routing default</option>
             {(agents.data ?? []).map((agent) => (

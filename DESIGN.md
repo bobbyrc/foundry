@@ -1,5 +1,5 @@
 ---
-name: Foundry
+name: Onlet
 description: The factory's andon board: a charcoal board lights what needs you over a machine-green enamel ground.
 colors:
   bg: "#e3eae4"
@@ -138,13 +138,13 @@ components:
     padding: "16px 18px"
 ---
 
-# Design System: Foundry
+# Design System: Onlet
 
 ## Overview
 
 **Creative North Star: "The Andon Board"**
 
-Foundry's interface is a factory's andon board: the lamp board on a production line that shows,
+Onlet's interface is a factory's andon board: the lamp board on a production line that shows,
 at a glance, whether the line runs. A healthy line is quiet green. A project that needs its owner
 lights yellow. A line that stopped itself lights red. The whole system exists to make that
 readable in one look, on a phone or a second monitor.

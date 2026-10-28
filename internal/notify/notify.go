@@ -27,7 +27,7 @@ type Notifier interface {
 	Notify(ctx context.Context, n Notification) error
 }
 
-// Config is one entry of the notify list from foundry.yaml.
+// Config is one entry of the notify list from onlet.yaml.
 type Config struct {
 	Type        string
 	Options     map[string]any

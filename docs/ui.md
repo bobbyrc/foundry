@@ -75,7 +75,7 @@ blinks on and off rather than pulsing; both stop under `prefers-reduced-motion`.
 
 ## Shell
 
-- Left rail 216px in `--board`: wordmark "foundry" in Barlow Condensed with a 12px call-yellow
+- Left rail 216px in `--board`: wordmark "onlet" in Barlow Condensed with a 12px call-yellow
   square before it; nav items: Overview, Projects, Chat, Tasks, Approvals, Runs, Deploys,
   Signals, Friction, Loops, Agents, Config, and Users (owners only). Approvals carries a
   yellow count badge when approvals wait; Tasks a red one when tasks are blocked (each count
@@ -97,7 +97,7 @@ blinks on and off rather than pulsing; both stop under `prefers-reduced-motion`.
 
 ## Auth
 
-Until someone signs in, the page shows one sheet on the charcoal board. If foundry has no
+Until someone signs in, the page shows one sheet on the charcoal board. If onlet has no
 accounts yet, the sheet is **Create the owner account**: a username, a password typed twice
 (at least 12 characters) and "Create account". That first account is the owner. Once accounts
 exist, the sheet is **Sign in**: a username, a password and "Sign in". A wrong username or
@@ -125,7 +125,7 @@ A control a role may not use is left out, not shown greyed out.
 
 The UI is an installable web app (it has a web app manifest, `/manifest.webmanifest`, and an
 icon of a yellow lamp square on charcoal, `/icon.svg`), so it can sit on a phone home screen
-and open without browser chrome. Open foundry's URL on the phone first. From another network
+and open without browser chrome. Open onlet's URL on the phone first. From another network
 that needs remote access, such as Tailscale, and the name you use must be in
 `server.allowed_hosts`, or the server answers 421. Then:
 
@@ -172,8 +172,8 @@ fallback.
 **Projects** (`/projects`) — one card per project, in a responsive grid (one column on
 mobile). Card header: project name (semibold), repo as a muted link to
 `https://github.com/<repo>`, and on the right a pause toggle (secondary "Pause" / danger-fill
-"Paused — Resume"). When the project is paused in foundry.yaml, the toggle is replaced by a
-muted "Paused in foundry.yaml" label (the file wins; the UI cannot unpause it). Body: a row of
+"Paused — Resume"). When the project is paused in onlet.yaml, the toggle is replaced by a
+muted "Paused in onlet.yaml" label (the file wins; the UI cannot unpause it). Body: a row of
 counts (queued, running, review, awaiting approval, blocked — each a link to `/tasks` filtered
 by project and that status; zero counts muted), then muted lines for the default branch, the
 deployer type (or "no deployer") and observers (or "no observers"). Footer: the project's
@@ -245,11 +245,11 @@ prompt, and the task kinds routed to it.
 **Config** (`/config`) — everyone sees the file path and the redacted config as syntax-highlighted
 JSON (keys `--info`, strings `--ok`, numbers `--warn`), with the note "Only an owner can change
 settings. Secrets are hidden." Operators also get a Reload button. An owner gets the editor, which
-opens on the **Visual** tab. The top-level sections of `foundry.yaml` sit in a list on the left (a
+opens on the **Visual** tab. The top-level sections of `onlet.yaml` sit in a list on the left (a
 square `--lamp-call` after a section with unsaved edits, `--lamp-stop` after one with problems); the
 active section's settings are on the right. A number, text or duration setting is an input; a
 checkbox is "On"; clearing an input removes the key. A value written as `${NAME}` shows as text with
-a note that foundry reads that environment variable. A map is one card per entry, with Rename and
+a note that onlet reads that environment variable. A map is one card per entry, with Rename and
 Remove (Remove asks first), and a form at the end to add one. A list has a row or a card per item,
 with Remove, and an Add button. A value with no simple form is edited as JSON. Edits stay on the
 page until saved: a bar at the bottom says how many there are, with Save and Discard. A save writes

@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/events"
-	"github.com/bobbyrc/foundry/internal/store/sqlite"
+	"github.com/bobbyrc/onlet/internal/events"
+	"github.com/bobbyrc/onlet/internal/store/sqlite"
 )
 
 func TestSecurityHeadersOnAPIAndSPA(t *testing.T) {
@@ -65,7 +65,7 @@ func TestHostGuard(t *testing.T) {
 		Bus:          events.NewBus(st, nil),
 		Controller:   &fakeCtl{cfg: testConfig()},
 		Token:        testToken,
-		AllowedHosts: []string{"foundry.lan:7777", " Extra.Example "},
+		AllowedHosts: []string{"onlet.lan:7777", " Extra.Example "},
 		Web:          fstest.MapFS{},
 	})
 
@@ -79,7 +79,7 @@ func TestHostGuard(t *testing.T) {
 		{"127.0.0.1:7777", http.StatusOK},
 		{"[::1]:7777", http.StatusOK},
 		{"[::1]", http.StatusOK},
-		{"foundry.lan", http.StatusOK},
+		{"onlet.lan", http.StatusOK},
 		{"extra.example:8080", http.StatusOK},
 		{"evil.example", http.StatusMisdirectedRequest},
 		{"evil.example:7777", http.StatusMisdirectedRequest},

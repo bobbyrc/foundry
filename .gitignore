@@ -1,8 +1,8 @@
-/foundry
+/onlet
 /web/node_modules
 /web/dist
 /internal/api/webdist/*
 !/internal/api/webdist/.keep
-.foundry-run/
+.onlet-run/
 *.db
 .playwright-mcp/

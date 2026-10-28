@@ -1,12 +1,12 @@
 // Package claude runs Claude Code non-interactively (claude -p --output-format stream-json) as a
-// foundry harness of type "claude-code".
+// onlet harness of type "claude-code".
 package claude
 
 import (
 	"context"
 	"strings"
 
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/harness"
 )
 
 const harnessType = "claude-code"

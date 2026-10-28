@@ -12,7 +12,7 @@ import (
 
 // hooksOff turns off git hooks for every command this package runs. Hooks live in the clone's
 // shared .git/hooks, which an agent may be able to write; if a hook ran, it would run with
-// foundry's credentials and environment.
+// onlet's credentials and environment.
 var hooksOff = []string{"-c", "core.hooksPath=/dev/null"}
 
 // gitCommand builds `git` with hooksOff in front of args, run in dir (the process working

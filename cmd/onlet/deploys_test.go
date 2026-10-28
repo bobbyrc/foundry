@@ -15,12 +15,12 @@ func fakeDeployments(t *testing.T) {
 	started := time.Date(2026, 10, 28, 9, 30, 0, 0, time.Local)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/deployments", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "foundry", r.URL.Query().Get("project"))
+		assert.Equal(t, "onlet", r.URL.Query().Get("project"))
 		assert.Equal(t, "5", r.URL.Query().Get("limit"))
 		writeJSON(w, http.StatusOK, []map[string]any{
-			{"id": "dep-1", "project": "foundry", "ref": "abcdef0123456789", "state": "failed",
+			{"id": "dep-1", "project": "onlet", "ref": "abcdef0123456789", "state": "failed",
 				"notes": strings.Repeat("n", 100), "log": "line one\nline two\n", "started_at": started},
-			{"id": "dep-2", "project": "foundry", "ref": "1234567890", "state": "healthy", "started_at": started},
+			{"id": "dep-2", "project": "onlet", "ref": "1234567890", "state": "healthy", "started_at": started},
 		})
 	})
 	fakeAPI(t, mux)
@@ -28,7 +28,7 @@ func fakeDeployments(t *testing.T) {
 
 func TestDeploysTable(t *testing.T) {
 	fakeDeployments(t)
-	code, out, errOut := runCLI("deploys", "--project", "foundry", "--limit", "5")
+	code, out, errOut := runCLI("deploys", "--project", "onlet", "--limit", "5")
 	require.Equal(t, 0, code, errOut)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.Len(t, lines, 3)
@@ -45,7 +45,7 @@ func TestDeploysTable(t *testing.T) {
 
 func TestDeploysJSON(t *testing.T) {
 	fakeDeployments(t)
-	code, out, errOut := runCLI("deploys", "--project", "foundry", "--limit", "5", "--json")
+	code, out, errOut := runCLI("deploys", "--project", "onlet", "--limit", "5", "--json")
 	require.Equal(t, 0, code, errOut)
 	assert.Contains(t, out, `"id": "dep-1"`)
 }
@@ -55,8 +55,8 @@ func TestDeploysShow(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /api/v1/deployments", func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, []map[string]any{
-				{"id": "dep-1", "project": "foundry", "ref": "abc", "state": "failed", "log": "boom\nstack"},
-				{"id": "dep-2", "project": "foundry", "ref": "def", "state": "healthy"},
+				{"id": "dep-1", "project": "onlet", "ref": "abc", "state": "failed", "log": "boom\nstack"},
+				{"id": "dep-2", "project": "onlet", "ref": "def", "state": "healthy"},
 			})
 		})
 		fakeAPI(t, mux)

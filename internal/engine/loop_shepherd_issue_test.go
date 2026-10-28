@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/scm"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/scm"
 )
 
 // lpStagingShepherdEnv is lpShepherdEnv for a project whose default branch is staging, so a

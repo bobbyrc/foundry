@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the foundry PNG app icons with the standard library only.
+"""Generate the onlet PNG app icons with the standard library only.
 
 Run from anywhere with `python3 -I web/scripts/gen-icons.py`. Writes web/public/icon-180.png
 and web/public/icon-512.png: a solid dark background with a centred amber square whose side

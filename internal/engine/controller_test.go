@@ -10,16 +10,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/api"
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/events"
-	"github.com/bobbyrc/foundry/internal/harness"
-	"github.com/bobbyrc/foundry/internal/scm"
-	scmfake "github.com/bobbyrc/foundry/internal/scm/fake"
-	"github.com/bobbyrc/foundry/internal/store"
-	"github.com/bobbyrc/foundry/internal/store/sqlite"
-	"github.com/bobbyrc/foundry/internal/workspace"
+	"github.com/bobbyrc/onlet/internal/api"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/events"
+	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onlet/internal/scm"
+	scmfake "github.com/bobbyrc/onlet/internal/scm/fake"
+	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onlet/internal/store/sqlite"
+	"github.com/bobbyrc/onlet/internal/workspace"
 )
 
 // ctYAML is a config every agent can resolve. The repo is an absolute path that does not
@@ -51,7 +51,7 @@ func ctNewRig(t *testing.T) *ctRig {
 	st, err := sqlite.Open(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
-	cfg, err := config.Parse([]byte(fmt.Sprintf(ctYAML, t.TempDir())), filepath.Join(t.TempDir(), "foundry.yaml"))
+	cfg, err := config.Parse([]byte(fmt.Sprintf(ctYAML, t.TempDir())), filepath.Join(t.TempDir(), "onlet.yaml"))
 	require.NoError(t, err)
 	return &ctRig{t: t, st: st, bus: events.NewBus(st, nil), fk: scmfake.New(), cfg: cfg}
 }
@@ -463,7 +463,7 @@ func TestControllerCreateTaskRejectsReviewAndZeroesRisk(t *testing.T) {
 	e := r.engine(nil)
 
 	_, err := e.CreateTask(ctx, domain.Task{Project: "demo", Kind: domain.KindReview, Title: "fake review"})
-	assert.True(t, errors.Is(err, api.ErrInvalid), "review tasks are created by foundry: %v", err)
+	assert.True(t, errors.Is(err, api.ErrInvalid), "review tasks are created by onlet: %v", err)
 
 	task, err := e.CreateTask(ctx, domain.Task{
 		Project: "demo", Title: "pre-rated", Risk: domain.RiskHigh, RiskReasons: []string{"client says so"},
@@ -514,7 +514,7 @@ func TestControllerDecideApprovalStaleHeadReturnsToReview(t *testing.T) {
 	assert.True(t, errors.Is(err, api.ErrConflict), "a changed head is a conflict: %v", err)
 	assert.Contains(t, err.Error(), "the pull request changed after this approval was requested")
 	assert.Equal(t, domain.ApprovalRejected, got.Status)
-	assert.Contains(t, got.Note, "foundry will re-check it")
+	assert.Contains(t, got.Note, "onlet will re-check it")
 
 	stored, err := r.st.GetTask(ctx, task.ID)
 	require.NoError(t, err)
@@ -553,12 +553,12 @@ func TestControllerSetProjectPausedErrors(t *testing.T) {
 	err = e.SetProjectPaused(ctx, "nope", false)
 	assert.True(t, errors.Is(err, api.ErrInvalid), "unknown project resume: %v", err)
 
-	// A project paused in foundry.yaml can be paused again, but not resumed from the API.
+	// A project paused in onlet.yaml can be paused again, but not resumed from the API.
 	r.cfg.Projects["demo"].Paused = true
 	configPaused := r.engine(nil)
 	err = configPaused.SetProjectPaused(ctx, "demo", false)
 	assert.True(t, errors.Is(err, api.ErrConflict), "resume of a config pause: %v", err)
-	assert.Contains(t, err.Error(), "foundry.yaml")
+	assert.Contains(t, err.Error(), "onlet.yaml")
 	assert.Equal(t, "config", configPaused.ProjectPausedBy("demo"))
 	require.NoError(t, configPaused.SetProjectPaused(ctx, "demo", true))
 	assert.Equal(t, "config", configPaused.ProjectPausedBy("demo"))
@@ -583,7 +583,7 @@ func TestControllerDecideApprovalWithoutHeadIsRefused(t *testing.T) {
 
 	_, err = e.DecideApproval(ctx, approval.ID, true, "")
 	assert.True(t, errors.Is(err, api.ErrConflict), "a headless approval is refused: %v", err)
-	assert.Contains(t, err.Error(), "approval has no head commit; foundry will re-check it")
+	assert.Contains(t, err.Error(), "approval has no head commit; onlet will re-check it")
 
 	a, err := r.st.GetApproval(ctx, approval.ID)
 	require.NoError(t, err)
@@ -626,7 +626,7 @@ func TestControllerRetryCancelsStaleReviews(t *testing.T) {
 	assert.Equal(t, domain.TaskQueued, gotParent.Status)
 }
 
-// A task that was running when foundry restarted, with no attempts left, is blocked rather than
+// A task that was running when onlet restarted, with no attempts left, is blocked rather than
 // re-queued for an attempt it cannot make.
 func TestControllerRecoverBlocksExhaustedRunningTask(t *testing.T) {
 	ctx := context.Background()
@@ -647,7 +647,7 @@ func TestControllerRecoverBlocksExhaustedRunningTask(t *testing.T) {
 	got, err := r.st.GetTask(ctx, exhausted.ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.TaskBlocked, got.Status)
-	assert.Equal(t, "foundry restarted during the last attempt and attempts are exhausted", got.BlockedReason)
+	assert.Equal(t, "onlet restarted during the last attempt and attempts are exhausted", got.BlockedReason)
 
 	again, err := r.st.GetTask(ctx, retryable.ID)
 	require.NoError(t, err)

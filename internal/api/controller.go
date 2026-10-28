@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // Controller is everything the API does beyond reading the store. internal/engine implements
@@ -31,7 +31,7 @@ type Controller interface {
 	// Paused reports the global pause switch. While paused no run starts and no loop acts.
 	Paused() bool
 	SetPaused(ctx context.Context, paused bool) error
-	// ProjectPausedBy reports why a project is paused: "config" (paused: true in foundry.yaml,
+	// ProjectPausedBy reports why a project is paused: "config" (paused: true in onlet.yaml,
 	// which the API cannot change), "owner" (paused at runtime through the API) or "".
 	ProjectPausedBy(project string) string
 	// SetProjectPaused pauses or resumes one project at runtime (persisted across restarts).

@@ -8,7 +8,7 @@ import { errorMessage } from '../lib/format';
 const MIN_PASSWORD = 12;
 
 /**
- * The sign-in sheet. With `setup` true it creates the first owner account instead: foundry has
+ * The sign-in sheet. With `setup` true it creates the first owner account instead: onlet has
  * no users yet. `expired` shows that a signed-in session ended and asks for sign-in again.
  */
 export function SignIn({ setup, expired }: { setup: boolean; expired: boolean }) {
@@ -58,13 +58,13 @@ export function SignIn({ setup, expired }: { setup: boolean; expired: boolean })
       <form className="card connect-card auth-card" onSubmit={(event) => void submit(event)}>
         <span className="auth-wordmark">
           <span className="wordmark-square" aria-hidden="true" />
-          foundry
+          onlet
         </span>
         <h1>{creating ? 'Create the owner account' : 'Sign in'}</h1>
 
         {creating ? (
           <p className="muted">
-            This account can change settings and add other people. Create it before you make foundry reachable from
+            This account can change settings and add other people. Create it before you make onlet reachable from
             other machines.
           </p>
         ) : null}

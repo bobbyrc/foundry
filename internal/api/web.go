@@ -34,8 +34,8 @@ func DefaultWeb() fs.FS {
 const notBuiltPage = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>foundry</title>
-<p>foundry is running. The web UI is not built: run <code>npm run build</code> in <code>web/</code>.</p>
+<title>onlet</title>
+<p>onlet is running. The web UI is not built: run <code>npm run build</code> in <code>web/</code>.</p>
 `
 
 // serveWeb serves a file from the UI, or index.html for any other path (the single-page app

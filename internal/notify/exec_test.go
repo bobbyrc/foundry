@@ -22,7 +22,7 @@ func newExec(opts map[string]any) (Notifier, error) {
 
 func TestExecNotifyPassesEnvironment(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "env.txt")
-	command := `printf '%s|%s|%s|%s' "$FOUNDRY_NOTIFY_TITLE" "$FOUNDRY_NOTIFY_BODY" "$FOUNDRY_NOTIFY_PRIORITY" "$FOUNDRY_NOTIFY_URL" > '` + out + `'`
+	command := `printf '%s|%s|%s|%s' "$ONLET_NOTIFY_TITLE" "$ONLET_NOTIFY_BODY" "$ONLET_NOTIFY_PRIORITY" "$ONLET_NOTIFY_URL" > '` + out + `'`
 
 	n, err := New(Config{Type: "exec", Options: map[string]any{"command": command}})
 	require.NoError(t, err)
@@ -31,18 +31,18 @@ func TestExecNotifyPassesEnvironment(t *testing.T) {
 		Title:    "Deploy",
 		Body:     "v1 is live",
 		Priority: PriorityHigh,
-		URL:      "https://foundry.local/x",
+		URL:      "https://onlet.local/x",
 	})
 	require.NoError(t, err)
 
 	got, err := os.ReadFile(out)
 	require.NoError(t, err)
-	assert.Equal(t, "Deploy|v1 is live|high|https://foundry.local/x", string(got))
+	assert.Equal(t, "Deploy|v1 is live|high|https://onlet.local/x", string(got))
 }
 
 func TestExecNotifyDefaultsPriorityToNormal(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "prio.txt")
-	command := `printf '%s' "$FOUNDRY_NOTIFY_PRIORITY" > '` + out + `'`
+	command := `printf '%s' "$ONLET_NOTIFY_PRIORITY" > '` + out + `'`
 
 	n, err := newExec(map[string]any{"command": command})
 	require.NoError(t, err)

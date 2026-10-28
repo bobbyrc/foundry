@@ -11,11 +11,11 @@ import (
 )
 
 func TestDocumentTreeKeepsEnvReferencesUnexpanded(t *testing.T) {
-	t.Setenv("FOUNDRY_TEST_TOKEN", "should-not-appear")
-	v, err := DocumentTree([]byte("server:\n  addr: ${FOUNDRY_TEST_TOKEN}\n"))
+	t.Setenv("ONLET_TEST_TOKEN", "should-not-appear")
+	v, err := DocumentTree([]byte("server:\n  addr: ${ONLET_TEST_TOKEN}\n"))
 	require.NoError(t, err)
 	server := v.(map[string]any)["server"].(map[string]any)
-	assert.Equal(t, "${FOUNDRY_TEST_TOKEN}", server["addr"])
+	assert.Equal(t, "${ONLET_TEST_TOKEN}", server["addr"])
 }
 
 func TestDocumentTreeReturnsJSONTypes(t *testing.T) {
@@ -131,7 +131,7 @@ func TestApplyChangesErrors(t *testing.T) {
 }
 
 func TestApplyChangesRoundTripParses(t *testing.T) {
-	example, err := os.ReadFile("../../foundry.example.yaml")
+	example, err := os.ReadFile("../../onlet.example.yaml")
 	require.NoError(t, err)
 	out, err := ApplyChanges(example, []Change{{Op: "set", Path: []string{"limits", "max_attempts"}, Value: float64(5)}})
 	require.NoError(t, err)

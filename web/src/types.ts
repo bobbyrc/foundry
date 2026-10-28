@@ -102,7 +102,7 @@ export interface LogLine {
 }
 
 /** An SSE event. Live-only events (run.log, chat.delta) may carry id 0. */
-export interface FoundryEvent<T = unknown> {
+export interface OnletEvent<T = unknown> {
   id: number;
   time: string;
   type: string;
@@ -273,7 +273,7 @@ export interface Project {
   paused: boolean;
 }
 
-/** Who holds the project paused: foundry.yaml ("config"), the UI or API ("owner"), or nobody. */
+/** Who holds the project paused: onlet.yaml ("config"), the UI or API ("owner"), or nobody. */
 export type PausedBy = '' | 'config' | 'owner';
 
 /** A project as GET /api/v1/projects returns it: config fields, effective pause state and counts. */

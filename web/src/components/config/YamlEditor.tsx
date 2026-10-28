@@ -1,4 +1,4 @@
-// The YAML tab: the raw text of foundry.yaml in a plain textarea. It is read from the server each
+// The YAML tab: the raw text of onlet.yaml in a plain textarea. It is read from the server each
 // time the tab opens, so it never shows a copy older than the file on disk at that moment.
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { useConfigFile, useSaveConfigFile } from '../../queries';
@@ -119,7 +119,7 @@ export function YamlEditor({ onDirtyChange }: { onDirtyChange: (dirty: boolean) 
       />
       <textarea
         className="config-yaml-text"
-        aria-label="foundry.yaml"
+        aria-label="onlet.yaml"
         value={text}
         spellCheck={false}
         wrap="off"

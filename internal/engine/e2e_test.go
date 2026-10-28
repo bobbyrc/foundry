@@ -16,21 +16,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/deploy"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/events"
-	"github.com/bobbyrc/foundry/internal/harness"
-	_ "github.com/bobbyrc/foundry/internal/harness/fake" // registers the "fake" harness type
-	"github.com/bobbyrc/foundry/internal/observe"
-	"github.com/bobbyrc/foundry/internal/scm"
-	scmfake "github.com/bobbyrc/foundry/internal/scm/fake"
-	"github.com/bobbyrc/foundry/internal/store"
-	"github.com/bobbyrc/foundry/internal/store/sqlite"
-	"github.com/bobbyrc/foundry/internal/workspace"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/deploy"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/events"
+	"github.com/bobbyrc/onlet/internal/harness"
+	_ "github.com/bobbyrc/onlet/internal/harness/fake" // registers the "fake" harness type
+	"github.com/bobbyrc/onlet/internal/observe"
+	"github.com/bobbyrc/onlet/internal/scm"
+	scmfake "github.com/bobbyrc/onlet/internal/scm/fake"
+	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onlet/internal/store/sqlite"
+	"github.com/bobbyrc/onlet/internal/workspace"
 )
 
-// e2eConfigYAML is the foundry.yaml every end-to-end test starts from. Arguments: data dir,
+// e2eConfigYAML is the onlet.yaml every end-to-end test starts from. Arguments: data dir,
 // bare repo path, clone path, and extra top-level YAML (column zero, may be empty).
 const e2eConfigYAML = `server:
   data_dir: %s

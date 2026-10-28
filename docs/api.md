@@ -1,6 +1,6 @@
-# Foundry HTTP API (v1)
+# Onlet HTTP API (v1)
 
-Every client — the web UI, the `foundry` CLI, the orchestrator agent, future native and mobile
+Every client — the web UI, the `onlet` CLI, the orchestrator agent, future native and mobile
 apps — uses this API. JSON field names are the `json` tags in `internal/domain` (Task, Run,
 LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessage) and
 `internal/config` (Config). Times are RFC 3339. The machine-readable OpenAPI 3.1 spec is [openapi.yaml](openapi.yaml).
@@ -14,7 +14,7 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
   do what operators do (approve, retry, cancel, pause, create tasks, chat, run loops, reload
   config). It can **never** edit the config file or manage users. `GET /events` also accepts
   `?token=` because browsers' `EventSource` cannot set headers.
-- **A signed-in person** uses the `foundry_session` cookie, set by `POST /auth/setup` (the first
+- **A signed-in person** uses the `onlet_session` cookie, set by `POST /auth/setup` (the first
   account) or `POST /auth/login`. The cookie is HttpOnly and SameSite=Strict, lasts 30 days, and
   is `Secure` when `server.public_url` is https. Sign-out (`POST /auth/logout`) ends the session.
   Changing a password ends that user's other sessions. What a person may do depends on their role:
@@ -117,7 +117,7 @@ value. `limit` is a non-negative integer, where 0 or absent means the route's de
 or non-numeric value is a 400. Most list routes default to 200. The exceptions are
 `GET /events/history` (500) and `GET /runs/{id}/logs` (1000).
 
-`POST /tasks` rejects `"kind":"review"` with 400, since foundry creates review tasks itself. An
+`POST /tasks` rejects `"kind":"review"` with 400, since onlet creates review tasks itself. An
 empty `kind` is stored as `feature`. A `risk` field is not part of `NewTask`, so it is rejected
 with 400 like any unknown field.
 
@@ -125,19 +125,19 @@ with 400 like any unknown field.
 field. `approve: false` rejects the approval.
 
 `POST /projects/{name}/pause` and `/resume` change a project's runtime pause, which is saved and
-survives restarts. A project paused by `paused: true` in foundry.yaml shows `paused_by: "config"`.
+survives restarts. A project paused by `paused: true` in onlet.yaml shows `paused_by: "config"`.
 The API cannot resume it, so `/resume` returns 409 until the config changes. An unknown project is a
 400. While a project is paused, the scheduler starts none of its runs and its loops create no tasks.
 
 `POST /approvals/{id}/decide` returns 409 when the task is not awaiting approval. For a merge
 approval it also returns 409 when the PR head changed since the approval was requested. In that
-case the approval is recorded as rejected and the task goes back to review so foundry can re-check it.
+case the approval is recorded as rejected and the task goes back to review so onlet can re-check it.
 
 ### Shapes not in `internal/domain`
 
 ```jsonc
 // NewTask
-{"project":"foundry","kind":"feature","title":"…","body":"…",
+{"project":"onlet","kind":"feature","title":"…","body":"…",
  "role":"","priority":0,"parent_id":"","source":"api"}   // role "" = routing default
 
 // TaskDetail
@@ -153,7 +153,7 @@ case the approval is recorded as rejected and the task goes back to review so fo
  "cost_today_usd":1.23,"daily_budget_usd":25,"paused":false}
 
 // LoopView
-{"name":"pr_shepherd","project":"foundry","enabled":true,"every":"1m",
+{"name":"pr_shepherd","project":"onlet","enabled":true,"every":"1m",
  "last_run_at":"…","last_error":""}
 
 // AgentView

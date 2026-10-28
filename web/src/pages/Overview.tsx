@@ -18,7 +18,7 @@ import { RelTime } from '../components/RelTime';
 import { RetryTaskControl, CancelTaskButton } from '../components/TaskActions';
 import { useCan } from '../auth';
 import { useApprovals, useCancelRun, useRuns, useTask, useTasks } from '../queries';
-import type { FoundryEvent, Run, Task } from '../types';
+import type { OnletEvent, Run, Task } from '../types';
 
 const STALE_OUTPUT_MS = 5 * 60_000;
 const ACTIVITY_LIMIT = 100;
@@ -177,7 +177,7 @@ function Activity() {
     queryFn: () => getEventsHistory({ limit: ACTIVITY_LIMIT }),
     refetchInterval: 30_000,
   });
-  const [live, setLive] = useState<FoundryEvent[]>([]);
+  const [live, setLive] = useState<OnletEvent[]>([]);
   const [showAll, setShowAll] = useState(false);
 
   useEffect(
@@ -192,7 +192,7 @@ function Activity() {
 
   const events = useMemo(() => {
     const seen = new Set<string>();
-    const merged: FoundryEvent[] = [];
+    const merged: OnletEvent[] = [];
     for (const ev of [...live, ...(history.data ?? [])]) {
       const key = ev.id > 0 ? `id:${ev.id}` : `${ev.type}:${ev.time}:${ev.message}`;
       if (seen.has(key)) continue;
