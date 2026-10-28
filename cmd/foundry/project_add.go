@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/bobbyrc/foundry/internal/config"
@@ -73,6 +74,7 @@ func insertProject(data []byte, path, name, repo, dir, branch string) ([]byte, e
 		root = doc.Content[0]
 	}
 	var projKey, projects, selfProject *yaml.Node
+	var setsSelf bool
 	projIdx := -1
 	if root != nil {
 		if root.Kind != yaml.MappingNode {
@@ -120,7 +122,7 @@ func insertProject(data []byte, path, name, repo, dir, branch string) ([]byte, e
 		}
 		// The entry is indented to match the projects already there.
 		indent = strings.Repeat(" ", projects.Content[0].Column-1)
-		at = projectsEnd(lines, root, projIdx, projKey.Line-1)
+		at = projectsEnd(lines, root, projIdx, projKey.Line-1, len(indent))
 	}
 
 	entry, err := entryLines(indent, name, repo, dir, branch)
@@ -132,6 +134,7 @@ func insertProject(data []byte, path, name, repo, dir, branch string) ([]byte, e
 	// Foundry's own repository becomes the self_project, as init does, but an existing choice
 	// is never overwritten.
 	if repo == selfRepo && selfProject == nil {
+		setsSelf = true
 		lines = insertLines(lines, len(lines), []string{"self_project: " + name + "\n"})
 	}
 
@@ -139,7 +142,34 @@ func insertProject(data []byte, path, name, repo, dir, branch string) ([]byte, e
 	if _, err := config.Parse(out, path); err != nil {
 		return nil, fmt.Errorf("adding project %q would make %s invalid, so it was not changed: %w", name, path, err)
 	}
+	if err := checkInsertion(data, out, path, name, setsSelf); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// checkInsertion is the semantic guard for insertProject. The text can still load and yet hold
+// different settings: a block scalar cut short by an inserted line, for example, parses without
+// error. So both versions are parsed, the added project and (when setsSelf is true) the new
+// self_project are removed from the new one, and the two must then be equal. Any other difference
+// is an error, and the caller writes nothing.
+func checkInsertion(before, after []byte, path, name string, setsSelf bool) error {
+	oldCfg, err := config.Parse(before, path)
+	if err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	newCfg, err := config.Parse(after, path)
+	if err != nil {
+		return fmt.Errorf("parse new %s: %w", path, err)
+	}
+	delete(newCfg.Projects, name)
+	if setsSelf {
+		newCfg.SelfProject = oldCfg.SelfProject
+	}
+	if !reflect.DeepEqual(oldCfg, newCfg) {
+		return fmt.Errorf("refusing to write %s: inserting project %s would change existing settings; add it by hand", path, name)
+	}
+	return nil
 }
 
 // errFlowStyle is the error for a config whose projects section is written in flow style, such as
@@ -153,22 +183,34 @@ func errFlowStyle(path string) error {
 // the last line of the projects section. Blank lines and full-line comments directly above the next
 // top-level key belong to that key, so the entry goes above them. When projects is the last key,
 // the entry goes after its last line, with any trailing blank lines left at the end of the file.
-// projLine is the index of the "projects:" line.
-func projectsEnd(lines []string, root *yaml.Node, projIdx, projLine int) int {
+// projLine is the index of the "projects:" line, and keyIndent is the indentation of the project
+// names. A comment indented deeper than keyIndent is never moved over: inside a project it can be
+// the text of a block scalar (a run: | script), and inserting above it would cut that scalar short.
+func projectsEnd(lines []string, root *yaml.Node, projIdx, projLine, keyIndent int) int {
 	at := len(lines)
 	if projIdx+2 < len(root.Content) {
 		at = root.Content[projIdx+2].Line - 1
 	}
-	for at-1 > projLine && isBlankOrComment(lines[at-1]) {
+	for at-1 > projLine && isBlankOrComment(lines[at-1], keyIndent) {
 		at--
 	}
 	return at
 }
 
-// isBlankOrComment reports whether a line holds nothing but whitespace or a full-line comment.
-func isBlankOrComment(line string) bool {
+// isBlankOrComment reports whether a line may be moved over when adding a project: it holds
+// nothing but whitespace, or it is a full-line comment indented no deeper than keyIndent.
+func isBlankOrComment(line string, keyIndent int) bool {
 	t := strings.TrimSpace(line)
-	return t == "" || strings.HasPrefix(t, "#")
+	if t == "" {
+		return true
+	}
+	return strings.HasPrefix(t, "#") && leadingSpaces(line) <= keyIndent
+}
+
+// leadingSpaces returns the number of spaces at the start of line. YAML forbids tabs in
+// indentation, so spaces are the only count that matters.
+func leadingSpaces(line string) int {
+	return len(line) - len(strings.TrimLeft(line, " "))
 }
 
 // splitLines splits s into lines that keep their newline characters, so joining them gives back s

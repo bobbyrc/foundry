@@ -211,13 +211,14 @@ func (e *Engine) runLoopOnce(ctx context.Context, name, project string, manual b
 	st, gerr := e.d.Store.GetLoopState(ctx, name, project)
 	if gerr != nil {
 		e.d.Logger.Error("loop state", "loop", name, "project", project, "err", gerr)
-		return errors.Join(err, gerr)
+		return redactedErr(errors.Join(err, gerr), p)
 	}
 	prev := st.LastError
 	st.LastRunAt = e.d.Now().UTC()
 	st.LastError = ""
 	// The message can carry a command's output tail, so it is redacted before it is stored,
-	// emitted or logged. The error returned to the caller is not redacted.
+	// emitted, logged or returned. The returned error keeps the original as Unwrap, so callers
+	// can still match its sentinels (see redactedError).
 	var msg string
 	if err != nil {
 		msg = redactSecrets(err.Error(), evidenceEnv(p))
@@ -233,8 +234,30 @@ func (e *Engine) runLoopOnce(ctx context.Context, name, project string, manual b
 				fmt.Sprintf("%s: %s", name, msg),
 				map[string]string{"loop": name, "error": msg})
 		}
+		return &redactedError{msg: msg, err: err}
 	}
-	return err
+	return nil
+}
+
+// redactedError is an error whose text has been redacted, but which still wraps the original, so
+// errors.Is and errors.As (used by the API's status mapping) work as before. The orchestrator
+// agent receives the error text through the API, so the secrets must not be in it.
+type redactedError struct {
+	msg string
+	err error
+}
+
+func (e *redactedError) Error() string { return e.msg }
+
+func (e *redactedError) Unwrap() error { return e.err }
+
+// redactedErr wraps err in a redactedError using project p's env values, or returns nil when err
+// is nil.
+func redactedErr(err error, p *config.Project) error {
+	if err == nil {
+		return nil
+	}
+	return &redactedError{msg: redactSecrets(err.Error(), evidenceEnv(p)), err: err}
 }
 
 // Loops implements api.Controller. It returns one row per loop and project, sorted by loop name

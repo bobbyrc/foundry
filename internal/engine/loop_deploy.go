@@ -296,6 +296,15 @@ func (e *Engine) resolveShippedTasks(ctx context.Context, p *config.Project, ref
 		e.d.Logger.Warn("deploy watch: list blocked tasks", "project", p.Name, "err", err)
 		return
 	}
+	var candidates []domain.Task
+	for _, t := range blocked {
+		if strings.HasPrefix(t.BlockedReason, releaseFailedPrefix) && t.MergeSHA != "" {
+			candidates = append(candidates, t)
+		}
+	}
+	if len(candidates) == 0 {
+		return
+	}
 	// One fetch serves every candidate below: the ancestry and revert checks read the clone as
 	// it is now, and fetching per task would repeat the same network round trip.
 	repo := e.repoFor(p)
@@ -303,10 +312,7 @@ func (e *Engine) resolveShippedTasks(ctx context.Context, p *config.Project, ref
 		e.d.Logger.Warn("deploy watch: fetch before shipped check", "project", p.Name, "err", err)
 		return
 	}
-	for _, t := range blocked {
-		if !strings.HasPrefix(t.BlockedReason, releaseFailedPrefix) || t.MergeSHA == "" {
-			continue
-		}
+	for _, t := range candidates {
 		shipped, err := e.d.Workspaces.IsAncestor(ctx, repo, t.MergeSHA, ref)
 		if err != nil {
 			e.d.Logger.Warn("deploy watch: check task commit", "task", t.ID, "err", err)

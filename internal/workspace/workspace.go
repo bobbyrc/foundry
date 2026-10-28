@@ -463,17 +463,41 @@ func (m *Manager) IsAncestor(ctx context.Context, r Repo, ancestor, descendant s
 // RevertedIn reports whether a commit made after commit, and reachable from ref, reverts it, so
 // the change is contained in ref but no longer in effect. A standard `git revert`, and GitHub's
 // revert pull requests, put "This reverts commit <full sha>." in the message, and that line is
-// what this looks for. A revert made another way is not detected. The caller fetches first (see
-// Fetch), as with IsAncestor.
+// what this looks for. A revert made another way is not detected. A revert that is itself
+// reverted (a "Reapply") does not count, so the change is back in effect. The caller fetches first
+// (see Fetch), as with IsAncestor.
 func (m *Manager) RevertedIn(ctx context.Context, r Repo, commit, ref string) (bool, error) {
 	unlock := m.lockClone(r.Path)
 	defer unlock()
-	out, err := git(ctx, r.Path, "log", "--format=%H",
+	return revertedIn(ctx, r.Path, commit, ref, 0)
+}
+
+// maxRevertDepth limits how many revert-of-revert links revertedIn follows. Past it the answer is
+// an error, not a guess.
+const maxRevertDepth = 5
+
+// revertedIn is RevertedIn without the clone lock, so it can recurse. It reports true when some
+// revert of commit in commit..ref is not itself reverted in that revert..ref range.
+func revertedIn(ctx context.Context, dir, commit, ref string, depth int) (bool, error) {
+	out, err := git(ctx, dir, "log", "--format=%H",
 		"--grep=This reverts commit "+commit, "--fixed-strings", commit+".."+ref)
 	if err != nil {
 		return false, fmt.Errorf("revert check %s in %s: %w", commit, ref, err)
 	}
-	return out != "", nil
+	reverts := strings.Fields(out)
+	if len(reverts) > 0 && depth >= maxRevertDepth {
+		return false, fmt.Errorf("revert chain of %s in %s is deeper than %d", commit, ref, maxRevertDepth)
+	}
+	for _, revert := range reverts {
+		reapplied, err := revertedIn(ctx, dir, revert, ref, depth+1)
+		if err != nil {
+			return false, err
+		}
+		if !reapplied {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // numstatCount reads one count column; git prints "-" for binary files, which count as zero.
