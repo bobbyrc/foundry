@@ -339,9 +339,13 @@ func taskList(e *env, args []string) error {
 	}
 	rows := make([][]string, 0, len(tasks))
 	for _, t := range tasks {
-		rows = append(rows, []string{t.ID, string(t.Status), string(t.Kind), t.Project, truncate(t.Title, titleWidth)})
+		pr := "-"
+		if t.PRNumber > 0 {
+			pr = fmt.Sprintf("#%d", t.PRNumber)
+		}
+		rows = append(rows, []string{t.ID, string(t.Status), string(t.Kind), t.Project, pr, orDash(string(t.Risk)), truncate(t.Title, titleWidth)})
 	}
-	table(e.out, []string{"ID", "STATUS", "KIND", "PROJECT", "TITLE"}, rows)
+	table(e.out, []string{"ID", "STATUS", "KIND", "PROJECT", "PR", "RISK", "TITLE"}, rows)
 	return nil
 }
 
