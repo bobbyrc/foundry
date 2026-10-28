@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -269,8 +270,9 @@ func (g *GitHub) MergePR(ctx context.Context, number int, headSHA string) error 
 	return nil
 }
 
-// CILog returns the last maxBytes bytes of the logs of up to three failed workflow runs on the
-// PR's branch. Each run's log is preceded by a "=== <name> ===" header.
+// CILog returns the logs of up to three failed workflow runs on the PR's branch, each preceded by
+// a "=== <name> ===" header. Lines are cleaned of gh's job/step/timestamp prefix and ANSI escapes;
+// if the result exceeds maxBytes it is cut down to the lines around failures (see condenseLog).
 func (g *GitHub) CILog(ctx context.Context, number int, maxBytes int) (string, error) {
 	pr, err := g.GetPR(ctx, number)
 	if err != nil {
@@ -305,9 +307,92 @@ func (g *GitHub) CILog(ctx context.Context, number int, maxBytes int) (string, e
 		if err != nil {
 			return "", fmt.Errorf("view log of run %d (%s): %w", r.DatabaseID, r.Name, err)
 		}
-		fmt.Fprintf(&b, "=== %s ===\n%s\n", r.Name, log)
+		fmt.Fprintf(&b, "=== %s ===\n%s", r.Name, cleanLog(string(log)))
 	}
-	return tail(b.String(), maxBytes), nil
+	return condenseLog(b.String(), maxBytes), nil
+}
+
+// ansiRE matches ANSI CSI escape sequences such as ESC[36;1m.
+var ansiRE = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+
+// timestampRE matches the RFC3339 timestamp (and following space) gh puts before each log line.
+var timestampRE = regexp.MustCompile(`^\x{FEFF}?\d{4}-\d\d-\d\dT[\d:.]+Z ?`)
+
+// failureContextLines is how many lines before each failure condenseLog keeps.
+const failureContextLines = 20
+
+// cleanLog strips ANSI escapes and the "<job>\t<step>\t<timestamp> " prefix that
+// `gh run view --log-failed` puts on every line. A "=== <job> / <step> ===" header is emitted
+// whenever the job or step changes. Lines without the prefix pass through unchanged.
+func cleanLog(raw string) string {
+	var b strings.Builder
+	var job, step string
+	for _, line := range strings.Split(strings.TrimRight(raw, "\n"), "\n") {
+		line = ansiRE.ReplaceAllString(strings.TrimSuffix(line, "\r"), "")
+		if parts := strings.SplitN(line, "\t", 3); len(parts) == 3 {
+			if parts[0] != job || parts[1] != step {
+				job, step = parts[0], parts[1]
+				fmt.Fprintf(&b, "=== %s / %s ===\n", job, step)
+			}
+			line = timestampRE.ReplaceAllString(parts[2], "")
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// isFailureLine reports whether a log line looks like a failure worth keeping.
+func isFailureLine(line string) bool {
+	for _, k := range []string{"FAIL", "panic:", "Error", "error:"} {
+		if strings.Contains(line, k) {
+			return true
+		}
+	}
+	return strings.Contains(strings.ToLower(line), "exit code")
+}
+
+// condenseLog returns s unchanged if it fits in maxBytes. Otherwise it keeps each failure line
+// with failureContextLines lines before it, marks the dropped stretches, and, if that is still
+// too long, falls back to its tail. With no failure lines it is just the tail of s.
+func condenseLog(s string, maxBytes int) string {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s
+	}
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	keep := make([]bool, len(lines))
+	found := false
+	for i, l := range lines {
+		if !isFailureLine(l) {
+			continue
+		}
+		found = true
+		for j := max(0, i-failureContextLines); j <= i; j++ {
+			keep[j] = true
+		}
+	}
+	if !found {
+		return tail(s, maxBytes)
+	}
+	var b strings.Builder
+	skipped := 0
+	flush := func() {
+		if skipped > 0 {
+			fmt.Fprintf(&b, "[... %d lines omitted ...]\n", skipped)
+			skipped = 0
+		}
+	}
+	for i, l := range lines {
+		if !keep[i] {
+			skipped++
+			continue
+		}
+		flush()
+		b.WriteString(l)
+		b.WriteByte('\n')
+	}
+	flush()
+	return tail(b.String(), maxBytes)
 }
 
 // tail returns the last maxBytes bytes of s, moved forward to a UTF-8 boundary. A maxBytes of

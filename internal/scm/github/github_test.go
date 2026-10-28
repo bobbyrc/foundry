@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -295,6 +296,58 @@ func TestCILogFetchesFailedRunsAndTails(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, tailed, 10)
 	assert.True(t, strings.HasSuffix(log, tailed))
+}
+
+const sampleFailedLog = "Go vet, format, test\tSet up job\t2026-10-28T04:08:10.1000000Z \x1b[36;1mgo version\x1b[0m\n" +
+	"Go vet, format, test\tgo test\t2026-10-28T04:08:18.5700000Z ok  \tfoundry/internal/a\t0.1s\n" +
+	"Go vet, format, test\tgo test\t2026-10-28T04:08:18.5800911Z --- FAIL: TestExecTimeout (5.01s)\n" +
+	"Go vet, format, test\tgo test\t2026-10-28T04:08:18.5900000Z \x1b[31;1mFAIL\x1b[0m\n" +
+	"Go vet, format, test\tUpload\t2026-10-28T04:08:19.0000000Z ##[error]Process completed with exit code 1.\n"
+
+func TestCleanLog(t *testing.T) {
+	assert.Equal(t, "=== Go vet, format, test / Set up job ===\ngo version\n"+
+		"=== Go vet, format, test / go test ===\nok  \tfoundry/internal/a\t0.1s\n"+
+		"--- FAIL: TestExecTimeout (5.01s)\nFAIL\n"+
+		"=== Go vet, format, test / Upload ===\n##[error]Process completed with exit code 1.\n",
+		cleanLog(sampleFailedLog))
+	assert.Equal(t, "plain line\n", cleanLog("plain line"))
+}
+
+func TestCondenseLogKeepsContextAroundFailures(t *testing.T) {
+	var lines []string
+	for i := 0; i < 100; i++ {
+		lines = append(lines, fmt.Sprintf("line %03d", i))
+	}
+	lines[60] = "--- FAIL: TestX"
+	s := strings.Join(lines, "\n") + "\n"
+
+	assert.Equal(t, s, condenseLog(s, 0))
+	assert.Equal(t, s, condenseLog(s, len(s)))
+
+	out := condenseLog(s, len(s)-1)
+	assert.True(t, strings.HasPrefix(out, "[... 40 lines omitted ...]\nline 040\n"), out)
+	assert.True(t, strings.HasSuffix(out, "line 059\n--- FAIL: TestX\n[... 39 lines omitted ...]\n"), out)
+
+	// Still too long after condensing: fall back to the tail.
+	assert.Len(t, condenseLog(s, 30), 30)
+}
+
+func TestCILogCleansAndCondensesRealLines(t *testing.T) {
+	f := newFake()
+	f.on["pr view"] = `{"number":2,"state":"OPEN","headRefName":"foundry/x","statusCheckRollup":[]}`
+	f.on["run list"] = `[{"databaseId":101,"conclusion":"failure","name":"ci"}]`
+	f.on["run view 101"] = sampleFailedLog
+	g := NewWithRunner(repo, f.runner())
+
+	log, err := g.CILog(context.Background(), 2, 100000)
+	require.NoError(t, err)
+	assert.NotContains(t, log, "\x1b")
+	assert.NotContains(t, log, "2026-10-28T")
+	assert.Contains(t, log, "=== ci ===\n=== Go vet, format, test / Set up job ===\ngo version\n")
+
+	small, err := g.CILog(context.Background(), 2, len(log)-1)
+	require.NoError(t, err)
+	assert.Contains(t, small, "--- FAIL: TestExecTimeout")
 }
 
 func TestTailKeepsUTF8Boundary(t *testing.T) {
