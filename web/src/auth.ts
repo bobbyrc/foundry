@@ -33,11 +33,31 @@ export function saveToken(token: string): void {
   emit();
 }
 
-/** Reads `#token=...` from the URL once, stores it and drops it from the address bar. */
+const TOKEN_FRAGMENT = /(?:^#|&)token=([^&]*)/;
+
+// A bearer token is never empty, contains no whitespace or control characters.
+const VALID_TOKEN = /^[^\s\x00-\x1f\x7f]+$/;
+
+/** Extracts the token from a `#token=...` fragment. Returns null when absent, malformed or invalid. */
+export function parseTokenFragment(hash: string): string | null {
+  const match = TOKEN_FRAGMENT.exec(hash);
+  if (!match?.[1]) return null;
+  let token: string;
+  try {
+    token = decodeURIComponent(match[1]);
+  } catch {
+    // A bad percent-escape (e.g. "%E0%A4%A") must not throw at startup.
+    return null;
+  }
+  return VALID_TOKEN.test(token) ? token : null;
+}
+
+/** Reads `#token=...` from the URL once, stores it if valid and always drops the fragment. */
 export function captureTokenFromHash(): void {
-  const match = /(?:^#|&)token=([^&]+)/.exec(window.location.hash);
-  if (!match?.[1]) return;
-  saveToken(decodeURIComponent(match[1]));
+  const hash = window.location.hash;
+  if (!TOKEN_FRAGMENT.test(hash)) return;
+  const token = parseTokenFragment(hash);
+  if (token !== null) saveToken(token);
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
 }
 

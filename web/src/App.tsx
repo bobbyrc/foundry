@@ -29,9 +29,9 @@ export function App() {
 
   useEffect(() => {
     if (!connected) return;
-    eventStream.start();
+    eventStream.start(qc);
     return () => eventStream.stop();
-  }, [connected]);
+  }, [connected, qc]);
 
   // Every event refreshes the query keys it touches (see events.ts keysFor).
   useEffect(() => subscribe((ev) => invalidateFor(ev, qc)), [qc]);

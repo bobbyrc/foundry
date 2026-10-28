@@ -38,8 +38,11 @@ type Listener = (ev: FoundryEvent) => void;
 const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
 
-class EventStream {
+export class EventStream {
   private source: EventSource | null = null;
+  private queryClient: QueryClient | null = null;
+  // Set by the first successful open and kept across stop()/start(), so any later open is a reconnect.
+  private everConnected = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private attempt = 0;
   private lastId = 0;
@@ -48,8 +51,9 @@ class EventStream {
   private readonly listeners = new Set<Listener>();
   private readonly statusListeners = new Set<() => void>();
 
-  start(): void {
+  start(queryClient: QueryClient): void {
     if (this.running || getToken() === null) return;
+    this.queryClient = queryClient;
     this.running = true;
     this.connect();
   }
@@ -100,8 +104,13 @@ class EventStream {
     this.source = source;
 
     source.onopen = () => {
+      const reconnected = this.everConnected;
+      this.everConnected = true;
       this.attempt = 0;
       this.setStatus('live');
+      // Events sent during the outage are not replayed (live-only ones never are), so refetch
+      // every query once rather than trust the cache.
+      if (reconnected) void this.queryClient?.invalidateQueries();
     };
     source.onmessage = (message) => this.handle(message);
     for (const type of EVENT_TYPES) {

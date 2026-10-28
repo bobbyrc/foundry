@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueryClient } from '@tanstack/react-query';
-import { invalidateFor, keysFor } from './events';
+import { EventStream, invalidateFor, keysFor } from './events';
 import { keys } from './keys';
 import type { FoundryEvent } from './types';
 
@@ -65,5 +65,60 @@ describe('invalidateFor', () => {
       [{ queryKey: keys.stats }],
       [{ queryKey: keys.task('t1') }],
     ]);
+  });
+});
+
+describe('EventStream reconnects', () => {
+  class FakeEventSource {
+    static instances: FakeEventSource[] = [];
+    onopen: (() => void) | null = null;
+    onmessage: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor(readonly url: string) {
+      FakeEventSource.instances.push(this);
+    }
+    addEventListener(): void {}
+    close(): void {}
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    FakeEventSource.instances = [];
+  });
+
+  function setup() {
+    vi.useFakeTimers();
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.stubGlobal('window', {
+      localStorage: { getItem: () => 'tok' },
+      addEventListener: () => {},
+    });
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const client = { invalidateQueries } as unknown as QueryClient;
+    const stream = new EventStream();
+    stream.start(client);
+    return { stream, client, invalidateQueries };
+  }
+
+  it('does not invalidate on the first connect', () => {
+    const { invalidateQueries } = setup();
+    FakeEventSource.instances[0]!.onopen?.();
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it('invalidates all queries once after a reconnect', async () => {
+    const { stream, invalidateQueries } = setup();
+    FakeEventSource.instances[0]!.onopen?.();
+    FakeEventSource.instances[0]!.onerror?.();
+    // recover() awaits getStats (which fails here without a server) then backs off 1s.
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(FakeEventSource.instances).toHaveLength(2);
+
+    FakeEventSource.instances[1]!.onopen?.();
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(invalidateQueries).toHaveBeenCalledWith();
+    expect(stream.getStatus()).toBe('live');
   });
 });
