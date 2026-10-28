@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/store"
@@ -119,4 +120,16 @@ func (s *Store) ListRunLogs(ctx context.Context, runID string, afterSeq int64, l
 		return nil, fmt.Errorf("list run logs %s: %w", runID, err)
 	}
 	return out, nil
+}
+
+// CostSince sums CostUSD of runs started at or after since. CostUSD lives in the JSON data column;
+// runs with no reported cost count as zero.
+func (s *Store) CostSince(ctx context.Context, since time.Time) (float64, error) {
+	var total float64
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(json_extract(data, '$.cost_usd')), 0) FROM runs WHERE started_at >= ?`,
+		nanos(since)).Scan(&total); err != nil {
+		return 0, fmt.Errorf("cost since: %w", err)
+	}
+	return total, nil
 }

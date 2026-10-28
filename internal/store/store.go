@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 )
@@ -56,6 +57,8 @@ type Store interface {
 	UpdateRun(ctx context.Context, id string, fn func(*domain.Run) error) (domain.Run, error)
 	// AppendRunLogs assigns Seq to each line (continuing the run's sequence) and stores them.
 	AppendRunLogs(ctx context.Context, runID string, lines []domain.LogLine) ([]domain.LogLine, error)
+	// CostSince sums CostUSD of runs started at or after since.
+	CostSince(ctx context.Context, since time.Time) (float64, error)
 	// ListRunLogs returns lines with Seq > afterSeq in ascending order.
 	ListRunLogs(ctx context.Context, runID string, afterSeq int64, limit int) ([]domain.LogLine, error)
 

@@ -83,3 +83,12 @@ projects:
 	require.NoError(t, err)
 	assert.NoError(t, cfg.Validate())
 }
+
+func TestValidateDailyBudgetMustNotBeNegative(t *testing.T) {
+	_, err := Parse([]byte("limits:\n  daily_budget_usd: -1\n"), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "limits.daily_budget_usd")
+
+	_, err = Parse([]byte("limits:\n  daily_budget_usd: 0\n"), "")
+	assert.NoError(t, err, "0 means no limit")
+}

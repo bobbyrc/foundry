@@ -41,6 +41,9 @@ type Limits struct {
 	StallTimeout      Duration `yaml:"stall_timeout" json:"stall_timeout"`               // default 15m
 	RunTimeout        Duration `yaml:"run_timeout" json:"run_timeout"`                   // default 2h
 	MaxAttempts       int      `yaml:"max_attempts" json:"max_attempts"`                 // default 3
+	// DailyBudgetUSD stops new task runs once today's reported agent cost reaches it (0 = no
+	// limit). Chat with the orchestrator is exempt. Codex reports no cost, so it is not counted.
+	DailyBudgetUSD float64 `yaml:"daily_budget_usd" json:"daily_budget_usd"`
 }
 
 // Harness configures one agent CLI. Type is a registered harness type: claude-code, codex,

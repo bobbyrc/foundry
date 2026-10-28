@@ -20,6 +20,7 @@ limits:
   stall_timeout: 15m                   # a run with no output for this long is stalled (default 15m)
   run_timeout: 2h                      # a run longer than this is stopped (default 2h)
   max_attempts: 3                      # tries per task before it is blocked until a human retries it (default 3)
+  daily_budget_usd: 20                 # task-run cost per local day (USD) before new runs stop; 0 = no limit. Codex reports no cost, so it is not counted
 
 # Harnesses: the agent CLIs foundry can drive. "claude" and "codex" are always present; you
 # only list one here to change its settings or to add another.

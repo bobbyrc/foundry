@@ -651,3 +651,27 @@ func TestReopenFileKeepsData(t *testing.T) {
 	require.NoError(t, s2.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n))
 	assert.Equal(t, len(migrations), n)
 }
+
+func TestCostSince(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	cutoff := time.Now().Add(-time.Hour)
+
+	for _, r := range []domain.Run{
+		{TaskID: "before", Project: "p", CostUSD: 10, StartedAt: cutoff.Add(-time.Second)},
+		{TaskID: "at", Project: "p", CostUSD: 1.5, StartedAt: cutoff},
+		{TaskID: "after", Project: "p", CostUSD: 2.25, StartedAt: cutoff.Add(time.Second)},
+		{TaskID: "free", Project: "p", StartedAt: cutoff.Add(time.Minute)}, // no reported cost
+	} {
+		_, err := s.CreateRun(ctx, r)
+		require.NoError(t, err)
+	}
+
+	got, err := s.CostSince(ctx, cutoff)
+	require.NoError(t, err)
+	assert.InDelta(t, 3.75, got, 1e-9, "runs at or after the cutoff only")
+
+	none, err := s.CostSince(ctx, time.Now().Add(time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, 0.0, none, "no runs since: zero, not an error")
+}

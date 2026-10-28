@@ -118,6 +118,9 @@ func (c *Config) Validate() error {
 	if l.MaxAttempts <= 0 {
 		add("limits.max_attempts: must be greater than 0")
 	}
+	if l.DailyBudgetUSD < 0 {
+		add("limits.daily_budget_usd: must be 0 (no limit) or greater, not %v", l.DailyBudgetUSD)
+	}
 
 	for i, n := range c.Notify {
 		prefix := fmt.Sprintf("notify[%d]", i)
