@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bobbyrc/foundry/internal/policy"
 )
@@ -36,6 +37,9 @@ type Workspace struct {
 // Manager creates, commits, pushes and removes worktrees under Root.
 type Manager struct {
 	Root string // where worktrees live, e.g. <data_dir>/worktrees
+
+	mu    sync.Mutex             // guards locks
+	locks map[string]*sync.Mutex // one per clone path, created on first use
 }
 
 // outboxExclude is the info/exclude pattern that keeps an agent's .foundry-run/ outbox out of
@@ -58,9 +62,34 @@ func remoteURL(r Repo) string {
 	return "https://github.com/" + s + ".git"
 }
 
+// lockClone takes the lock for the clone at path and returns the function that releases it.
+// Git's own lock files make concurrent fetches and worktree adds on one clone collide, so
+// every operation that writes to a clone holds its lock for the whole call.
+func (m *Manager) lockClone(path string) func() {
+	m.mu.Lock()
+	if m.locks == nil {
+		m.locks = make(map[string]*sync.Mutex)
+	}
+	l, ok := m.locks[path]
+	if !ok {
+		l = &sync.Mutex{}
+		m.locks[path] = l
+	}
+	m.mu.Unlock()
+	l.Lock()
+	return l.Unlock
+}
+
 // EnsureClone makes sure r.Path is a clone of the remote and fetches origin, pruning deleted
 // branches.
 func (m *Manager) EnsureClone(ctx context.Context, r Repo) error {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
+	return m.ensureClone(ctx, r)
+}
+
+// ensureClone is EnsureClone without taking the clone's lock. The caller must hold it.
+func (m *Manager) ensureClone(ctx context.Context, r Repo) error {
 	_, err := os.Stat(filepath.Join(r.Path, ".git"))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -83,7 +112,9 @@ func (m *Manager) EnsureClone(ctx context.Context, r Repo) error {
 // being re-worked), the worktree starts from its tip; otherwise it starts a new branch from
 // origin's default branch.
 func (m *Manager) Prepare(ctx context.Context, r Repo, branch, runID string) (Workspace, error) {
-	if err := m.EnsureClone(ctx, r); err != nil {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
+	if err := m.ensureClone(ctx, r); err != nil {
 		return Workspace{}, err
 	}
 	dir := filepath.Join(m.Root, r.Name, runID)
@@ -213,6 +244,8 @@ func (m *Manager) Push(ctx context.Context, r Repo, ws Workspace) error {
 // Diff returns per-file line counts between origin/base and origin/head. Both are branch names
 // without the "origin/" prefix.
 func (m *Manager) Diff(ctx context.Context, r Repo, base, head string) ([]policy.FileChange, error) {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
 	if _, err := git(ctx, r.Path, "fetch", "origin", "--prune"); err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", r.Name, err)
 	}
@@ -277,6 +310,8 @@ func newPath(p string) string {
 // Remove deletes the worktree and prunes git's record of it. A worktree that is already gone is
 // not an error. The branch is kept, since it may back an open PR.
 func (m *Manager) Remove(ctx context.Context, r Repo, ws Workspace) error {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
 	if _, err := os.Stat(ws.Dir); err == nil {
 		if _, err := git(ctx, r.Path, "worktree", "remove", "--force", ws.Dir); err != nil {
 			return fmt.Errorf("remove worktree %s: %w", ws.Dir, err)

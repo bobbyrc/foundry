@@ -53,6 +53,9 @@ func Evaluate(p config.Policy, in Input) Decision {
 	case in.AgentRisk == domain.RiskUnknown:
 		risk = domain.MaxRisk(risk, domain.RiskMedium)
 		reasons = append(reasons, "agent did not rate its risk")
+	case !slices.Contains([]domain.Risk{domain.RiskLow, domain.RiskMedium, domain.RiskHigh}, in.AgentRisk):
+		risk = domain.RiskHigh
+		reasons = append(reasons, fmt.Sprintf("agent gave an unrecognised risk %q", string(in.AgentRisk)))
 	case in.AgentRisk.Rank() > risk.Rank():
 		risk = in.AgentRisk
 		reason := "agent rated risk " + string(in.AgentRisk)

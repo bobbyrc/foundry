@@ -245,6 +245,18 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
+			name:   "unrecognised agent risk counts as high",
+			policy: config.Policy{Gates: testGates()},
+			in:     Input{Kind: domain.KindFeature, AgentRisk: "bogus"},
+			want: Decision{
+				Risk:            domain.RiskHigh,
+				Reasons:         []string{`agent gave an unrecognised risk "bogus"`},
+				RequireReview:   true,
+				RequireCI:       true,
+				RequireApproval: true,
+			},
+		},
+		{
 			name:   "missing gate requires approval and review and CI",
 			policy: config.Policy{Gates: map[string]config.Gate{}},
 			in:     Input{Kind: domain.KindFeature, AgentRisk: domain.RiskLow},

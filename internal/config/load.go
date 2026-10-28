@@ -40,7 +40,10 @@ func Load(path string) (*Config, error) {
 // resolve relative agent prompt paths; an empty path resolves them against the working
 // directory. An empty document is valid and yields the defaults.
 func Parse(data []byte, path string) (*Config, error) {
-	expanded := expandEnv(data)
+	expanded, err := expandEnv(data)
+	if err != nil {
+		return nil, err
+	}
 	dec := yaml.NewDecoder(bytes.NewReader(expanded))
 	dec.KnownFields(true)
 	var cfg Config
@@ -55,13 +58,34 @@ func Parse(data []byte, path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// expandEnv replaces ${NAME} with the value of the environment variable NAME. An unset
-// variable expands to the empty string, as os.Getenv does.
-func expandEnv(data []byte) []byte {
-	return envRef.ReplaceAllFunc(data, func(match []byte) []byte {
-		name := envRef.FindSubmatch(match)[1]
-		return []byte(os.Getenv(string(name)))
+// expandEnv replaces ${NAME} with the value of the environment variable NAME. A variable that is
+// set to the empty string expands to nothing. A variable that is not set is an error, so a typo
+// or a missing secret fails at startup instead of becoming an empty value. The error names each
+// unset variable once, in sorted order.
+func expandEnv(data []byte) ([]byte, error) {
+	var missing []string
+	seen := map[string]bool{}
+	out := envRef.ReplaceAllFunc(data, func(match []byte) []byte {
+		name := string(envRef.FindSubmatch(match)[1])
+		value, ok := os.LookupEnv(name)
+		if !ok {
+			if !seen[name] {
+				seen[name] = true
+				missing = append(missing, name)
+			}
+			return nil
+		}
+		return []byte(value)
 	})
+	if len(missing) == 0 {
+		return out, nil
+	}
+	sort.Strings(missing)
+	errs := make([]error, len(missing))
+	for i, name := range missing {
+		errs[i] = fmt.Errorf("undefined environment variable ${%s}", name)
+	}
+	return nil, errors.Join(errs...)
 }
 
 // RollbackEnabled reports whether a failed verify window rolls the release back. Default true.

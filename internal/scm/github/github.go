@@ -83,7 +83,12 @@ func (g *GitHub) OpenPR(ctx context.Context, spec scm.PRSpec) (scm.PR, error) {
 		return scm.PR{}, fmt.Errorf("open PR %s: %w", spec.Head, err)
 	}
 	if len(spec.Labels) > 0 {
-		if err := g.EditLabels(ctx, number, spec.Labels, nil); err != nil {
+		// gh issue edit may reject pull request numbers, so labels go through gh pr edit.
+		if err := g.ensureLabels(ctx, spec.Labels); err != nil {
+			return scm.PR{}, fmt.Errorf("label PR #%d: %w", number, err)
+		}
+		if _, err := g.run(ctx, "", "pr", "edit", strconv.Itoa(number), "--repo", g.Repo,
+			"--add-label", strings.Join(spec.Labels, ",")); err != nil {
 			return scm.PR{}, fmt.Errorf("label PR #%d: %w", number, err)
 		}
 	}

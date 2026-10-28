@@ -103,7 +103,7 @@ func TestOpenPRCreatesLabelsAndReturnsPR(t *testing.T) {
 		f.calls[1].args[:7])
 	assert.Equal(t, []string{"label", "create", "bug", "--repo", repo, "--force", "--color"},
 		f.calls[2].args[:7])
-	assert.Equal(t, []string{"issue", "edit", "12", "--repo", repo, "--add-label", "foundry,bug"},
+	assert.Equal(t, []string{"pr", "edit", "12", "--repo", repo, "--add-label", "foundry,bug"},
 		f.calls[3].args)
 	assert.Equal(t, []string{"pr", "view", "12", "--repo", repo, "--json", prViewFields}, f.calls[4].args)
 }

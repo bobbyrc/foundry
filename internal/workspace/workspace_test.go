@@ -2,10 +2,12 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -79,6 +81,27 @@ func TestRemoteURL(t *testing.T) {
 	}
 	for in, want := range cases {
 		assert.Equal(t, want, remoteURL(Repo{Remote: in}), in)
+	}
+}
+
+func TestConcurrentPrepareOnOneClone(t *testing.T) {
+	repo, m, _ := setup(t)
+	ctx := context.Background()
+
+	const n = 8
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := m.Prepare(ctx, repo, fmt.Sprintf("foundry/c%d", i), fmt.Sprintf("run%d", i))
+			assert.NoError(t, err, "prepare %d", i)
+		}()
+	}
+	wg.Wait()
+
+	for i := range n {
+		assert.DirExists(t, filepath.Join(m.Root, repo.Name, fmt.Sprintf("run%d", i)))
 	}
 }
 

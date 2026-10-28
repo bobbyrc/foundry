@@ -2,9 +2,10 @@
 # Copy it to foundry.yaml and edit. Every key is optional; unset keys take the defaults
 # noted below. Unknown keys are errors, so a typo fails at startup.
 #
-# ${NAME} anywhere in this file is replaced with the environment variable NAME before
-# parsing (an unset variable becomes empty). A bare $NAME is left alone, so shell snippets
-# such as "vercel rollback $FOUNDRY_ROLLBACK_ID" pass through unchanged.
+# A dollar sign followed by NAME in braces is replaced with the environment variable NAME before
+# parsing. A variable that is not set is an error that names it, so the daemon will not start.
+# A bare $NAME is left alone, so shell snippets such as "vercel rollback $FOUNDRY_ROLLBACK_ID"
+# pass through unchanged.
 
 # Server: where foundry listens and where it keeps its state.
 server:
@@ -18,7 +19,7 @@ limits:
   max_runs_per_project: 1              # agent runs in one project at a time (default 1)
   stall_timeout: 15m                   # a run with no output for this long is stalled (default 15m)
   run_timeout: 2h                      # a run longer than this is stopped (default 2h)
-  max_attempts: 3                      # tries per task before it is marked failed (default 3)
+  max_attempts: 3                      # tries per task before it is blocked until a human retries it (default 3)
 
 # Harnesses: the agent CLIs foundry can drive. "claude" and "codex" are always present; you
 # only list one here to change its settings or to add another.
@@ -36,7 +37,7 @@ harnesses:
       MY_AGENT_MODE: "headless"
 
 # Agents: roles. Each role runs on one harness with one model and one set of instructions.
-# The five built-in roles (orchestrator, implementer, reviewer, triager, sre, improver) are
+# The six built-in roles (orchestrator, implementer, reviewer, triager, sre, improver) are
 # always present with the defaults shown in the comments below. Redefine any of them here.
 agents:
   orchestrator:

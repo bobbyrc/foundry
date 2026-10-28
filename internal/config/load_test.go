@@ -146,6 +146,34 @@ func TestBadDurationNamesTheValue(t *testing.T) {
 	assert.Contains(t, err.Error(), `"soon"`)
 }
 
+func TestUnsetEnvVarIsAnErrorNamingEachOnce(t *testing.T) {
+	_, err := Parse([]byte(`
+server:
+  public_url: "${FOUNDRY_TEST_ZULU}/${FOUNDRY_TEST_ALPHA}"
+projects:
+  app:
+    repo: bob/app
+    deploy:
+      type: command
+      options:
+        rollback: "${FOUNDRY_TEST_ALPHA} ${FOUNDRY_TEST_MIKE}"
+`), "")
+	require.Error(t, err)
+	assert.EqualError(t, err, "undefined environment variable ${FOUNDRY_TEST_ALPHA}\n"+
+		"undefined environment variable ${FOUNDRY_TEST_MIKE}\n"+
+		"undefined environment variable ${FOUNDRY_TEST_ZULU}")
+}
+
+func TestEmptyEnvVarExpandsToNothing(t *testing.T) {
+	t.Setenv("FOUNDRY_TEST_EMPTY", "")
+	cfg, err := Parse([]byte(`
+server:
+  public_url: "https://host${FOUNDRY_TEST_EMPTY}/foundry"
+`), "")
+	require.NoError(t, err)
+	assert.Equal(t, "https://host/foundry", cfg.Server.PublicURL)
+}
+
 func TestExampleFileLoads(t *testing.T) {
 	cfg, err := Load("../../foundry.example.yaml")
 	require.NoError(t, err)
