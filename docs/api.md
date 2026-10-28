@@ -7,13 +7,44 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 
 ## Auth and errors
 
-- Base path `/api/v1`. Every route except `GET /api/v1/health` needs
-  `Authorization: Bearer <token>`. `GET /events` also accepts `?token=` because browsers'
-  `EventSource` cannot set headers.
-- The token lives at `<data_dir>/token` (created on first start, mode 600).
-- Errors: `{"error": "<message>"}` with 400 (invalid), 401, 404, 409 (conflict), 500.
+Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
+
+- **The API token** (`Authorization: Bearer <token>`) is for the CLI and the orchestrator agent.
+  It lives at `<data_dir>/token` (created on first start, mode 600). It can read everything and
+  do what operators do (approve, retry, cancel, pause, create tasks, chat, run loops, reload
+  config). It can **never** edit the config file or manage users. `GET /events` also accepts
+  `?token=` because browsers' `EventSource` cannot set headers.
+- **A signed-in person** uses the `foundry_session` cookie, set by `POST /auth/setup` (the first
+  account) or `POST /auth/login`. The cookie is HttpOnly and SameSite=Strict, lasts 30 days, and
+  is `Secure` when `server.public_url` is https. Sign-out (`POST /auth/logout`) ends the session.
+  Changing a password ends that user's other sessions. What a person may do depends on their role:
+
+| Role | Reads pages and events | Acts on work | Edits config, manages users |
+|---|---|---|---|
+| `viewer` | yes | no | no |
+| `operator` | yes | yes | no |
+| `owner` | yes | yes | yes |
+
+  The last owner cannot be demoted or deleted. A state-changing request with a session cookie
+  (any POST, PUT, PATCH or DELETE) must pass a cross-site check: a browser request from another
+  site gets 403. Requests with no `Sec-Fetch-Site` or `Origin` header (the CLI's) pass.
+
+- Errors are `{"error": "<message>"}` with:
+  - 400 invalid request (bad JSON, unknown field, bad value in the URL or query).
+  - 401 no valid token or session. A wrong username or password on sign-in also gets 401, with
+    the same message for both.
+  - 403 `"forbidden"`: signed in, or with the token, but the role or token may not do this. Also
+    `"cross-origin request refused"` for a cross-site browser write.
+  - 404 not found; 409 conflict (including `"that username is taken"`, `"an owner account already
+    exists"` and removing the last owner); 429 too many failed sign-ins for one username (five
+    within 15 minutes; the lock is in memory and a restart clears it); 500 internal (the message is
+    hidden and the error is logged).
+  - 422 the input is well formed but not acceptable. Usually `{"error": "..."}`. A config that does
+    not validate gets `{"error": "...", "problems": [{"path","message"}]}`, where `path` is the
+    dotted setting (`""` when the message names none).
 - Request bodies are limited to 1 MB. A body with a JSON field the route does not define is
   rejected with 400, so check spelling against the shapes below.
+- `GET /health` and the `/auth/*` sign-in routes need no token. `GET /auth/state` never answers 401.
 - The web UI is served at `/` (single-page app; unknown non-API paths serve `index.html`).
 
 ## Routes
@@ -21,6 +52,20 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 | Method & path | Body / query | Response |
 |---|---|---|
 | `GET /health` | | `{"ok":true,"version":"…"}` |
+| `GET /auth/state` | | `{"setup_required":bool,"user":User\|null}` (never 401) |
+| `POST /auth/setup` | `{"username","password"}`; only while no user exists | `User` and sets the cookie (200); 409 once a user exists |
+| `POST /auth/login` | `{"username","password"}` | `User` and sets the cookie (200); 401 wrong credentials; 429 locked |
+| `POST /auth/logout` | | 204, clears the cookie; session only (token gets 403) |
+| `POST /auth/password` | `{"current","new"}` | 204; 401 wrong current password; other sessions end; session only |
+| `GET /users` | | `[]User` (owner) |
+| `POST /users` | `{"username","password","role"}` | `User` (201, owner); 409 taken |
+| `POST /users/{name}/role` | `{"role"}` | `User` (owner); 409 last owner |
+| `POST /users/{name}/password` | `{"password"}` | 204 (owner); ends that user's other sessions |
+| `DELETE /users/{name}` | | 204 (owner); 409 last owner |
+| `GET /config/file` | | `{"path","version","text"}` (owner) |
+| `PUT /config/file` | `{"version","text"}` | `ConfigSaved` (owner); 409 stale version; 422 `problems` |
+| `GET /config/document` | | `{"path","version","document","schema"}` (owner) |
+| `PATCH /config/document` | `{"version","changes":[{"op":"set"\|"delete","path":[...],"value"}]}` | `ConfigSaved` (owner); keeps comments |
 | `GET /events` | `?after=<id>&token=` | SSE stream (below) |
 | `GET /events/history` | `?after=&project=&task_id=&limit=` (default 500) | `[]Event` |
 | `GET /stats` | | `Stats` |
@@ -51,6 +96,17 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 | `POST /conversations` | `{"title":"…","project":"…"}` | `Conversation` (201) |
 | `GET /conversations/{id}` | | `{"conversation":Conversation,"messages":[]ChatMessage}` |
 | `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202); 409 while busy |
+
+Which role may call each route: every `GET` needs `viewer` or better (the token included). Every
+`POST` that acts on work (tasks, approvals, pause, loops, chat, `config/reload`, projects) needs
+`operator` or better (the token included). Everything under `/users` and `/config/file` and
+`/config/document` needs `owner` (the token gets 403).
+
+`User` is `{"username","role","created_at","updated_at"}`. `ConfigSaved` is
+`{"version","restart_required":[...]}`: `restart_required` lists settings read only at start-up
+that changed (`server.addr`, `server.data_dir`, `server.allowed_hosts`, `notify`); they take effect
+after a restart. A save writes the file atomically and then reloads the daemon, so a 500 from a save
+means the file was written but the reload failed.
 
 `status` filters on task and run lists take a comma-separated list; `GET /approvals` takes one
 value. `limit` is a non-negative integer, where 0 or absent means the route's default; a negative

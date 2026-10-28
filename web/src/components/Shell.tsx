@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useCan } from '../auth';
 import { useStats } from '../queries';
+import { AccountPanel } from './AccountPanel';
 import { LiveIndicator } from './LiveIndicator';
 import { PauseSwitch } from './PauseSwitch';
 
-const NAV: { to: string; label: string; end?: boolean; approvals?: boolean; blocked?: boolean }[] = [
+const NAV: { to: string; label: string; end?: boolean; approvals?: boolean; blocked?: boolean; admin?: boolean }[] = [
   { to: '/', label: 'Overview', end: true },
   { to: '/projects', label: 'Projects' },
   { to: '/chat', label: 'Chat' },
@@ -17,6 +19,7 @@ const NAV: { to: string; label: string; end?: boolean; approvals?: boolean; bloc
   { to: '/loops', label: 'Loops' },
   { to: '/agents', label: 'Agents' },
   { to: '/config', label: 'Config' },
+  { to: '/users', label: 'Users', admin: true },
 ];
 
 function Wordmark() {
@@ -44,6 +47,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const stats = useStats();
+  const administer = useCan('administer');
   const pending = stats.data?.approvals_pending ?? 0;
   const blocked = stats.data?.tasks_by_status.blocked ?? 0;
   const close = () => setMenuOpen(false);
@@ -102,7 +106,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <Wordmark />
         </div>
         <nav aria-label="Main">
-          {NAV.map((item) => (
+          {NAV.filter((item) => !item.admin || administer).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -117,6 +121,7 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="sidebar-footer">
+          <AccountPanel />
           <PauseSwitch />
           <LiveIndicator />
         </div>

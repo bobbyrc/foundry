@@ -49,6 +49,12 @@ human, or when it has used up `max_attempts`. Retry it with a note, or cancel it
   code does everything that leaves the machine: commits, pushes, PRs, merges, deploys and rollbacks.
 - **Agents cannot approve their own work.** Worker agents get no API token. Only the orchestrator
   does, and it uses the CLI.
+- **People sign in; config and users change only through them.** The web UI signs people in with
+  a username and password (roles: viewer reads, operator also acts on work, owner also edits
+  `foundry.yaml` and manages users). The API token, which the CLI and the orchestrator hold, can
+  read and act but can never edit the config or users, so an agent cannot rewrite its own policy
+  or environment. The first visit to a new instance creates the owner account, so create it
+  before you make foundry reachable from other machines.
 - **Agents get a small environment.** An agent sees an allowlist (`PATH`, `HOME`, `USER`, `LANG`,
   ...), not foundry's own environment, so `GH_TOKEN` and provider tokens do not reach it. To pass
   one through, name it in the harness's `inherit_env` list. Agents still run as your user and can
@@ -125,7 +131,7 @@ as in `foundry task create -h`.
 | `serve` | run the daemon: API, web UI and engine |
 | `init` | write a starter foundry.yaml |
 | `token` | print the API token |
-| `open` | open the web UI in a browser |
+| `open` | open the web UI (sign in there) |
 | `status` | what is running, and what needs you |
 | `projects` | list managed projects |
 | `project add\|pause\|resume` | add a project to the config, or pause or resume one |
@@ -139,6 +145,7 @@ as in `foundry task create -h`.
 | `events` | show history, or follow the event stream |
 | `loops` | list recurring loops |
 | `loop run NAME` | run a loop now |
+| `user reset-password NAME` | give a user a new random password and sign them out everywhere |
 | `pause` | stop starting runs and loops |
 | `resume` | resume a paused factory |
 | `chat` | message the orchestrator and print its reply |

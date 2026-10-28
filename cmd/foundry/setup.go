@@ -142,16 +142,13 @@ func cmdOpen(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
+	// The browser signs in with a password, so no token goes in the URL. The config is only
+	// needed for the address, which FOUNDRY_API can give instead.
 	cfg, cfgErr := loadConfig(path)
-	if cfgErr != nil && os.Getenv("FOUNDRY_TOKEN") == "" {
+	if cfgErr != nil && os.Getenv("FOUNDRY_API") == "" {
 		return cfgErr
 	}
-	token, err := apiToken(cfg)
-	if err != nil {
-		return err
-	}
-	base := publicBaseURL(cfg)
-	url := strings.TrimRight(base, "/") + "/#token=" + token
+	url := strings.TrimRight(publicBaseURL(cfg), "/") + "/"
 
 	opener := "xdg-open"
 	if runtime.GOOS == "darwin" {

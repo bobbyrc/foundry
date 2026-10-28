@@ -129,13 +129,14 @@ func cmdServe(e *env, args []string) error {
 	}
 
 	handler := api.NewServer(api.Options{
-		Store:        st,
-		Bus:          bus,
-		Controller:   eng,
-		Token:        token,
-		Version:      version,
-		AllowedHosts: serveAllowedHosts(cfg.Server),
-		Logger:       logger,
+		Store:         st,
+		Bus:           bus,
+		Controller:    eng,
+		Token:         token,
+		Version:       version,
+		SecureCookies: strings.HasPrefix(cfg.Server.PublicURL, "https://"),
+		AllowedHosts:  serveAllowedHosts(cfg.Server),
+		Logger:        logger,
 	})
 	// Every request context derives from baseCtx. Streaming (SSE) handlers run until their
 	// context ends, and http.Server.Shutdown does not end it, so shutdown cancels baseCtx first.

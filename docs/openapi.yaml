@@ -24,7 +24,12 @@ servers:
     description: Local foundry daemon (default listen address)
 security:
   - bearer: []
+  - session: []
 tags:
+  - name: auth
+    description: Sign-in, sign-out and the signed-in user's own password. Sessions are cookies.
+  - name: users
+    description: Accounts and roles. Owner sessions only.
   - name: health
   - name: events
     description: Server-Sent Event stream and stored event history.
@@ -41,6 +46,7 @@ tags:
   - name: friction
   - name: loops
   - name: config
+    description: Reading and saving foundry.yaml. Owner sessions only; the API token cannot.
   - name: conversations
     description: Chat threads with the orchestrator agent.
 
@@ -906,12 +912,386 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /auth/state:
+    get:
+      operationId: getAuthState
+      tags: [auth]
+      summary: Whether setup is needed, and who is signed in.
+      description: Never answers 401. `user` is the signed-in user when the request carries a valid session cookie, otherwise null.
+      security: []
+      responses:
+        '200':
+          description: The sign-in state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthState'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/setup:
+    post:
+      operationId: setupOwner
+      tags: [auth]
+      summary: Create the first account, as an owner.
+      description: Allowed only while no user exists. The check and the insert happen in one transaction, so two racing requests cannot both succeed. On success the response sets the session cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: The owner account, with the session cookie set.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/login:
+    post:
+      operationId: logIn
+      tags: [auth]
+      summary: Sign in with a username and password.
+      description: Five failed attempts for one username within 15 minutes lock that username; further attempts answer 429 until the window passes. The lock is in memory, so a restart clears it. An unknown username takes as long as a wrong password.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: Signed in. The session cookie is set.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/logout:
+    post:
+      operationId: logOut
+      tags: [auth]
+      summary: End the current session.
+      description: Requires a session cookie. The API token has no session, so it gets 403.
+      responses:
+        '204':
+          description: Signed out. The session cookie is cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/password:
+    post:
+      operationId: changeOwnPassword
+      tags: [auth]
+      summary: Change the signed-in user's password.
+      description: Every other session of that user ends. The session making the request stays signed in. Any role may call it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Changed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List accounts.
+      description: Owner only. Sorted by username. The password hash is never sent.
+      responses:
+        '200':
+          description: Every account.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create an account.
+      description: Owner only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '201':
+          description: The created account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /users/{name}/role:
+    post:
+      operationId: setUserRole
+      tags: [users]
+      summary: Change an account's role.
+      description: Owner only. Demoting the last owner is refused with 409.
+      parameters:
+        - $ref: '#/components/parameters/UserName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          description: The updated account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /users/{name}/password:
+    post:
+      operationId: setUserPassword
+      tags: [users]
+      summary: Set an account's password.
+      description: Owner only. The account's other sessions end. When the owner sets their own password, their current session stays.
+      parameters:
+        - $ref: '#/components/parameters/UserName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPasswordRequest'
+      responses:
+        '204':
+          description: Set.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /users/{name}:
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete an account and its sessions.
+      description: Owner only. Deleting the last owner is refused with 409.
+      parameters:
+        - $ref: '#/components/parameters/UserName'
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /config/file:
+    get:
+      operationId: getConfigFile
+      tags: [config]
+      summary: Read the config file as written.
+      description: Owner only. Unlike GET /config, nothing is redacted, so `${NAME}` references appear as written. The version is the SHA-256 of the text and must be sent back with a save.
+      responses:
+        '200':
+          description: The file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigFile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: putConfigFile
+      tags: [config]
+      summary: Replace the config file's text.
+      description: Owner only. Refused with 409 when the file changed since the version was read. The new text is validated like a load before anything is written. On success the file is written atomically and the daemon reloads it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutConfigFileRequest'
+      responses:
+        '200':
+          description: Saved and reloaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ProblemsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /config/document:
+    get:
+      operationId: getConfigDocument
+      tags: [config]
+      summary: Read the config file as a document tree, with its settings schema.
+      description: Owner only. The tree is parsed without `${NAME}` expansion, so references stay as written. The schema lists every setting with its type and help text, taken from the doc comments in the config code.
+      responses:
+        '200':
+          description: The document, its version and the schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigDocument'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ProblemsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchConfigDocument
+      tags: [config]
+      summary: Apply setting changes to the config file.
+      description: Owner only. Changes walk the YAML tree, so comments and key order are kept. The same version check, validation, atomic write and reload as PUT /config/file apply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchConfigDocumentRequest'
+      responses:
+        '200':
+          description: Saved and reloaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigSaved'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ProblemsError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
 components:
   securitySchemes:
     bearer:
       type: http
       scheme: bearer
-      description: The token in `<data_dir>/token`, created on first start with mode 600.
+      description: The token in `<data_dir>/token`, created on first start with mode 600. The CLI and the orchestrator agent use it. It can read and act, never edit config or manage users.
+    session:
+      type: apiKey
+      in: cookie
+      name: foundry_session
+      description: Set by signing in (POST /auth/login or /auth/setup). HttpOnly, SameSite=Strict. Browsers only. The role decides what the session may do.
     queryToken:
       type: apiKey
       in: query
@@ -919,6 +1299,13 @@ components:
       description: Accepted only by `GET /events`, because browsers' EventSource cannot set headers.
 
   parameters:
+    UserName:
+      name: name
+      in: path
+      required: true
+      description: Account username.
+      schema:
+        type: string
     Limit:
       name: limit
       in: query
@@ -971,11 +1358,35 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Unauthorized:
-      description: The bearer token is missing or wrong.
+      description: No valid token or session. A bad username or password on sign-in also answers this.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The caller is signed in or has the token, but the role or the token may not do this. Also returned for a cross-site browser request that would change state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: Too many failed sign-ins for this username. Wait for the window to pass.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unprocessable:
+      description: The input is well formed but not acceptable, such as a short password or an unknown role.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ProblemsError:
+      description: The config does not validate. `problems` lists each setting path and its message.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ConfigProblems'
     NotFound:
       description: No record has that ID.
       content:
@@ -995,7 +1406,194 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
 
+  headers:
+    SessionCookie:
+      description: foundry_session=<value>; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000 (30 days). Secure when public_url is https.
+      schema:
+        type: string
+
   schemas:
+    User:
+      type: object
+      description: A signed-in account. The password hash is never included.
+      required: [username, role, created_at, updated_at]
+      properties:
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Role:
+      type: string
+      enum: [viewer, operator, owner]
+      description: viewer reads; operator also acts on work; owner also edits config and manages users.
+
+    AuthState:
+      type: object
+      required: [setup_required, user]
+      properties:
+        setup_required:
+          type: boolean
+          description: True while no account exists; the UI then shows the owner setup page.
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - type: 'null'
+
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    NewUser:
+      type: object
+      additionalProperties: false
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+          description: Lower case letters, digits, dots, underscores and hyphens; starts with a letter or digit; at most 64 characters.
+        password:
+          type: string
+          description: At least 12 characters.
+        role:
+          $ref: '#/components/schemas/Role'
+
+    RoleRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+
+    SetPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [current, new]
+      properties:
+        current:
+          type: string
+        new:
+          type: string
+
+    ConfigFile:
+      type: object
+      required: [path, version, text]
+      properties:
+        path:
+          type: string
+        version:
+          type: string
+          description: SHA-256 (hex) of text. Send it back with a save.
+        text:
+          type: string
+
+    ConfigDocument:
+      type: object
+      required: [path, version, document, schema]
+      properties:
+        path:
+          type: string
+        version:
+          type: string
+        document:
+          description: The file as a JSON-compatible tree; references such as `${NAME}` stay as text.
+        schema:
+          type: object
+          description: Every setting, with its key, type, help text, fields (sections) or item (maps and lists).
+
+    PutConfigFileRequest:
+      type: object
+      additionalProperties: false
+      required: [version, text]
+      properties:
+        version:
+          type: string
+        text:
+          type: string
+
+    PatchConfigDocumentRequest:
+      type: object
+      additionalProperties: false
+      required: [version, changes]
+      properties:
+        version:
+          type: string
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigChange'
+
+    ConfigChange:
+      type: object
+      additionalProperties: false
+      required: [op, path]
+      properties:
+        op:
+          type: string
+          enum: [set, delete]
+        path:
+          type: array
+          description: Mapping keys; a decimal string indexes a list.
+          items:
+            type: string
+        value:
+          description: For set. Any JSON value.
+
+    ConfigSaved:
+      type: object
+      required: [version, restart_required]
+      properties:
+        version:
+          type: string
+          description: Version of the saved text.
+        restart_required:
+          type: array
+          description: Settings read only at start-up that changed. They take effect after a restart. Empty when none.
+          items:
+            type: string
+
+    ConfigProblem:
+      type: object
+      required: [path, message]
+      properties:
+        path:
+          type: string
+          description: Dotted setting path, empty when the message names none (for example a YAML syntax error).
+        message:
+          type: string
+
+    ConfigProblems:
+      type: object
+      required: [error, problems]
+      properties:
+        error:
+          type: string
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigProblem'
+
     Error:
       type: object
       required: [error]

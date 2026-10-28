@@ -91,7 +91,6 @@ describe('EventStream reconnects', () => {
     vi.useFakeTimers();
     vi.stubGlobal('EventSource', FakeEventSource);
     vi.stubGlobal('window', {
-      localStorage: { getItem: () => 'tok' },
       addEventListener: () => {},
     });
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);

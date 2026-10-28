@@ -395,3 +395,70 @@ export interface Config {
   self_project: string;
   path: string;
 }
+
+// ---- accounts ----
+
+export type Role = 'viewer' | 'operator' | 'owner';
+
+export interface User {
+  username: string;
+  role: Role;
+  created_at: string;
+  updated_at: string;
+}
+
+/** The answer to GET /auth/state. `user` is the signed-in account, or null. */
+export interface AuthStateResponse {
+  setup_required: boolean;
+  user: User | null;
+}
+
+// ---- Config editing (owner only; GET/PATCH /config/document and GET/PUT /config/file) ----
+
+/** The kinds of node in the config schema. "section" has fields; "map" and "list" have an item. */
+export type SchemaType = 'section' | 'map' | 'list' | 'string' | 'int' | 'float' | 'bool' | 'duration' | 'any';
+
+/** One node of the schema the server sends with the document. The root is a section with key "". */
+export interface SchemaNode {
+  key: string;
+  type: SchemaType;
+  help?: string;
+  /** Sections: their fields, in display order. */
+  fields?: SchemaNode[];
+  /** Maps: the schema of each value. Lists: the schema of each element. */
+  item?: SchemaNode;
+}
+
+/** One edit to the file. `path` is the mapping keys; decimal strings index lists. */
+export interface ConfigChange {
+  op: 'set' | 'delete';
+  path: string[];
+  value?: unknown;
+}
+
+/** A problem the server found in the edited file. `path` is dotted, and "" means the whole file. */
+export interface ConfigProblem {
+  path: string;
+  message: string;
+}
+
+/** GET /config/document: the file as JSON, with ${NAME} references left unexpanded. */
+export interface ConfigDocument {
+  path: string;
+  version: string;
+  document: unknown;
+  schema: SchemaNode;
+}
+
+/** GET /config/file: the raw text of the file. */
+export interface ConfigText {
+  path: string;
+  version: string;
+  text: string;
+}
+
+/** The answer to a successful save. `restart_required` lists the settings that need a restart. */
+export interface ConfigSaved {
+  version: string;
+  restart_required: string[];
+}

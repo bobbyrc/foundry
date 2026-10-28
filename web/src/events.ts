@@ -3,7 +3,6 @@
 import { useSyncExternalStore } from 'react';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { ApiError, getStats } from './api';
-import { getToken } from './auth';
 import { keys } from './keys';
 import type { FoundryEvent } from './types';
 
@@ -51,8 +50,9 @@ export class EventStream {
   private readonly listeners = new Set<Listener>();
   private readonly statusListeners = new Set<() => void>();
 
+  /** Starts the stream. Only call it while signed in: the session cookie is what authenticates it. */
   start(queryClient: QueryClient): void {
-    if (this.running || getToken() === null) return;
+    if (this.running) return;
     this.queryClient = queryClient;
     this.running = true;
     this.connect();
@@ -95,12 +95,11 @@ export class EventStream {
   }
 
   private connect(): void {
-    const token = getToken();
-    if (!this.running || token === null) return;
+    if (!this.running) return;
 
-    const params = new URLSearchParams({ token });
-    if (this.lastId > 0) params.set('after', String(this.lastId));
-    const source = new EventSource(`/api/v1/events?${params.toString()}`);
+    // The browser sends the session cookie with EventSource, so the URL carries no credential.
+    const query = this.lastId > 0 ? `?after=${this.lastId}` : '';
+    const source = new EventSource(`/api/v1/events${query}`);
     this.source = source;
 
     source.onopen = () => {
@@ -124,7 +123,7 @@ export class EventStream {
     };
   }
 
-  /** Checks the token (a 401 stops the stream) and schedules the next connect attempt. */
+  /** Checks the session (a 401 stops the stream) and schedules the next connect attempt. */
   private async recover(): Promise<void> {
     try {
       await getStats();

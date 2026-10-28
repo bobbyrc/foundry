@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useCan } from '../auth';
 import { useLoops, useProjects, useSetProjectPaused } from '../queries';
 import { Button } from '../components/Button';
 import { Empty } from '../components/Empty';
@@ -106,10 +107,13 @@ function PauseControl({ project }: { project: ProjectView }) {
   const toggle = useSetProjectPaused();
   const mine = toggle.variables?.name === project.name;
   const pending = toggle.isPending && mine;
+  const canOperate = useCan('operate');
 
   let control;
   if (project.paused_by === 'config') {
     control = <span className="muted small project-config-pause">Paused in foundry.yaml</span>;
+  } else if (!canOperate) {
+    control = <span className="muted small">{project.paused ? 'Paused' : 'Running'}</span>;
   } else if (project.paused) {
     control = (
       <Button variant="danger-fill" disabled={pending} onClick={() => toggle.mutate({ name: project.name, pause: false })}>

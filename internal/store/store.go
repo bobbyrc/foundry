@@ -12,6 +12,13 @@ import (
 // ErrNotFound is returned (wrapped is fine) when a lookup by ID or key finds nothing.
 var ErrNotFound = errors.New("not found")
 
+// ErrConflict is returned when a create would duplicate a unique key (a taken username), or
+// when the first-user setup runs after a user already exists.
+var ErrConflict = errors.New("conflict")
+
+// ErrLastOwner is returned when a change would leave no user with the owner role.
+var ErrLastOwner = errors.New("the last owner cannot be removed or demoted")
+
 type TaskFilter struct {
 	Project  string
 	Statuses []domain.TaskStatus // empty = all
@@ -112,4 +119,27 @@ type Store interface {
 	GetLoopState(ctx context.Context, name, project string) (domain.LoopState, error)
 	SaveLoopState(ctx context.Context, s domain.LoopState) error
 	ListLoopStates(ctx context.Context) ([]domain.LoopState, error)
+
+	// CreateFirstUser stores u only if no user exists yet, atomically, and returns ErrConflict
+	// otherwise. CreatedAt and UpdatedAt are set when zero.
+	CreateFirstUser(ctx context.Context, u domain.User) (domain.User, error)
+	// CreateUser returns ErrConflict when the username is taken.
+	CreateUser(ctx context.Context, u domain.User) (domain.User, error)
+	GetUser(ctx context.Context, username string) (domain.User, error)
+	// ListUsers returns every user ordered by username.
+	ListUsers(ctx context.Context) ([]domain.User, error)
+	CountUsers(ctx context.Context) (int, error)
+	// SetUserRole returns ErrLastOwner when it would demote the only owner.
+	SetUserRole(ctx context.Context, username string, role domain.Role) (domain.User, error)
+	// SetUserPassword replaces the hash and deletes the user's sessions except keepSessionID
+	// (empty keeps none).
+	SetUserPassword(ctx context.Context, username, passwordHash, keepSessionID string) error
+	// DeleteUser deletes the user and their sessions; ErrLastOwner for the only owner.
+	DeleteUser(ctx context.Context, username string) error
+
+	CreateSession(ctx context.Context, s domain.Session) error
+	// GetSession returns ErrNotFound for an unknown or expired (ExpiresAt <= now) session.
+	GetSession(ctx context.Context, id string, now time.Time) (domain.Session, error)
+	DeleteSession(ctx context.Context, id string) error
+	DeleteExpiredSessions(ctx context.Context, now time.Time) error
 }

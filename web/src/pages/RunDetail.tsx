@@ -4,6 +4,7 @@ import { cx, formatCost, formatTokens, shortId } from '../lib/format';
 import { isActiveRun } from '../lib/status';
 import { elapsedMs, formatDuration, parseTime } from '../lib/time';
 import { useNow } from '../lib/clock';
+import { useCan } from '../auth';
 import { useCancelRun, useRun, useTask } from '../queries';
 import { Button } from '../components/Button';
 import { Callout } from '../components/Callout';
@@ -20,6 +21,7 @@ export function RunDetail() {
   const task = useTask(run.data?.task_id ?? '');
   const cancel = useCancelRun(id);
   const now = useNow();
+  const canOperate = useCan('operate');
 
   if (run.isError) return <ErrorLine error={run.error} />;
   if (!run.data) return <p className="muted">Loading run…</p>;
@@ -39,7 +41,7 @@ export function RunDetail() {
           </>
         }
         actions={
-          active ? (
+          active && canOperate ? (
             <Button variant="danger" confirm disabled={cancel.isPending} onClick={() => cancel.mutate()}>
               Cancel run
             </Button>

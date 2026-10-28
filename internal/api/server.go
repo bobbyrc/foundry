@@ -3,16 +3,16 @@
 package api
 
 import (
-	"crypto/subtle"
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/bobbyrc/foundry/internal/auth"
 	"github.com/bobbyrc/foundry/internal/events"
 	"github.com/bobbyrc/foundry/internal/store"
 )
@@ -22,9 +22,13 @@ type Options struct {
 	Store      store.Store
 	Bus        events.Bus
 	Controller Controller
-	// Token is the bearer token every route except health requires.
+	// Token is the bearer token that the CLI and the orchestrator agent send. It can read and
+	// operate, but never edit the config or manage users; see internal/auth.
 	Token   string
 	Version string
+	// SecureCookies sets the Secure flag on the session cookie. serve sets it when public_url is
+	// https. A request that arrives over TLS gets the flag either way.
+	SecureCookies bool
 	// AllowedHosts are the Host names accepted beyond localhost, 127.0.0.1 and ::1, which are
 	// always accepted. serve computes the list: the host of server.addr (not a wildcard
 	// address), the host of server.public_url and server.allowed_hosts. A request for any other
@@ -42,6 +46,13 @@ type server struct {
 	web  fs.FS
 	// streams holds one slot per open /events stream; see events in sse.go.
 	streams chan struct{}
+	// limiter counts failed sign-ins per username; see authLogin.
+	limiter *auth.Limiter
+	// now is the clock for sessions. Tests may replace it before serving requests.
+	now func() time.Time
+	// configMu serialises saves of the config file, so two saves cannot both check the version
+	// and then overwrite each other.
+	configMu sync.Mutex
 }
 
 // NewServer returns the handler for every foundry HTTP route.
@@ -53,7 +64,8 @@ func NewServer(o Options) http.Handler {
 	if web == nil {
 		web = DefaultWeb()
 	}
-	s := &server{opts: o, log: o.Logger, web: web, streams: make(chan struct{}, maxEventStreams)}
+	s := &server{opts: o, log: o.Logger, web: web, streams: make(chan struct{}, maxEventStreams), now: time.Now}
+	s.limiter = auth.NewLimiter(signInLimit, signInWindow, s.now)
 
 	r := chi.NewRouter()
 	r.Use(securityHeaders)
@@ -63,9 +75,15 @@ func NewServer(o Options) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.NotFound(notFound)
 		r.MethodNotAllowed(methodNotAllowed)
+		// Outside the principal middleware: health, and the routes that sign a person in.
 		r.Get("/health", s.health)
+		r.Get("/auth/state", s.authState)
+		r.Post("/auth/setup", s.authSetup)
+		r.Post("/auth/login", s.authLogin)
 		r.Group(func(r chi.Router) {
-			r.Use(s.auth, clampLimits)
+			r.Use(s.principal, clampLimits)
+			r.Post("/auth/logout", s.authLogout)
+			r.Post("/auth/password", s.changePassword)
 			s.apiRoutes(r)
 		})
 	})
@@ -73,71 +91,6 @@ func NewServer(o Options) http.Handler {
 	r.HandleFunc("/api/*", notFound)
 	r.Handle("/*", http.HandlerFunc(s.serveWeb))
 	return r
-}
-
-func (s *server) apiRoutes(r chi.Router) {
-	r.Get("/events", s.events)
-	r.Get("/events/history", s.eventHistory)
-	r.Get("/stats", s.stats)
-
-	r.Get("/control", s.getControl)
-	r.Post("/control/pause", s.setPaused(true))
-	r.Post("/control/resume", s.setPaused(false))
-
-	r.Get("/projects", s.listProjects)
-	r.Post("/projects/{name}/pause", s.setProjectPaused(true))
-	r.Post("/projects/{name}/resume", s.setProjectPaused(false))
-	r.Get("/agents", s.listAgents)
-
-	r.Get("/tasks", s.listTasks)
-	r.Post("/tasks", s.createTask)
-	r.Get("/tasks/{id}", s.getTask)
-	r.Post("/tasks/{id}/cancel", s.cancelTask)
-	r.Post("/tasks/{id}/retry", s.retryTask)
-
-	r.Get("/runs", s.listRuns)
-	r.Get("/runs/{id}", s.getRun)
-	r.Get("/runs/{id}/logs", s.runLogs)
-	r.Post("/runs/{id}/cancel", s.cancelRun)
-
-	r.Get("/approvals", s.listApprovals)
-	r.Post("/approvals/{id}/decide", s.decideApproval)
-
-	r.Get("/deployments", s.listDeployments)
-	r.Get("/signals", s.listSignals)
-	r.Get("/friction", s.listFriction)
-
-	r.Get("/loops", s.listLoops)
-	r.Post("/loops/{name}/run", s.runLoop)
-
-	r.Get("/config", s.getConfig)
-	r.Post("/config/reload", s.reloadConfig)
-
-	r.Get("/conversations", s.listConversations)
-	r.Post("/conversations", s.createConversation)
-	r.Get("/conversations/{id}", s.getConversation)
-	r.Post("/conversations/{id}/messages", s.sendMessage)
-}
-
-// auth requires the bearer token. GET /events also accepts ?token=, because browsers'
-// EventSource cannot set headers. The health route is mounted outside this middleware.
-func (s *server) auth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tok := ""
-		if h := r.Header.Get("Authorization"); len(h) > len("Bearer ") && strings.EqualFold(h[:len("Bearer ")], "Bearer ") {
-			tok = h[len("Bearer "):]
-		}
-		if tok == "" && r.URL.Path == "/api/v1/events" {
-			tok = r.URL.Query().Get("token")
-		}
-		// An empty configured token must never match; ConstantTimeCompare alone would
-		// treat two empty values as equal.
-		if tok == "" || s.opts.Token == "" || subtle.ConstantTimeCompare([]byte(tok), []byte(s.opts.Token)) != 1 {
-			writeErrorMsg(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // requestLog writes one line per request. Event streams and health checks log at debug level

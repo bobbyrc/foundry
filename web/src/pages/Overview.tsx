@@ -16,6 +16,7 @@ import { Empty } from '../components/Empty';
 import { ErrorLine } from '../components/ErrorLine';
 import { RelTime } from '../components/RelTime';
 import { RetryTaskControl, CancelTaskButton } from '../components/TaskActions';
+import { useCan } from '../auth';
 import { useApprovals, useCancelRun, useRuns, useTask, useTasks } from '../queries';
 import type { FoundryEvent, Run, Task } from '../types';
 
@@ -130,6 +131,7 @@ function LiveRuns() {
 function RunItem({ run, scale, now }: { run: Run; scale: number; now: number }) {
   const task = useTask(run.task_id);
   const cancel = useCancelRun(run.id);
+  const canOperate = useCan('operate');
   const started = parseTime(run.started_at);
   const lastOutput = parseTime(run.last_output_at);
   const quietMs = lastOutput ? now - lastOutput.getTime() : started ? now - started.getTime() : 0;
@@ -140,9 +142,11 @@ function RunItem({ run, scale, now }: { run: Run; scale: number; now: number }) 
     <li className="run-item">
       <div className="run-item-head">
         <Link to={`/runs/${run.id}`}>{task.data?.task.title ?? 'Loading task…'}</Link>
-        <Button variant="ghost" confirm disabled={cancel.isPending} onClick={() => cancel.mutate()}>
-          Cancel
-        </Button>
+        {canOperate ? (
+          <Button variant="ghost" confirm disabled={cancel.isPending} onClick={() => cancel.mutate()}>
+            Cancel
+          </Button>
+        ) : null}
       </div>
       <div className="run-item-meta">
         <span>

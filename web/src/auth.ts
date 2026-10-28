@@ -1,100 +1,130 @@
+// Who is signed in. The server holds the session in an HttpOnly cookie that the browser sends by
+// itself, so this module keeps only what the UI needs to draw: loading, setup, signed out (and
+// whether the session just ended) or signed in as a user. Nothing is stored in the browser.
 import { useSyncExternalStore } from 'react';
+import * as api from './api';
+import { can, type Action } from './lib/roles';
+import type { User } from './types';
 
-// The bearer token lives in localStorage. A 401 from any API call (api.ts dispatches
-// UNAUTHORIZED_EVENT) flips the app back to the Connect page until a new token is saved.
-
-const TOKEN_KEY = 'foundry.token';
+/** Dispatched on window by api.ts when a normal call comes back 401: the session has ended. */
 export const UNAUTHORIZED_EVENT = 'foundry:unauthorized';
 
-const listeners = new Set<() => void>();
-let unauthorized = false;
-// The saved token is also kept in memory, so it works until the next reload when storage is blocked.
-let memoryToken: string | null = null;
+export type AuthState =
+  | { status: 'loading' }
+  | { status: 'setup' }
+  | { status: 'signed-out'; expired: boolean }
+  | { status: 'signed-in'; user: User };
 
-function emit(): void {
+export type AuthEvent =
+  | { type: 'loaded'; setupRequired: boolean; user: User | null }
+  | { type: 'signed-in'; user: User }
+  | { type: 'signed-out' }
+  | { type: 'unauthorized' }
+  | { type: 'user-updated'; user: User };
+
+/**
+ * The state machine, with no side effects, so each transition can be tested. A 401 only ends a
+ * session that was signed in; before sign-in it means nothing has changed.
+ */
+export function nextState(state: AuthState, event: AuthEvent): AuthState {
+  switch (event.type) {
+    case 'loaded':
+      if (event.setupRequired) return { status: 'setup' };
+      if (event.user) return { status: 'signed-in', user: event.user };
+      return { status: 'signed-out', expired: false };
+    case 'signed-in':
+      return { status: 'signed-in', user: event.user };
+    case 'signed-out':
+      return { status: 'signed-out', expired: false };
+    case 'unauthorized':
+      return state.status === 'signed-in' ? { status: 'signed-out', expired: true } : state;
+    case 'user-updated':
+      return state.status === 'signed-in' ? { status: 'signed-in', user: event.user } : state;
+  }
+}
+
+const RETRY_MS = 2_000;
+
+const listeners = new Set<() => void>();
+let state: AuthState = { status: 'loading' };
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function dispatch(event: AuthEvent): void {
+  const next = nextState(state, event);
+  if (next === state) return;
+  state = next;
   for (const listener of listeners) listener();
 }
 
-export function getToken(): string | null {
-  try {
-    const token = window.localStorage.getItem(TOKEN_KEY)?.trim();
-    if (token) return token;
-  } catch {
-    // Storage can be blocked (private window, disabled site data): fall back to memory.
-  }
-  return memoryToken;
-}
-
-export function saveToken(token: string): void {
-  memoryToken = token.trim() || null;
-  try {
-    window.localStorage.setItem(TOKEN_KEY, token.trim());
-  } catch {
-    // Without storage the token lasts only until the next reload.
-  }
-  unauthorized = false;
-  emit();
-}
-
-const TOKEN_FRAGMENT = /(?:^#|&)token=([^&]*)/;
-
-// A bearer token is never empty, contains no whitespace or control characters.
-const VALID_TOKEN = /^[^\s\x00-\x1f\x7f]+$/;
-
-/** Extracts the token from a `#token=...` fragment. Returns null when absent, malformed or invalid. */
-export function parseTokenFragment(hash: string): string | null {
-  const match = TOKEN_FRAGMENT.exec(hash);
-  if (!match?.[1]) return null;
-  let token: string;
-  try {
-    token = decodeURIComponent(match[1]);
-  } catch {
-    // A bad percent-escape (e.g. "%E0%A4%A") must not throw at startup.
-    return null;
-  }
-  return VALID_TOKEN.test(token) ? token : null;
-}
-
-/** Reads `#token=...` from the URL once, stores it if valid and always drops the fragment. */
-export function captureTokenFromHash(): void {
-  const hash = window.location.hash;
-  if (!TOKEN_FRAGMENT.test(hash)) return;
-  const token = parseTokenFragment(hash);
-  if (token !== null) saveToken(token);
-  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-}
-
-export function isUnauthorized(): boolean {
-  return unauthorized;
-}
-
-export function subscribeAuth(listener: () => void): () => void {
+function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
 }
 
-export function useUnauthorized(): boolean {
-  return useSyncExternalStore(subscribeAuth, isUnauthorized);
+export function getAuthState(): AuthState {
+  return state;
 }
 
-/** Connected means a token is stored and the last API call was not rejected. */
-export function isConnected(): boolean {
-  return getToken() !== null && !unauthorized;
+/** Asks the server who is signed in. Called once at startup, and again after a self role change. */
+export async function loadAuthState(): Promise<void> {
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  try {
+    const res = await api.getAuthState();
+    dispatch({ type: 'loaded', setupRequired: res.setup_required, user: res.user });
+  } catch {
+    // The server is unreachable: stay on "loading" and ask again shortly.
+    retryTimer = setTimeout(() => void loadAuthState(), RETRY_MS);
+  }
 }
 
-// The App watches this rather than useUnauthorized alone: saving the first token changes whether
-// it is connected but not the rejected flag, and React redraws only when the watched value changes.
-export function useConnected(): boolean {
-  return useSyncExternalStore(subscribeAuth, isConnected);
+/** Signs in. Rejects with an ApiError (401 wrong credentials, 429 too many attempts). */
+export async function signIn(username: string, password: string): Promise<void> {
+  const user = await api.login(username, password);
+  dispatch({ type: 'signed-in', user });
+}
+
+/** Creates the first owner account and signs in as it. Rejects with 409 when one already exists. */
+export async function setUp(username: string, password: string): Promise<void> {
+  const user = await api.setupOwner(username, password);
+  dispatch({ type: 'signed-in', user });
+}
+
+/** Ends the session on the server and drops back to the sign-in page. */
+export async function signOut(): Promise<void> {
+  try {
+    await api.logout();
+  } finally {
+    // Even when the request fails, the screen must not keep showing the account.
+    dispatch({ type: 'signed-out' });
+  }
+}
+
+/** Updates the signed-in user after its own password or role changed. */
+export function setSignedInUser(user: User): void {
+  dispatch({ type: 'user-updated', user });
+}
+
+export function useAuthState(): AuthState {
+  return useSyncExternalStore(subscribe, getAuthState);
+}
+
+/** The signed-in user, or null before sign-in and after the session ends. */
+export function useMe(): User | null {
+  const auth = useAuthState();
+  return auth.status === 'signed-in' ? auth.user : null;
+}
+
+/** Whether the signed-in user may do `action`. False while nobody is signed in. */
+export function useCan(action: Action): boolean {
+  const me = useMe();
+  return can(me?.role, action);
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener(UNAUTHORIZED_EVENT, () => {
-    if (!unauthorized) {
-      unauthorized = true;
-      emit();
-    }
-  });
+  window.addEventListener(UNAUTHORIZED_EVENT, () => dispatch({ type: 'unauthorized' }));
 }

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -49,7 +48,7 @@ func addProject(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := writeFileAtomic(path, out); err != nil {
+	if err := config.WriteFileAtomic(path, out); err != nil {
 		return err
 	}
 	fmt.Fprintf(e.out, "added project %s (%s) to %s\n", name, *repo, path)
@@ -277,45 +276,6 @@ func mappingValue(m *yaml.Node, key string) *yaml.Node {
 		if m.Content[i].Value == key {
 			return m.Content[i+1]
 		}
-	}
-	return nil
-}
-
-// writeFileAtomic replaces the file at path with data. The new bytes go to a temporary file in the
-// same directory, which is then renamed over the old file, so a crash or a full disk leaves either
-// the old config or the new one, never a half-written one. The temporary file takes the old file's
-// permissions, because a config can hold secrets.
-func writeFileAtomic(path string, data []byte) error {
-	// A symlinked config (for example one managed by a dotfile tool) is written through to its
-	// target; renaming over the link itself would replace the link with a plain file.
-	target, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return err
-	}
-	info, err := os.Stat(target)
-	if err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(target), "."+filepath.Base(target)+".*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp file for %s: %w", path, err)
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	_, werr := tmp.Write(data)
-	if werr == nil {
-		werr = tmp.Chmod(info.Mode().Perm())
-	}
-	if werr == nil {
-		werr = tmp.Sync()
-	}
-	if cerr := tmp.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr != nil {
-		return fmt.Errorf("write %s: %w", path, werr)
-	}
-	if err := os.Rename(tmp.Name(), target); err != nil {
-		return fmt.Errorf("replace %s: %w", path, err)
 	}
 	return nil
 }

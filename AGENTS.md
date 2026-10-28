@@ -90,13 +90,18 @@ reviewer's approval.
 9. **Agent text cannot ping people.** Any new code that posts agent-written text to GitHub must
    go through `quoteMentions` (`internal/scm/github/mentions.go`).
 10. **Strict input.** Unknown YAML keys and unknown JSON request fields are errors. Keep it so.
-11. **Local by default.** The API binds to loopback, needs the bearer token, and refuses unknown
-    Host headers (DNS-rebinding guard). Remote access is opt-in through `public_url` and
-    `allowed_hosts`.
+11. **Local by default.** The API binds to loopback, needs the bearer token or a signed-in
+    session, and refuses unknown Host headers (DNS-rebinding guard). Remote access is opt-in
+    through `public_url` and `allowed_hosts`.
+12. **Config and users change only through a person.** Editing `foundry.yaml` and managing users
+    need a signed-in owner session. The API token, which the orchestrator agent holds, can never
+    do either (`auth.TokenAllows`), so an agent cannot rewrite its own policy or environment.
+    Every new route declares the action it needs (read, operate or administer).
 
 Changes to `internal/engine/prompts/**`, `internal/policy/**`, `internal/config/defaults.go`,
-`internal/sysproc/**`, `internal/engine/loop_shepherd.go` and `internal/engine/helpers.go` are
-rated **high** risk by a built-in rule, and `AGENTS.md`, `CLAUDE.md` and `foundry.yaml` files are
+`internal/sysproc/**`, `internal/engine/loop_shepherd.go`, `internal/engine/helpers.go`,
+`internal/auth/**`, `internal/api/auth.go` and `internal/api/routes.go` are rated **high** risk by
+a built-in rule, and `AGENTS.md`, `CLAUDE.md` and `foundry.yaml` files are
 **medium**: the owner approves them. Do not move logic out of those files to avoid the rule.
 
 ## Go conventions
