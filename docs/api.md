@@ -12,6 +12,8 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
   `EventSource` cannot set headers.
 - The token lives at `<data_dir>/token` (created on first start, mode 600).
 - Errors: `{"error": "<message>"}` with 400 (invalid), 401, 404, 409 (conflict), 500.
+- Request bodies are limited to 1 MB. A body with a JSON field the route does not define is
+  rejected with 400, so check spelling against the shapes below.
 - The web UI is served at `/` (single-page app; unknown non-API paths serve `index.html`).
 
 ## Routes
@@ -20,7 +22,7 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 |---|---|---|
 | `GET /health` | | `{"ok":true,"version":"…"}` |
 | `GET /events` | `?after=<id>&token=` | SSE stream (below) |
-| `GET /events/history` | `?after=&project=&task_id=&limit=` | `[]Event` |
+| `GET /events/history` | `?after=&project=&task_id=&limit=` (default 500) | `[]Event` |
 | `GET /stats` | | `Stats` |
 | `GET /control` | | `{"paused":bool}` |
 | `POST /control/pause`, `POST /control/resume` | | `{"paused":bool}` |
@@ -34,7 +36,7 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 | `GET /runs/{id}` | | `Run` |
 | `GET /runs/{id}/logs` | `?after=<seq>&limit=` (default 1000) | `[]LogLine` |
 | `POST /runs/{id}/cancel` | | 204 |
-| `GET /approvals` | `?status=pending` (default pending; `all`) | `[]Approval` |
+| `GET /approvals` | `?status=pending` (default), `approved`, `rejected` or `all` | `[]Approval` |
 | `POST /approvals/{id}/decide` | `{"approve":bool,"note":"…"}` | `Approval` |
 | `GET /deployments` | `?project=&limit=` | `[]Deployment` |
 | `GET /signals` | `?project=&limit=` | `[]Signal` |
@@ -42,14 +44,25 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 | `GET /loops` | | `[]LoopView` |
 | `POST /loops/{name}/run` | `?project=` | 202 |
 | `GET /agents` | | `[]AgentView` |
-| `GET /config` | | `Config` with every `env` value replaced by `"***"` |
+| `GET /config` | | `Config` with every `env` value (projects and harnesses) and every deploy, observer or notifier option whose key contains `token`, `secret`, `password` or `key` replaced by `"***"` |
 | `POST /config/reload` | | 204 |
 | `GET /conversations` | | `[]Conversation` |
 | `POST /conversations` | `{"title":"…","project":"…"}` | `Conversation` (201) |
 | `GET /conversations/{id}` | | `{"conversation":Conversation,"messages":[]ChatMessage}` |
 | `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202); 409 while busy |
 
-`status` filters on lists take a comma-separated list. List limits default to 200.
+`status` filters on task and run lists take a comma-separated list; `GET /approvals` takes one
+value. `limit` is a non-negative integer, where 0 or absent means the route's default; a negative
+or non-numeric value is a 400. Most list routes default to 200. The exceptions are
+`GET /events/history` (500) and `GET /runs/{id}/logs` (1000).
+
+`POST /tasks` rejects `"kind":"review"` with 400, since foundry creates review tasks itself. An
+empty `kind` is stored as `feature`. A `risk` field is not part of `NewTask`, so it is rejected
+with 400 like any unknown field.
+
+`POST /approvals/{id}/decide` returns 409 when the task is not awaiting approval. For a merge
+approval it also returns 409 when the PR head changed since the approval was requested. In that
+case the approval is recorded as rejected and the task goes back to review so foundry can re-check it.
 
 ### Shapes not in `internal/domain`
 
@@ -90,7 +103,8 @@ data: {"id":1234,"time":"…","type":"task.updated","task_id":"…","message":"�
 
 ```
 
-Live-only events (`run.log`, `chat.delta`) carry no `id:` line, since they are not stored.
+Live-only events (`run.log`, `chat.delta`) carry no `id:` line, since they are not stored. Their
+JSON data has `"id":0`, so clients must not use it as a resume cursor.
 The server sends `: ping` every 15s. Clients must ignore event types they do not know and
 reconnect with the last `id` they saw. Event types are the `Ev*` constants in
 `internal/domain/domain.go`.
