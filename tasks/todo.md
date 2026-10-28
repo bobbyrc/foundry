@@ -166,4 +166,7 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] PR #47 init → main opened for the owner (not merged): summary, safety gap, decisions
 - [x] Friction page shows which filed issues are closed (the friction loop refreshes issue states) and lists open ones by default: 5 open of 11
 - [x] friction #46 (agent-reported): incident evidence is now labelled as data, not instructions; the SRE noticed my drill's log line read like an instruction
+- [x] retention: events older than 30 days and run logs older than 90 days are pruned daily (server.retain_events / retain_run_logs). The dogfood DB was 3.4 MB after one busy night, about 1 GB a year without it
+- [x] stray test daemon from early in the night (scratchpad/run, random port) stopped by verified pid
+- [x] factory budget: today's dogfood spend is about $21 of the $25 daily cap, and the day lasts until midnight, so I stopped queueing factory work at 04:25 to leave headroom for the owner
 
