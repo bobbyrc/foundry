@@ -1,0 +1,207 @@
+/* Chat page. Every rule sits under .chat-page so it outranks the older chat rules in styles.css. */
+
+.chat-page .chat-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 28px;
+  min-height: 60vh;
+}
+
+.chat-page .chat-layout.no-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Conversation list: rows with rules between them; the open one sits on a panel. */
+.chat-page .conv-heading {
+  margin-bottom: 8px;
+}
+
+.chat-page .conv-list ul {
+  border-top: 1px solid var(--rule);
+}
+
+.chat-page .conv-item {
+  gap: 2px;
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.chat-page .conv-item.active {
+  background: var(--panel);
+  font-weight: 600;
+}
+
+.chat-page .conv-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* New chat: centred under the top of the thread, with the composer and example prompts. */
+.chat-page .chat-start {
+  width: 100%;
+  max-width: 640px;
+  margin: 8vh auto 0;
+}
+
+.chat-page .chat-start-title {
+  font-family: var(--font-cond);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  margin-bottom: 10px;
+}
+
+.chat-page .chat-start > p {
+  margin: 0;
+}
+
+.chat-page .examples-row,
+.chat-page .examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-page .chat-start .examples-row {
+  margin-top: 16px;
+}
+
+.chat-page .examples {
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.chat-page .examples > p {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+}
+
+/* Composer: one sheet with the field and, under it, the hint and Send. */
+.chat-page .composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 12px;
+  padding: 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.chat-page .composer:focus-within {
+  border-color: var(--text);
+}
+
+.chat-page .composer textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  max-height: 40vh;
+  margin: 0;
+  padding: 12px 14px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+  outline: none;
+}
+
+.chat-page .composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 8px 14px;
+}
+
+.chat-page .composer-hint {
+  min-width: 0;
+}
+
+/* Thread */
+.chat-page .msg.user .bubble {
+  max-width: 72ch;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.chat-page .msg.assistant {
+  max-width: 72ch;
+}
+
+.chat-page .msg-label {
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--font-cond);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chat-page .working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.chat-page .working .lamp {
+  width: 10px;
+  height: 10px;
+}
+
+/* Phone: the list becomes a row of chips above an open thread; the full list shows otherwise. */
+@media (max-width: 759px) {
+  .chat-page .chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .chat-page .conv-list.compact ul {
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    border-top: 0;
+    padding-bottom: 4px;
+  }
+
+  .chat-page .conv-list.compact .conv-item {
+    flex: none;
+    max-width: 240px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .chat-page .conv-list.compact .conv-item.active {
+    border-color: var(--text);
+  }
+
+  .chat-page .conv-list.compact .conv-meta {
+    display: none;
+  }
+
+  .chat-page .chat-start {
+    margin-top: 4vh;
+  }
+
+  .chat-page .chat-start-title {
+    font-size: 26px;
+  }
+}

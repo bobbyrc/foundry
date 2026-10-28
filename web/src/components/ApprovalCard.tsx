@@ -106,7 +106,7 @@ export function ApprovalCard({ approval, showTask = true }: { approval: Approval
             <ErrorLine error={decide.error} />
           </div>
         ) : null}
-        {summary ? (
+        {summary && showTask ? (
           <section className="approval-section">
             <h4>What changed</h4>
             <ClampedMarkdown text={summary} lines={3} />

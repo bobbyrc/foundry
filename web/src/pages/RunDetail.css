@@ -1,0 +1,248 @@
+/*
+ * Run detail. Every rule sits under .run-detail so it overrides the older log rules in styles.css
+ * without touching them. Tokens and the run bar (.run-track, .run-flow, .run-quiet) come from
+ * styles.css.
+ */
+
+/* The page is a column whose log takes the space left under the header, so the log fills the
+   viewport on a desktop. 76px is the main column's top and bottom padding. */
+.run-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 76px);
+}
+
+.run-detail .run-header {
+  margin-bottom: 14px;
+}
+
+.run-detail .run-heading {
+  min-width: 0;
+}
+
+.run-detail .run-heading h1 {
+  overflow-wrap: anywhere;
+}
+
+.run-detail .run-sub {
+  margin: 4px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- time strip: the run's bar on its own axis ---- */
+
+.run-detail .run-time {
+  margin-bottom: 18px;
+}
+
+.run-detail .run-time-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.run-detail .run-time-ticks {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-detail .run-time-text {
+  flex: none;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.run-detail .run-time-track {
+  height: 12px;
+  margin-top: 6px;
+}
+
+/* A finished run is one solid bar in its end colour, with no quiet part. */
+.run-detail .run-time--done .run-flow {
+  background: var(--lamp-done);
+}
+
+.run-detail .run-time--stop .run-flow {
+  background: var(--lamp-stop);
+}
+
+.run-detail .run-time--off .run-flow {
+  background: var(--lamp-off-light);
+}
+
+/* ---- facts: a wrapping row of label and value ---- */
+
+.run-detail .run-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin: 0;
+}
+
+.run-detail .run-fact {
+  min-width: 0;
+}
+
+.run-detail .run-fact dt {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.run-detail .run-fact dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.run-detail .run-more {
+  margin: 12px 0 16px;
+}
+
+.run-detail .run-more > summary {
+  display: inline-block;
+  list-style: none;
+  cursor: pointer;
+}
+
+.run-detail .run-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-detail .run-more[open] > .run-facts {
+  margin-top: 12px;
+}
+
+/* ---- log: fills the rest of the viewport ---- */
+
+.run-detail .log-panel {
+  flex: 1 1 0;
+  min-height: 360px;
+  margin-top: 0;
+}
+
+.run-detail .log-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.run-detail .log-count {
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-detail .log {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+}
+
+.run-detail .log-line {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  padding: 1px 14px;
+}
+
+.run-detail .log-line:hover {
+  background: var(--panel-2);
+}
+
+.run-detail .gutter {
+  color: var(--muted);
+}
+
+/* tool_use: the chevron is centred on the 19.5px line the text sits on. */
+.run-detail .log-chevron {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin: 5px 1ch 0 0;
+  color: var(--run);
+}
+
+/* Denial: a tinted line with a small DENIED tag before the text, and no coloured edge. */
+.run-detail .log-line.kind-denial {
+  background: color-mix(in srgb, var(--lamp-stop) 12%, transparent);
+  box-shadow: none;
+}
+
+.run-detail .kind-denial > .log-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.run-detail .kind-denial > .log-body > pre {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.run-detail .log-denied {
+  flex: none;
+  margin-top: 3px;
+  padding: 0 5px;
+  background: var(--lamp-stop);
+  color: #ffffff;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+/* ---- phone: header stacks, facts two per row, the log keeps a 52px gutter ---- */
+
+@media (max-width: 759px) {
+  .run-detail {
+    min-height: 0;
+  }
+
+  .run-detail .run-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .run-detail .run-facts {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px 16px;
+  }
+
+  .run-detail .log-panel {
+    flex: none;
+    min-height: 0;
+  }
+
+  .run-detail .log {
+    flex: none;
+    min-height: 60vh;
+    max-height: 80vh;
+  }
+
+  .run-detail .log-line {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 8px;
+    padding: 1px 12px;
+  }
+
+  /* A 12px timestamp is 58px wide; this keeps "12:03:22" inside the 52px column. */
+  .run-detail .gutter {
+    font-size: 11px;
+    letter-spacing: -0.03em;
+  }
+}

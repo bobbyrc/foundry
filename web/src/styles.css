@@ -1431,8 +1431,8 @@ a.board-window:hover .board-name {
   margin-top: 8px;
   background: repeating-linear-gradient(
     to right,
-    transparent 0 calc(33.333% - 1px),
-    var(--rule) calc(33.333% - 1px) 33.333%
+    transparent 0 calc(25% - 1px),
+    var(--rule) calc(25% - 1px) 25%
   );
 }
 
@@ -1647,15 +1647,6 @@ a.board-window:hover .board-name {
 .log-tool pre {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.log-marker {
-  flex: none;
-  margin-right: 1ch;
-  color: var(--run);
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.5;
 }
 
 .kind-tool_result {

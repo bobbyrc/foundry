@@ -7,7 +7,7 @@ mobile apps should follow the same information architecture.
 ## Stack
 
 Vite + React + TypeScript, react-router, @tanstack/react-query, marked + dompurify for
-Markdown. No component library; one stylesheet with design tokens. `npm run build` writes to
+Markdown. No component library; `src/styles.css` holds the design tokens and shared components, and a page with rules of its own imports a small CSS file next to it (`src/pages/TaskDetail.css`). `npm run build` writes to
 `../internal/api/webdist`, which the Go binary embeds. `npm run dev` proxies `/api` to
 `http://127.0.0.1:7777`.
 
@@ -159,7 +159,7 @@ fallback.
   (yellow for approvals, red for blocked), a muted line under it, then the body. Blocked items:
   "Blocked · project · attempt 2 of 3 · 11m ago", the `blocked_reason` in a stop callout, Retry
   with note and Cancel. Empty: "Nothing needs you. The factory is handling everything in flight."
-- Right: **Live runs** on one shared time axis (`src/lib/runbar.ts`; 10m, 20m, 30m, 1h, ...
+- Right: **Live runs** on one shared time axis (`src/lib/runbar.ts`; 20m, 40m, 1h, 2h, ...
   whichever fits the longest run). Each run: task title (links to the run), Cancel, "role ·
   project", elapsed time and "output 12s ago", then a bar whose length is the elapsed time:
   green up to the last output, yellow after it once the run has been quiet for 5 minutes ("quiet
@@ -181,14 +181,23 @@ loops as small pills (name, a dot coloured by health: `--ok` when last run had n
 `--danger` with the error as a tooltip, `--muted` when disabled or never run). The sidebar
 gets **Projects** between Overview and Chat.
 
-**Chat** (`/chat`, `/chat/:id`) — conversation list on the left (240px, "New chat" button,
-items show title and RelTime), thread on the right. User messages: right-aligned
-`--panel-2` bubbles. Assistant messages: left-aligned, no bubble, rendered Markdown. While
-the orchestrator replies, `chat.delta` text streams into a provisional assistant message
-with a blinking caret, and a muted line "Orchestrator is working · view run" links to its
-run. Composer at the bottom: auto-growing textarea, Enter sends, Shift+Enter newline,
-disabled while busy. Empty thread: three example prompts as clickable chips ("What's
-running right now?", "Fix the flaky test in …", "Triage open issues in …").
+**Chat** (`/chat`, `/chat/:id`) — with no conversation open, a centred block 640px wide
+sits 8vh from the top: the heading "Talk to the orchestrator", a muted line on what it can and
+cannot do, the composer, and three example prompts as chips ("What's running right now?",
+"Fix the flaky test in …", "Triage open issues in …"). Sending creates a conversation and opens
+it with the message already sent. Once conversations exist, a 260px list sits on the left under
+a "Conversations" heading: rows with a rule between them, the title (one line, ellipsed) and
+RelTime under it, the open one on a panel in bold. The right side keeps the same start block.
+An open conversation: user messages are right-aligned panel sheets with a 1px border (72ch
+max); assistant messages are unboxed, 72ch max, under a small "orchestrator" label, rendered
+Markdown. While the orchestrator replies, `chat.delta` text streams into a provisional message
+with a blinking caret, and a line with a blinking green square, "Orchestrator is working · view
+run", links to its run. The composer is a sheet pinned to the bottom of the thread: an
+auto-growing field with no border of its own, and "Send" at its bottom right. The hint "Enter to
+send · Shift+Enter for a new line" sits at its bottom left. Enter sends. The field is disabled
+while the orchestrator replies. Under 760px the layout is one column: with a conversation open,
+the list becomes a row of chips above the thread; with none open, the full list shows first.
+Viewers read the thread and see a muted line in place of the composer.
 
 **Tasks** (`/tasks`) — filter bar: project select, status chips (multi-select; default
 "active" = queued, running, review, awaiting_approval, merged, deploying, blocked), kind
@@ -197,25 +206,45 @@ title, body (textarea, Markdown), role (optional; lists agents), priority (numbe
 columns: status, title (with kind tag and source muted under it), project, role, risk, PR
 (#123 link), attempts (`1/3`), updated.
 
-**Task detail** (`/tasks/:id`) — header: title, StatusPill, actions Cancel and Retry (with
-note). Danger callout with `blocked_reason` when blocked. Meta grid: project, kind, role,
-source and source_ref, branch (mono), PR link, risk badge with reasons as a list, attempts,
-created, updated, IdChip. Sections: Summary (latest agent summary), Body (Markdown),
-Approvals (with decide controls), Subtasks (children), Runs (status, harness · model,
-started, duration, cost, link).
+**Task detail** (`/tasks/:id`) — a header row with the title, StatusPill and the Cancel and Retry
+actions (role-gated as before). Under it, one muted line: kind · project · role · from source, then
+the IdChip. Below that is the task's line: seven lamps (Queued, Running, Review, Approval, Merged,
+Deploying, Done) joined by a rule. Passed stations show the done lamp; the current one lights in
+its tone (running blinks); a stop is red and its label reads Blocked, Failed or Cancelled; skipped
+stations are hollow; stations not yet reached are dim. From 960px the page has two columns: the
+main column, and a 300px spec sheet that stays in view. The sheet lists risk with its reasons,
+pull request and branch, attempts, project, kind, role, source, parent, created, updated and ID.
+Under 960px it is one column, with the sheet directly after "Needs you". The main column, top to
+bottom: Needs you (only when something waits: the blocked reason with Retry and Cancel, a note
+that the project is paused, and pending approvals with their decide controls); Summary and Body
+(Markdown, when present); Runs (# is the attempt number in start order, then status, harness ·
+model, started, duration, cost and link); Subtasks (when there are any); Decided approvals (one
+compact row each: decision, title, time and note).
 
-**Run detail** (`/runs/:id`) — header: role · harness · model, StatusPill, Cancel while
-active. Meta: task link, project, branch, workdir, session ID, exit code, cost, tokens,
-started/ended, error (danger callout). Log viewer fills the rest: monospace lines with a
-time gutter; `text` plain; `tool_use` prefixed with an accent "▸"; `tool_result` muted,
-collapsed to 3 lines with "show more"; `denial` on a danger-tinted background with a
-"DENIED" tag; `stderr` muted italic; `error` danger; `system` muted. A "Follow" toggle
-(default on) keeps the view scrolled to the bottom. Logs load from `/runs/:id/logs` and
-then append `run.log` events for this run, deduplicated by `seq`.
+**Run detail** (`/runs/:id`) — header: "role · project" with the StatusPill, and Cancel run on
+the right while the run is active (operators only). Under it, muted: harness · model, then the
+task title as a link. Then the time strip, the run's bar on its own axis: the same bar as the
+Overview's live runs, drawn to the run's elapsed time, green up to the last output and yellow
+after 5 minutes without output. The axis ticks sit above it, and at the right of the ticks the
+elapsed time with "output 4s ago" or "quiet for 7m". A finished run is one solid bar and no
+yellow: grey when it succeeded, red when it stopped itself (failed, stalled, timed out, denied),
+light grey when cancelled. Under the strip, a row of facts (label above value): branch, cost,
+tokens, started, duration, and exit code once the run has ended. "More" expands workdir, session
+ID and run ID. A run's error shows in a red callout above the log. The log takes the rest of the
+screen (at least 360px on a desktop; 60% of the screen height on a phone). Its toolbar has "Log",
+the line count, and a "Follow" toggle (default on) that keeps the view at the newest line. Log
+lines: `text` plain; `tool_use` with a green drawn chevron before it; `tool_result` muted,
+collapsed to 3 lines with "show more"; `denial` on a red-tinted line with a "DENIED" tag before
+the text; `stderr` muted italic; `error` red; `system` muted. The time gutter is 64px (52px on a
+phone). Logs load from `/runs/:id/logs` and then append `run.log` events for this run,
+deduplicated by `seq`.
 
-**Approvals** (`/approvals`) — pending by default, toggle "All". Cards: title, kind,
-project, task link, reason (Markdown), created; Approve (primary) / Reject (danger) with an
-optional note field.
+**Approvals** (`/approvals`) — pending by default, with a Pending / All control in the header.
+The list is at most 920px wide so the agent-written prose stays readable. Pending with nothing
+waiting shows one muted line: "Nothing waits on you. Approvals appear here when a change needs
+your sign-off." "All" adds decided approvals as cards, each with its status pill. Cards: title,
+kind, project, task link, reason (Markdown), created; Approve (primary) / Reject (danger) with an
+optional note field. Full width under 760px.
 
 **Runs** (`/runs`) — table: status, role, harness · model, project, task, started, duration,
 cost. Filters: project, status.
