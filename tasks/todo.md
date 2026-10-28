@@ -127,6 +127,6 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] orchestrator chat verified live (56s, correct counts; it repeated stale incident diagnoses, which resolved once the blocked tasks did)
 - [x] PR #26 (Codex cost estimate): an independent review found flaky tests (reproduced: 2 of 120 runs failed under load) and unchecked .inf/.nan prices. Fixed both on the PR branch and merged dogfood into it (full suite and 57 web tests pass). foundry re-reviews it, then it returns to the owner for approval. Recommend APPROVE
 - [ ] OWNER: PR #14 — recommend REJECT as written: its Go cache advice belongs in project env/setup, and GOMODCACHE=/tmp with GOPROXY=off breaks module resolution. Its rule "never report a skipped check as passed; rate it medium; file friction" is worth adding to the implementer prompt by hand
-- [ ] verify: #42 (docs) is the first release through the in-repo release script; then close friction #32
+- [x] #42 → PR #43 was the first release through the in-repo release script (22cccf4, healthy); friction #32 closed
 - [ ] OWNER: the dogfood daemon's data and clone live in a session scratch dir under /private/tmp. To keep it, follow examples/dogfood/README.md with DOGFOOD=~/.local/share/foundry-dogfood (or copy the scratch dir there)
 
