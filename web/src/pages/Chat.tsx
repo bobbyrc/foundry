@@ -237,7 +237,20 @@ function Thread({ conversationId }: { conversationId: string }) {
     await sendText(text);
   };
 
-  if (conversation.isError) return <ErrorLine error={conversation.error} />;
+  if (conversation.isError) {
+    // The API answers 404 for an id that was deleted or never existed: say so, and offer a fresh start.
+    if (conversation.error instanceof ApiError && conversation.error.status === 404) {
+      return (
+        <Empty>
+          <p>This conversation no longer exists.</p>
+          <Link to="/chat" className="btn btn-secondary">
+            Start a new conversation
+          </Link>
+        </Empty>
+      );
+    }
+    return <ErrorLine error={conversation.error} />;
+  }
   if (!conversation.data) return <p className="muted">Loading conversation…</p>;
 
   const empty = messages.length === 0 && delta === null;

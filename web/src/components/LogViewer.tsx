@@ -5,7 +5,6 @@ import { formatClock, cx } from '../lib/format';
 import { maxSeq, mergeLogLines } from '../lib/logs';
 import { parseTime } from '../lib/time';
 import type { LogKind, LogLine } from '../types';
-import { Empty } from './Empty';
 import { ErrorLine } from './ErrorLine';
 
 const PAGE = 1_000;
@@ -128,7 +127,11 @@ export function LogViewer({ runId, active }: { runId: string; active: boolean })
       {error ? <ErrorLine error={error} /> : null}
       {!error && !loaded ? <p className="muted">Loading log…</p> : null}
       <div className="log" ref={bodyRef} role="log" aria-label={`Output of run ${runId}`}>
-        {loaded && lines.length === 0 ? <Empty>No output yet. Lines appear here as the agent works.</Empty> : null}
+        {loaded && lines.length === 0 ? (
+          <p className="log-empty muted">
+            {active ? 'No output yet. Lines appear here as the agent works.' : 'This run left no output.'}
+          </p>
+        ) : null}
         {lines.map((line) => (
           <LogRow key={line.seq} line={line} expanded={expanded.has(line.seq)} onToggle={() => toggleExpanded(line.seq)} />
         ))}
