@@ -445,6 +445,44 @@ func TestCommentIssue(t *testing.T) {
 	assert.Equal(t, "hello there", f.calls[0].stdin)
 }
 
+func TestCloseIssueClosesOpenIssueWithComment(t *testing.T) {
+	f := newFake()
+	f.on["issue view 8"] = `{"state":"OPEN"}`
+	g := NewWithRunner(repo, f.runner())
+	require.NoError(t, g.CloseIssue(context.Background(), 8, "Fixed by #12 (merged by foundry into `staging`)."))
+	require.Len(t, f.calls, 2)
+	assert.Equal(t, []string{"issue", "view", "8", "--repo", repo, "--json", "state"}, f.calls[0].args)
+	assert.Equal(t, []string{"issue", "close", "8", "--repo", repo, "--reason", "completed",
+		"--comment", "Fixed by #12 (merged by foundry into `staging`)."}, f.calls[1].args)
+	assert.Empty(t, f.calls[1].stdin)
+}
+
+func TestCloseIssueSkipsAlreadyClosedIssue(t *testing.T) {
+	f := newFake()
+	f.on["issue view 8"] = `{"state":"CLOSED"}`
+	g := NewWithRunner(repo, f.runner())
+	require.NoError(t, g.CloseIssue(context.Background(), 8, "again"))
+	assert.Equal(t, 0, f.countCalls("issue", "close"))
+}
+
+func TestCloseIssueWrapsViewAndCloseErrors(t *testing.T) {
+	f := newFake()
+	f.errOn["issue view 8"] = errors.New("no such issue")
+	g := NewWithRunner(repo, f.runner())
+	err := g.CloseIssue(context.Background(), 8, "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "view issue #8")
+	assert.Contains(t, err.Error(), "no such issue")
+
+	f = newFake()
+	f.on["issue view 8"] = `{"state":"OPEN"}`
+	f.errOn["issue close 8"] = errors.New("forbidden")
+	g = NewWithRunner(repo, f.runner())
+	err = g.CloseIssue(context.Background(), 8, "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "close issue #8")
+}
+
 func TestEditLabelsAddAndRemove(t *testing.T) {
 	f := newFake()
 	g := NewWithRunner(repo, f.runner())

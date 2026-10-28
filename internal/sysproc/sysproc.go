@@ -66,6 +66,25 @@ func Wait(cmd *exec.Cmd) error {
 	return err
 }
 
+// WaitKeepOnSuccess is Wait for a command whose successful run may start processes that should
+// keep running, such as a deploy script that launches a service in the background. When the
+// command exits 0 it returns nil and leaves the group alone, so those processes survive. That
+// includes a background child that holds the output pipes: exec.ErrWaitDelay is success here too.
+// When the command exits non-zero, is killed by a signal or times out, the group is killed as Wait
+// does and the error is returned unchanged. Use it for commands whose leftovers are wanted after a
+// success (deploy, rollback). Use Wait for everything else: a status check or notifier has no
+// reason to leave a process running.
+func WaitKeepOnSuccess(cmd *exec.Cmd) error {
+	err := cmd.Wait()
+	if cmd.ProcessState != nil && cmd.ProcessState.Success() && (err == nil || errors.Is(err, exec.ErrWaitDelay)) {
+		return nil
+	}
+	if cmd.Process != nil {
+		_ = KillGroup(cmd.Process.Pid, syscall.SIGKILL)
+	}
+	return err
+}
+
 // baseEnv is the allowlist of foundry's environment that agent processes receive. Everything
 // else is withheld, so credentials foundry holds for itself (GH_TOKEN, GITHUB_TOKEN,
 // SENTRY_AUTH_TOKEN, ...) never reach an agent that runs arbitrary commands.

@@ -252,6 +252,24 @@ func (f *Fake) CommentIssue(_ context.Context, number int, body string) error {
 	return nil
 }
 
+// CloseIssue sets an issue's state to closed and appends comment to its comments. It does
+// nothing when the issue is already closed. It returns an error wrapping ErrNotFound when the
+// issue does not exist.
+func (f *Fake) CloseIssue(_ context.Context, number int, comment string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	is, ok := f.Issues[number]
+	if !ok {
+		return fmt.Errorf("fake: close issue #%d: %w", number, ErrNotFound)
+	}
+	if is.State == "closed" {
+		return nil
+	}
+	is.State = "closed"
+	f.Comments[number] = append(f.Comments[number], comment)
+	return nil
+}
+
 // EditLabels adds the labels in add that are missing and removes those in remove, on an issue
 // or a PR. It returns an error wrapping ErrNotFound when neither exists.
 func (f *Fake) EditLabels(_ context.Context, number int, add, remove []string) error {

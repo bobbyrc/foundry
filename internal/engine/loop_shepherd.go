@@ -445,7 +445,28 @@ func (e *Engine) markMerged(ctx context.Context, p *config.Project, t domain.Tas
 	e.d.Bus.Emit(ctx, domain.EvPRMerged, p.Name, t.ID, "",
 		fmt.Sprintf("PR #%d merged: %s", t.PRNumber, t.Title), map[string]string{"merge_sha": mergeSHA})
 	e.kickLoop(loopDeployWatch, p.Name)
+	e.closeMergedIssue(ctx, p, t)
 	return true, nil
+}
+
+// closeMergedIssue closes the GitHub issue behind an intake task whose PR has merged. GitHub
+// closes it by itself only when the PR merges into the repository's default branch, so fixes
+// that land on another branch would leave it open. It runs after the task has moved to merged,
+// and a failure is logged, never returned.
+func (e *Engine) closeMergedIssue(ctx context.Context, p *config.Project, t domain.Task) {
+	n, ok := issueNumberOf(t)
+	if !ok {
+		return
+	}
+	s, err := e.d.SCMFor(p)
+	if err != nil {
+		e.d.Logger.Error("close merged issue: scm", "task", t.ID, "project", p.Name, "err", err)
+		return
+	}
+	comment := fmt.Sprintf("Fixed by #%d (merged into `%s`).", t.PRNumber, p.DefaultBranch)
+	if err := s.CloseIssue(ctx, n, comment); err != nil {
+		e.d.Logger.Warn("close merged issue", "task", t.ID, "issue", n, "err", err)
+	}
 }
 
 // decidePendingApprovals resolves every pending approval of a task with status and note. A

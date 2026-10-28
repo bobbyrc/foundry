@@ -528,6 +528,31 @@ func (g *GitHub) CommentIssue(ctx context.Context, number int, body string) erro
 	return nil
 }
 
+// CloseIssue closes an issue as completed and leaves comment on it. An issue that is already
+// closed is left alone, so the comment is posted at most once. comment is passed as a flag
+// value, not through a shell, so it needs no quoting.
+func (g *GitHub) CloseIssue(ctx context.Context, number int, comment string) error {
+	out, err := g.run(ctx, "", "issue", "view", strconv.Itoa(number), "--repo", g.Repo,
+		"--json", "state")
+	if err != nil {
+		return fmt.Errorf("view issue #%d: %w", number, err)
+	}
+	var cur struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(out, &cur); err != nil {
+		return fmt.Errorf("decode issue #%d: %w", number, err)
+	}
+	if strings.EqualFold(cur.State, "closed") {
+		return nil
+	}
+	if _, err := g.run(ctx, "", "issue", "close", strconv.Itoa(number), "--repo", g.Repo,
+		"--reason", "completed", "--comment", comment); err != nil {
+		return fmt.Errorf("close issue #%d: %w", number, err)
+	}
+	return nil
+}
+
 // EditLabels adds and removes labels on an issue or pull request. Labels to add are created
 // first if missing. With nothing to add or remove, no gh call is made.
 func (g *GitHub) EditLabels(ctx context.Context, number int, add, remove []string) error {

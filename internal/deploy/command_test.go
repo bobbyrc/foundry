@@ -227,9 +227,8 @@ func TestOptHelpers(t *testing.T) {
 	assert.Equal(t, time.Minute, d)
 }
 
-// killLeftoverChildOnCleanup kills the background child whose PID a command wrote to pidFile. A
-// failed command leaves its child running (sysproc.Wait kills only after success), so the test
-// does the cleanup.
+// killLeftoverChildOnCleanup kills the background child whose PID a command wrote to pidFile, so a
+// test that leaves a child running (a successful deploy keeps its services) does not leak it.
 func killLeftoverChildOnCleanup(t *testing.T, pidFile string) {
 	t.Helper()
 	t.Cleanup(func() {
@@ -264,16 +263,72 @@ func assertLeftoverChildGone(t *testing.T, pidFile string) {
 	}
 }
 
-func TestCommandDeploySucceedsWithBackgroundChild(t *testing.T) {
+// deployedChildPID reads the PID a deploy wrote to pidFile and registers its cleanup.
+func deployedChildPID(t *testing.T, pidFile string) int {
+	t.Helper()
+	killLeftoverChildOnCleanup(t, pidFile)
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	return pid
+}
+
+// processAlive reports whether a process with pid exists (signal 0 checks existence only).
+func processAlive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+func TestCommandDeploySucceedsAndKeepsBackgroundService(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	d := newTestCommand(t, map[string]any{
+		"deploy": "sleep 30 >/dev/null 2>&1 & echo $! > " + pidFile + "; echo https://ok.example",
+	}, nil)
+	start := time.Now()
+	h, err := d.Deploy(context.Background(), "sha")
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), 3*time.Second)
+	assert.Equal(t, "https://ok.example", h.URL)
+	assert.True(t, processAlive(deployedChildPID(t, pidFile)), "a service started by a successful deploy must keep running")
+}
+
+func TestCommandDeploySucceedsAndKeepsBackgroundChildHoldingOutput(t *testing.T) {
+	// The child inherits the output pipe, so the deploy returns only after sysproc's wait delay.
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	d := newTestCommand(t, map[string]any{
 		"deploy": "sleep 30 & echo $! > " + pidFile + "; echo https://ok.example",
 	}, nil)
 	start := time.Now()
 	h, err := d.Deploy(context.Background(), "sha")
-	require.NoError(t, err, "a 0 exit with a leftover child must not be a failed deploy")
+	require.NoError(t, err, "a 0 exit with a child holding the output must not be a failed deploy")
 	assert.Less(t, time.Since(start), 3*time.Second)
 	assert.Equal(t, "https://ok.example", h.URL)
+	assert.True(t, processAlive(deployedChildPID(t, pidFile)), "a service started by a successful deploy must keep running")
+}
+
+func TestCommandDeployFailureKillsBackgroundChild(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	d := newTestCommand(t, map[string]any{
+		"deploy": "sleep 30 >/dev/null 2>&1 & echo $! > " + pidFile + "; exit 3",
+	}, nil)
+	_, err := d.Deploy(context.Background(), "sha")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit status 3")
+	assertLeftoverChildGone(t, pidFile)
+}
+
+func TestCommandDeployTimeoutKillsBackgroundChild(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	d, err := New(Config{Type: "command", Dir: t.TempDir(), Options: map[string]any{
+		"deploy":  "sleep 30 >/dev/null 2>&1 & echo $! > " + pidFile + "; sleep 30",
+		"timeout": "1s",
+	}})
+	require.NoError(t, err)
+	start := time.Now()
+	_, err = d.Deploy(context.Background(), "sha")
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 5*time.Second)
 	assertLeftoverChildGone(t, pidFile)
 }
 

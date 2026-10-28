@@ -147,7 +147,9 @@ projects:
     deploy:
       type: command                    # runs the commands under options below
       options:
-        # Shell commands for the "command" deploy type.
+        # Shell commands for the "command" deploy type. A deploy may start a long-running service in
+        # the background: it keeps running after a successful deploy, and foundry kills it if the
+        # deploy fails or times out. Redirect its output (e.g. "> app.log 2>&1 &").
         deploy: "vercel deploy --prod --yes"
         # $FOUNDRY_ROLLBACK_ID is set by foundry to the release to roll back to.
         rollback: "vercel rollback $FOUNDRY_ROLLBACK_ID --yes"

@@ -69,7 +69,7 @@ func newCommandDeployer(cfg Config) (Deployer, error) {
 // the deploy is treated as synchronous and recorded as ready. The Handle carries the tail of the
 // command's output (stdout and stderr) as Output.
 func (d *commandDeployer) Deploy(ctx context.Context, ref string) (Handle, error) {
-	stdout, output, err := d.run(ctx, "deploy", d.deployCmd, "FOUNDRY_REF="+ref)
+	stdout, output, err := d.run(ctx, "deploy", d.deployCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_REF="+ref)
 	if err != nil {
 		return Handle{}, err
 	}
@@ -97,7 +97,7 @@ func (d *commandDeployer) Status(ctx context.Context, id string) (Status, error)
 		}
 		return Status{State: StateReady}, nil
 	}
-	out, _, err := d.run(ctx, "status", d.statusCmd, "FOUNDRY_DEPLOY_ID="+id)
+	out, _, err := d.run(ctx, "status", d.statusCmd, sysproc.Wait, "FOUNDRY_DEPLOY_ID="+id)
 	if err != nil {
 		return Status{}, err
 	}
@@ -109,7 +109,7 @@ func (d *commandDeployer) Rollback(ctx context.Context, id, ref string) error {
 	if d.rollbackCmd == "" {
 		return errors.New("deploy: no rollback command configured")
 	}
-	_, _, err := d.run(ctx, "rollback", d.rollbackCmd, "FOUNDRY_ROLLBACK_ID="+id, "FOUNDRY_ROLLBACK_REF="+ref)
+	_, _, err := d.run(ctx, "rollback", d.rollbackCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_ROLLBACK_ID="+id, "FOUNDRY_ROLLBACK_REF="+ref)
 	return err
 }
 
@@ -117,8 +117,9 @@ func (d *commandDeployer) Rollback(ctx context.Context, id, ref string) error {
 // the caller parses for its result) and the last deployOutputTail bytes of stdout and stderr
 // combined, as they arrived (the evidence for incidents). The environment is the
 // process environment, then the project's env, then extra, so extra wins on conflicts. A non-zero
-// exit or timeout is an error that carries the tail of the command's output.
-func (d *commandDeployer) run(ctx context.Context, label, command string, extra ...string) (stdout, output string, err error) {
+// exit or timeout is an error that carries the tail of the command's output. wait decides what
+// happens to processes the command leaves behind (see sysproc.Wait and sysproc.WaitKeepOnSuccess).
+func (d *commandDeployer) run(ctx context.Context, label, command string, wait func(*exec.Cmd) error, extra ...string) (stdout, output string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 
@@ -129,13 +130,13 @@ func (d *commandDeployer) run(ctx context.Context, label, command string, extra 
 	cmd.Env = append(append(os.Environ(), d.env...), extra...)
 	cmd.Stdout = io.MultiWriter(&out, combined)
 	cmd.Stderr = combined
-	// On timeout the whole process group is killed, not just sh, and Wait does not block on pipes a
-	// grandchild still holds open. A deploy that exits 0 but leaves a background child behind still
-	// succeeds (see sysproc.Wait).
+	// On timeout the whole process group is killed, not just sh, and the wait does not block on pipes
+	// a grandchild still holds open. A deploy that exits 0 may leave a service running (see
+	// sysproc.WaitKeepOnSuccess).
 	sysproc.Configure(cmd)
 	err = cmd.Start()
 	if err == nil {
-		err = sysproc.Wait(cmd)
+		err = wait(cmd)
 	}
 	if err != nil {
 		return "", "", fmt.Errorf("deploy: %s command failed: %w: output: %s", label, err, tail(strings.TrimSpace(combined.String())))

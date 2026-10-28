@@ -176,6 +176,11 @@ being handled.
 Runs shell commands (`sh -c`) in the project's local clone. Use it for any platform that has a CLI or
 API you can call from a script.
 
+A `deploy` or `rollback` command may start long-running processes, such as a service in the
+background. They keep running after the command succeeds. If the command fails or hits its
+`timeout`, foundry kills them. Redirect a background process's output (`> app.log 2>&1 &`) so it
+does not hold the command's output pipe open.
+
 | Option     | Required | Default | Meaning                                                              |
 |------------|----------|---------|----------------------------------------------------------------------|
 | `deploy`   | yes      |         | Creates a release of the ref in `FOUNDRY_REF`.                      |
