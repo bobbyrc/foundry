@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -61,7 +62,11 @@ func (o *execObserver) Poll(ctx context.Context, since time.Time) ([]domain.Sign
 	cmd.Env = append(append(os.Environ(), o.env...), "FOUNDRY_SINCE="+since.UTC().Format(time.RFC3339))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	// Kill sh on timeout, and stop waiting on pipes a grandchild still holds open.
+	// On timeout kill the whole process group, not just sh: a grandchild (e.g. sleep) would
+	// otherwise hold the output pipes open. WaitDelay is the backstop for a grandchild that left
+	// the group.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 5 * time.Second
 	if err := cmd.Run(); err != nil {
 		output := strings.TrimSpace(stdout.String() + stderr.String())
