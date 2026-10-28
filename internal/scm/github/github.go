@@ -74,7 +74,7 @@ func (g *GitHub) OpenPR(ctx context.Context, spec scm.PRSpec) (scm.PR, error) {
 	if spec.Draft {
 		args = append(args, "--draft")
 	}
-	out, err := g.run(ctx, spec.Body, args...)
+	out, err := g.run(ctx, quoteMentions(spec.Body), args...)
 	if err != nil {
 		return scm.PR{}, fmt.Errorf("open PR %s -> %s: %w", spec.Head, spec.Base, err)
 	}
@@ -258,7 +258,7 @@ func (g *GitHub) FindPR(ctx context.Context, head string) (scm.PR, bool, error) 
 
 // UpdatePRBody replaces the description of a pull request. The body goes in on stdin.
 func (g *GitHub) UpdatePRBody(ctx context.Context, number int, body string) error {
-	if _, err := g.run(ctx, body, "pr", "edit", strconv.Itoa(number), "--repo", g.Repo,
+	if _, err := g.run(ctx, quoteMentions(body), "pr", "edit", strconv.Itoa(number), "--repo", g.Repo,
 		"--body-file", "-"); err != nil {
 		return fmt.Errorf("update body of PR #%d: %w", number, err)
 	}
@@ -513,7 +513,7 @@ func (g *GitHub) CreateIssue(ctx context.Context, spec scm.IssueSpec) (scm.Issue
 	for _, l := range spec.Labels {
 		args = append(args, "--label", l)
 	}
-	out, err := g.run(ctx, spec.Body, args...)
+	out, err := g.run(ctx, quoteMentions(spec.Body), args...)
 	if err != nil {
 		return scm.Issue{}, fmt.Errorf("create issue %q: %w", spec.Title, err)
 	}
@@ -534,8 +534,8 @@ func (g *GitHub) CreateIssue(ctx context.Context, spec scm.IssueSpec) (scm.Issue
 
 // CommentIssue posts body as a comment on an issue or pull request.
 func (g *GitHub) CommentIssue(ctx context.Context, number int, body string) error {
-	if _, err := g.run(ctx, body, "issue", "comment", strconv.Itoa(number), "--repo", g.Repo,
-		"--body-file", "-"); err != nil {
+	if _, err := g.run(ctx, quoteMentions(body), "issue", "comment", strconv.Itoa(number),
+		"--repo", g.Repo, "--body-file", "-"); err != nil {
 		return fmt.Errorf("comment on #%d: %w", number, err)
 	}
 	return nil
@@ -560,7 +560,7 @@ func (g *GitHub) CloseIssue(ctx context.Context, number int, comment string) err
 		return nil
 	}
 	if _, err := g.run(ctx, "", "issue", "close", strconv.Itoa(number), "--repo", g.Repo,
-		"--reason", "completed", "--comment", comment); err != nil {
+		"--reason", "completed", "--comment", quoteMentions(comment)); err != nil {
 		return fmt.Errorf("close issue #%d: %w", number, err)
 	}
 	return nil
