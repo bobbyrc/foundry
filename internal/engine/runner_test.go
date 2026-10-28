@@ -143,9 +143,16 @@ agents:
 
 	ctx, cancel := context.WithCancel(context.Background())
 	env.ctx = ctx
-	go e.runScheduler(ctx)
+	schedDone := make(chan struct{})
+	go func() {
+		defer close(schedDone)
+		e.runScheduler(ctx)
+	}()
 	t.Cleanup(func() {
 		cancel()
+		// Wait for the scheduler to stop first: until then it can still start a run, and a run
+		// started after the wait below would write into the test's directories during cleanup.
+		<-schedDone
 		e.cancelAllRuns("test finished")
 		e.wg.Wait()
 	})
@@ -670,4 +677,14 @@ func TestCreateTaskRoutesByProjectRouting(t *testing.T) {
 
 	global := env.create(domain.Task{Kind: domain.KindBugfix, Title: "Fix it"})
 	assert.Equal(t, "implementer", global.Role, "kinds the project does not route use the global routing")
+}
+
+// Publishing records when foundry pushed the branch, for the CI grace period.
+func TestRunnerPublishRecordsPushTime(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{})
+	task := env.create(domain.Task{Title: "Add greeting", Body: "[fake:commit]"})
+
+	got := env.waitStatus(task.ID, domain.TaskReview)
+	require.NotNil(t, got.PushedAt)
+	assert.WithinDuration(t, time.Now(), *got.PushedAt, time.Minute)
 }

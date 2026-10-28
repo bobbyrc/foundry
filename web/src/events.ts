@@ -200,7 +200,7 @@ export function keysFor(ev: FoundryEvent): QueryKey[] {
   } else if (ev.type === 'loop.error') {
     add(keys.loopsAll);
   } else if (ev.type === 'system') {
-    add(keys.control, keys.stats);
+    add(keys.control, keys.stats, keys.projectsAll);
   }
   return out;
 }

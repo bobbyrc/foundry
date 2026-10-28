@@ -6,6 +6,7 @@ import { PauseSwitch } from './PauseSwitch';
 
 const NAV: { to: string; label: string; end?: boolean; approvals?: boolean }[] = [
   { to: '/', label: 'Overview', end: true },
+  { to: '/projects', label: 'Projects' },
   { to: '/chat', label: 'Chat' },
   { to: '/tasks', label: 'Tasks' },
   { to: '/approvals', label: 'Approvals', approvals: true },

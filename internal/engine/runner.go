@@ -330,6 +330,7 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 		e.requeueOrBlock(ctx, t.ID, "push failed", err.Error())
 		return false
 	}
+	pushedAt := e.d.Now().UTC()
 	s, err := e.d.SCMFor(p)
 	if err != nil {
 		e.requeueOrBlock(ctx, t.ID, "could not reach the code host", err.Error())
@@ -384,6 +385,7 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 		x.Risk = result.Risk
 		x.RiskReasons = result.RiskReasons
 		x.ApprovedSHA = "" // a new push invalidates any earlier review
+		x.PushedAt = &pushedAt
 		x.BlockedReason = ""
 		return nil
 	}) {

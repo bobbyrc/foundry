@@ -75,6 +75,11 @@ type Engine struct {
 	kickMu sync.Mutex
 	kicks  map[string]chan string
 
+	// projPaused holds projects paused at runtime by the owner (persisted as LoopState
+	// {Name: controlLoop, Project: name, Cursor: "paused"}). Guarded by projMu.
+	projMu     sync.Mutex
+	projPaused map[string]bool
+
 	// budgetMu guards budgetDay, the local date the daily-budget notice was last sent.
 	budgetMu  sync.Mutex
 	budgetDay string
@@ -117,12 +122,13 @@ func New(d Deps) (*Engine, error) {
 		d.SchedulerTick = 5 * time.Second
 	}
 	return &Engine{
-		d:         d,
-		cfg:       d.Config,
-		wake:      make(chan struct{}, 1),
-		active:    map[string]*activeRun{},
-		loopLocks: map[string]*sync.Mutex{},
-		kicks:     map[string]chan string{},
+		d:          d,
+		cfg:        d.Config,
+		wake:       make(chan struct{}, 1),
+		active:     map[string]*activeRun{},
+		loopLocks:  map[string]*sync.Mutex{},
+		kicks:      map[string]chan string{},
+		projPaused: map[string]bool{},
 	}, nil
 }
 
@@ -175,6 +181,17 @@ func (e *Engine) recover(ctx context.Context) error {
 		return err
 	}
 	e.paused.Store(st.Cursor == "paused")
+	states, err := e.d.Store.ListLoopStates(ctx)
+	if err != nil {
+		return err
+	}
+	e.projMu.Lock()
+	for _, s := range states {
+		if s.Name == controlLoop && s.Project != "" && s.Cursor == "paused" {
+			e.projPaused[s.Project] = true
+		}
+	}
+	e.projMu.Unlock()
 
 	runs, err := e.d.Store.ListRuns(ctx, store.RunFilter{
 		Statuses: []domain.RunStatus{domain.RunStarting, domain.RunRunning}, Limit: 1000,

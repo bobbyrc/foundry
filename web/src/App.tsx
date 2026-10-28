@@ -12,6 +12,7 @@ import { Connect } from './pages/Connect';
 import { Deploys } from './pages/Deploys';
 import { Friction } from './pages/Friction';
 import { Loops } from './pages/Loops';
+import { Projects } from './pages/Projects';
 import { Overview } from './pages/Overview';
 import { RunDetail } from './pages/RunDetail';
 import { Runs } from './pages/Runs';
@@ -41,6 +42,7 @@ export function App() {
     <Shell>
       <Routes>
         <Route path="/" element={<Overview />} />
+        <Route path="/projects" element={<Projects />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />
         <Route path="/tasks" element={<Tasks />} />

@@ -49,8 +49,8 @@ func (e *Engine) schedule(ctx context.Context) {
 				busy = append(busy, name)
 			}
 		}
-		for name, p := range cfg.Projects {
-			if p.Paused {
+		for name := range cfg.Projects {
+			if e.projectPaused(name) {
 				busy = append(busy, name)
 			}
 		}

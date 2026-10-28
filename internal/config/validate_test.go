@@ -147,3 +147,12 @@ projects:
 `), "")
 	require.NoError(t, err)
 }
+
+func TestValidateCIGraceMustNotBeNegative(t *testing.T) {
+	_, err := Parse([]byte("policies:\n  bad:\n    ci_grace: -1m\n"), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "policies.bad.ci_grace")
+
+	_, err = Parse([]byte("policies:\n  ok:\n    ci_grace: 0s\n"), "")
+	assert.NoError(t, err, "0 means the default")
+}

@@ -266,7 +266,14 @@ export interface Project {
   paused: boolean;
 }
 
-export interface ProjectView extends Project {
+/** Who holds the project paused: foundry.yaml ("config"), the UI or API ("owner"), or nobody. */
+export type PausedBy = '' | 'config' | 'owner';
+
+/** A project as GET /api/v1/projects returns it: config fields, effective pause state and counts. */
+export interface ProjectView extends Omit<Project, 'deploy' | 'observe'> {
+  deploy: Deploy | null;
+  observe: Observer[];
+  paused_by: PausedBy;
   counts: ProjectCounts;
 }
 

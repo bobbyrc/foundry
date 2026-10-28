@@ -34,6 +34,7 @@ func DefaultPolicy() Policy {
 		MaxFiles: 20,
 		Rules:    DefaultRules(),
 		Gates:    DefaultGates(),
+		CIGrace:  Duration{3 * time.Minute},
 	}
 }
 
@@ -242,6 +243,9 @@ func applyPolicyDefaults(c *Config) {
 		}
 		if p.Gates == nil {
 			p.Gates = DefaultGates()
+		}
+		if p.CIGrace.Duration == 0 {
+			p.CIGrace.Duration = 3 * time.Minute
 		}
 		for level, g := range DefaultGates() {
 			if _, ok := p.Gates[level]; !ok {

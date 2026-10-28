@@ -200,13 +200,26 @@ func (e *Engine) wakeScheduler() {
 // Paused reports the global pause switch.
 func (e *Engine) Paused() bool { return e.paused.Load() }
 
-// projectPaused reports whether nothing may start for the project.
+// projectPaused reports whether nothing may start for the project: the factory is paused,
+// the project is unknown, or it is paused in config or by the owner at runtime.
 func (e *Engine) projectPaused(name string) bool {
 	if e.Paused() {
 		return true
 	}
-	p, ok := e.Config().Projects[name]
-	return !ok || p.Paused
+	return e.ProjectPausedBy(name) != "" || e.Config().Projects[name] == nil
+}
+
+// ProjectPausedBy implements api.Controller.
+func (e *Engine) ProjectPausedBy(name string) string {
+	if p := e.Config().Projects[name]; p != nil && p.Paused {
+		return "config"
+	}
+	e.projMu.Lock()
+	defer e.projMu.Unlock()
+	if e.projPaused[name] {
+		return "owner"
+	}
+	return ""
 }
 
 // cancelRun stops a live run, recording why. It reports whether the run was live.

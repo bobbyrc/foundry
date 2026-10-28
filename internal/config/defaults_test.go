@@ -242,3 +242,18 @@ projects:
 	assert.Equal(t, "/abs/designer.md", app.Agents["designer"].Prompt, "absolute paths are left alone")
 	assert.Equal(t, app.Agents["implementer"].Prompt, cfg.AgentsFor("app")["implementer"].Prompt, "merged roles see the resolved path")
 }
+
+func TestCIGraceDefaultsToThreeMinutesForEveryPolicy(t *testing.T) {
+	assert.Equal(t, 3*time.Minute, DefaultPolicy().CIGrace.Duration)
+
+	cfg, err := Parse([]byte("policies:\n  strict:\n    max_lines: 10\n"), "")
+	require.NoError(t, err)
+	assert.Equal(t, 3*time.Minute, cfg.Policies["default"].CIGrace.Duration)
+	assert.Equal(t, 3*time.Minute, cfg.Policies["strict"].CIGrace.Duration)
+}
+
+func TestCIGraceUserValueIsKept(t *testing.T) {
+	cfg, err := Parse([]byte("policies:\n  quick:\n    ci_grace: 45s\n"), "")
+	require.NoError(t, err)
+	assert.Equal(t, 45*time.Second, cfg.Policies["quick"].CIGrace.Duration)
+}

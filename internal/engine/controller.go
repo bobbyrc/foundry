@@ -266,6 +266,35 @@ func (e *Engine) SetPaused(ctx context.Context, paused bool) error {
 	return nil
 }
 
+// SetProjectPaused pauses or resumes one project at runtime, persisted across restarts. Pausing
+// does not cancel running runs; nothing new starts for the project. A project paused in
+// foundry.yaml cannot be resumed here: the file is the source of that pause.
+func (e *Engine) SetProjectPaused(ctx context.Context, name string, paused bool) error {
+	if e.Config().Projects[name] == nil {
+		return fmt.Errorf("%w: unknown project %q", api.ErrInvalid, name)
+	}
+	if !paused && e.Config().Projects[name].Paused {
+		return fmt.Errorf("%w: project %q is paused in foundry.yaml; edit the file to resume", api.ErrConflict, name)
+	}
+	cursor := ""
+	msg := fmt.Sprintf("project %s resumed", name)
+	if paused {
+		cursor = "paused"
+		msg = fmt.Sprintf("project %s paused by owner — queued work will not start", name)
+	}
+	if err := e.d.Store.SaveLoopState(ctx, domain.LoopState{Name: controlLoop, Project: name, Cursor: cursor}); err != nil {
+		return err
+	}
+	e.projMu.Lock()
+	e.projPaused[name] = paused
+	e.projMu.Unlock()
+	e.d.Bus.Emit(ctx, domain.EvSystem, name, "", "", msg, nil)
+	if !paused {
+		e.wakeScheduler()
+	}
+	return nil
+}
+
 // SendChat stores the owner's message and starts the orchestrator's reply in the background.
 // The conversation is marked busy in the same store update that checks it, so two sends
 // cannot both start a reply.

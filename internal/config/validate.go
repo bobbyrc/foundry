@@ -63,6 +63,9 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
+		if p.CIGrace.Duration < 0 {
+			add("policies.%s.ci_grace: must be 0 (default 3m) or greater", name)
+		}
 		for level := range p.Gates {
 			switch level {
 			case string(domain.RiskLow), string(domain.RiskMedium), string(domain.RiskHigh):

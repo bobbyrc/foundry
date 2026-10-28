@@ -517,3 +517,45 @@ func TestControllerDecideApprovalStaleHeadReturnsToReview(t *testing.T) {
 	assert.Equal(t, domain.TaskReview, stored.Status, "the shepherd re-evaluates the new head")
 	assert.Equal(t, "open", r.fk.PRs[pr.Number].State, "the pull request is not merged")
 }
+
+func TestControllerSetProjectPausedPersists(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	require.NoError(t, e.SetProjectPaused(ctx, "demo", true))
+	assert.Equal(t, "owner", e.ProjectPausedBy("demo"))
+	assert.True(t, e.projectPaused("demo"))
+
+	// A new engine on the same store, as after a restart, restores the pause.
+	restarted := r.engine(nil)
+	require.NoError(t, restarted.recover(ctx))
+	assert.Equal(t, "owner", restarted.ProjectPausedBy("demo"))
+
+	require.NoError(t, restarted.SetProjectPaused(ctx, "demo", false))
+	assert.Equal(t, "", restarted.ProjectPausedBy("demo"))
+	again := r.engine(nil)
+	require.NoError(t, again.recover(ctx))
+	assert.Equal(t, "", again.ProjectPausedBy("demo"))
+	assert.False(t, again.projectPaused("demo"))
+}
+
+func TestControllerSetProjectPausedErrors(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+
+	err := e.SetProjectPaused(ctx, "nope", true)
+	assert.True(t, errors.Is(err, api.ErrInvalid), "unknown project pause: %v", err)
+	err = e.SetProjectPaused(ctx, "nope", false)
+	assert.True(t, errors.Is(err, api.ErrInvalid), "unknown project resume: %v", err)
+
+	// A project paused in foundry.yaml can be paused again, but not resumed from the API.
+	r.cfg.Projects["demo"].Paused = true
+	configPaused := r.engine(nil)
+	err = configPaused.SetProjectPaused(ctx, "demo", false)
+	assert.True(t, errors.Is(err, api.ErrConflict), "resume of a config pause: %v", err)
+	assert.Contains(t, err.Error(), "foundry.yaml")
+	assert.Equal(t, "config", configPaused.ProjectPausedBy("demo"))
+	require.NoError(t, configPaused.SetProjectPaused(ctx, "demo", true))
+	assert.Equal(t, "config", configPaused.ProjectPausedBy("demo"))
+}

@@ -14,6 +14,7 @@ import type {
   LoopView,
   NewTask,
   ChatMessage,
+  PausedBy,
   ProjectView,
   Run,
   Signal,
@@ -96,6 +97,18 @@ export const resumeFactory = () => request<{ paused: boolean }>('POST', '/contro
 // ---- projects and tasks ----
 
 export const listProjects = () => request<ProjectView[]>('GET', '/projects');
+
+export interface ProjectPauseState {
+  paused: boolean;
+  paused_by: PausedBy;
+}
+
+/** Pauses a project. The server answers 409 when it is paused in foundry.yaml and cannot be resumed here. */
+export const pauseProject = (name: string) =>
+  request<ProjectPauseState>('POST', `/projects/${encodeURIComponent(name)}/pause`);
+
+export const resumeProject = (name: string) =>
+  request<ProjectPauseState>('POST', `/projects/${encodeURIComponent(name)}/resume`);
 
 export interface TaskQuery {
   project?: string;

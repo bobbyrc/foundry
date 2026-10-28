@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/scm"
+	"github.com/bobbyrc/foundry/internal/store"
 )
 
 const lpBranch = "foundry/aaaa1111-add-notes"
@@ -423,4 +425,67 @@ func TestLoopShepherdMergeFailureAtSameHeadBlocks(t *testing.T) {
 	if len(env.fake.Merged) != 0 {
 		t.Fatalf("merged despite the merge error: %v", env.fake.Merged)
 	}
+}
+
+// Right after foundry's push, a PR whose CI reports no checks is still waiting for CI: no
+// reviewer runs and nothing merges. Once the policy's ci_grace has passed, "no checks" passes.
+func TestLoopShepherdWaitsForCIRegistrationAfterPush(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	env.fake.SetCI(task.PRNumber, scm.CINone)
+	pushed := env.now
+	lpSetTask(t, env, task.ID, func(x *domain.Task) {
+		x.PushedAt = &pushed
+		x.ApprovedSHA = "sha-1"
+	})
+
+	env.run(loopPRShepherd)
+	if got := env.task(task.ID); got.Status != domain.TaskReview {
+		t.Fatalf("status = %s, want review right after the push", got.Status)
+	}
+	if len(env.fake.Merged) != 0 {
+		t.Fatalf("merged within the CI grace period: %v", env.fake.Merged)
+	}
+
+	env.now = pushed.Add(2 * time.Minute)
+	env.run(loopPRShepherd)
+	if len(env.fake.Merged) != 0 {
+		t.Fatalf("merged 2m after the push, inside the 3m grace: %v", env.fake.Merged)
+	}
+
+	env.now = pushed.Add(4 * time.Minute)
+	env.run(loopPRShepherd)
+	if got := env.task(task.ID); got.Status != domain.TaskMerged {
+		t.Fatalf("status = %s after the grace, want merged", got.Status)
+	}
+}
+
+// A PR that never registers checks, with no push recorded, is judged as having no CI.
+func TestLoopShepherdNoCIPassesWithoutRecentPush(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	env.fake.SetCI(task.PRNumber, scm.CINone)
+
+	env.run(loopPRShepherd)
+
+	if n := len(env.tasks(domain.KindReview)); n != 1 {
+		t.Fatalf("got %d review tasks, want 1: a repo without CI must pass the gate", n)
+	}
+}
+
+// A change of risk that the policy explains with no reasons reads "risk low", not "risk low: ".
+func TestLoopShepherdPolicyEventWithoutReasons(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.RiskReasons = []string{"stale"} })
+
+	env.run(loopPRShepherd)
+
+	evs, err := env.st.ListEvents(env.ctx, store.EventFilter{Limit: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range evs {
+		if ev.Type == domain.EvPolicyDecision && ev.Message == "risk low" {
+			return
+		}
+	}
+	t.Fatal("no policy.decision event with message \"risk low\"")
 }

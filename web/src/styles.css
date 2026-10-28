@@ -1100,6 +1100,68 @@ input[type='checkbox'] {
   color: var(--review);
 }
 
+/* ---- projects ---- */
+
+.projects-grid .card {
+  margin-bottom: 0;
+}
+
+.project-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-title h3 {
+  overflow-wrap: anywhere;
+}
+
+.project-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 12px 0;
+}
+
+.project-count.is-zero {
+  color: var(--muted);
+}
+
+.project-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.project-config-pause {
+  white-space: nowrap;
+}
+
+.loop-pills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.loop-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--panel-2);
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+.loop-pill .dot {
+  width: 6px;
+  height: 6px;
+}
+
 /* ---- agents and auth ---- */
 
 .agent-card h3 {
@@ -1239,6 +1301,10 @@ input[type='checkbox'] {
 
   .two-col,
   .chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .projects-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

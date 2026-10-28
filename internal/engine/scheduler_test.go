@@ -151,3 +151,25 @@ type rtCostErrStore struct {
 func (rtCostErrStore) CostSince(context.Context, time.Time) (float64, error) {
 	return 0, errors.New("boom")
 }
+
+// A project paused by the owner at runtime is skipped while another project's task is claimed,
+// and its own task is claimed once the project is resumed.
+func TestSchedulerSkipsOwnerPausedProject(t *testing.T) {
+	t.Parallel()
+	env := rtNewEngine(t, rtOpts{projects: []string{"demo", "other"}})
+	require.NoError(t, env.e.SetProjectPaused(env.ctx, "demo", true))
+	pausedTask := env.create(domain.Task{Project: "demo"})
+	otherTask := env.create(domain.Task{Project: "other"})
+
+	rtWait(t, 20*time.Second, "other project's task to be claimed", func() bool {
+		return len(env.runs(otherTask.ID)) > 0
+	})
+	time.Sleep(200 * time.Millisecond)
+	assert.Empty(t, env.runs(pausedTask.ID), "paused project's task was claimed")
+	assert.Equal(t, domain.TaskQueued, env.task(pausedTask.ID).Status)
+
+	require.NoError(t, env.e.SetProjectPaused(env.ctx, "demo", false))
+	rtWait(t, 20*time.Second, "resumed project's task to be claimed", func() bool {
+		return len(env.runs(pausedTask.ID)) > 0
+	})
+}

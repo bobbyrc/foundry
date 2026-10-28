@@ -234,6 +234,16 @@ export function useTogglePause() {
   });
 }
 
+/** Pauses or resumes one project. Its card shows the pending state and error from the variables. */
+export function useSetProjectPaused() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { name: string; pause: boolean }) =>
+      vars.pause ? api.pauseProject(vars.name) : api.resumeProject(vars.name),
+    onSuccess: () => invalidate(qc, keys.projectsAll, keys.stats),
+  });
+}
+
 export function useCreateConversation() {
   const qc = useQueryClient();
   return useMutation({

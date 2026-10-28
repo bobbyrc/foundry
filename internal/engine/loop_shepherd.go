@@ -136,14 +136,23 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 			return err
 		}
 		t = saved
-		e.d.Bus.Emit(ctx, domain.EvPolicyDecision, p.Name, t.ID, "",
-			"risk "+string(d.Risk)+": "+strings.Join(d.Reasons, "; "), d)
+		msg := "risk " + string(d.Risk)
+		if len(d.Reasons) > 0 {
+			msg += ": " + strings.Join(d.Reasons, "; ")
+		}
+		e.d.Bus.Emit(ctx, domain.EvPolicyDecision, p.Name, t.ID, "", msg, d)
 	}
 
 	if d.RequireCI {
 		switch pr.CI {
 		case scm.CIPending:
 			return nil
+		case scm.CINone:
+			// GitHub often registers checks a few seconds after a push. Within the grace
+			// period after foundry's push, "no checks" is not yet "no CI".
+			if t.PushedAt != nil && e.d.Now().Sub(*t.PushedAt) < e.Config().PolicyFor(p.Name).CIGrace.Duration {
+				return nil
+			}
 		case scm.CIFailure:
 			log, lerr := s.CILog(ctx, t.PRNumber, 8000)
 			if lerr != nil {
