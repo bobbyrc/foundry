@@ -214,8 +214,9 @@ web/                  React + Vite + TypeScript UI (built into internal/api/webd
 - The server answers only requests whose Host header is localhost, a loopback address, the bind
   host, the `public_url` host, or `server.allowed_hosts`. This blocks DNS rebinding, where a web
   page points its own name at 127.0.0.1. Responses carry a strict CSP and refuse framing.
-- Agent text that foundry posts to GitHub (PR bodies, issues, comments) has @mentions outside
-  code wrapped in backticks, so an agent cannot notify people. Release evidence is redacted
+- Agent text that foundry posts to GitHub (PR bodies, issues, comments) has an invisible
+  zero-width space inserted after the @ of every mention outside fenced code blocks, so an agent
+  cannot notify people. Release evidence is redacted
   (see Deploy watch).
 
 ### Known limits of the harnesses
