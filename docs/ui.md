@@ -13,57 +13,82 @@ Markdown. No component library; one stylesheet with design tokens. `npm run buil
 
 ## Tokens
 
-Dark is the default; light follows `prefers-color-scheme: light`.
+The visual world is an **andon board**: the lamp board over a factory line that is green while
+work flows, yellow when a station calls for help, and red when the line stopped itself. A
+charcoal board carries the navigation and the Overview's lamp board; the page ground is a pale
+machine-green enamel. Light is the default; dark follows `prefers-color-scheme: dark`. Structure
+is drawn with 1px rules and square corners; content has no shadows.
 
-| Token | Dark | Light | Use |
+| Token | Light | Dark | Use |
 |---|---|---|---|
-| `--bg` | `#0e0f11` | `#f7f7f8` | page |
-| `--panel` | `#16181c` | `#ffffff` | cards, sidebar |
-| `--panel-2` | `#1d2026` | `#f1f2f4` | hover, inputs, user chat bubble |
-| `--border` | `#2a2e36` | `#e2e4e8` | 1px borders |
-| `--text` | `#e6e8eb` | `#16181c` | body |
-| `--muted` | `#9aa1ac` | `#5d6470` | secondary text |
-| `--accent` | `#f59e0b` | `#d97706` | brand (forge amber), primary buttons, focus ring |
-| `--ok` | `#22c55e` | `#15803d` | done, healthy, low risk |
-| `--warn` | `#eab308` | `#a16207` | medium risk, pending |
-| `--danger` | `#ef4444` | `#dc2626` | blocked, failed, high risk, denial |
-| `--info` | `#60a5fa` | `#2563eb` | running, deploying |
-| `--review` | `#a78bfa` | `#7c3aed` | review |
+| `--bg` | `#e3eae4` | `#111614` | page ground |
+| `--panel` | `#f5f8f5` | `#181e1b` | sheets: items, tables, meta grids |
+| `--panel-2` | `#eaf0eb` | `#202723` | hover, code |
+| `--input` | `#ffffff` | `#0d1210` | form fields |
+| `--field` | `#6f7d76` | `#64736b` | form field outlines (3:1 against field and ground) |
+| `--border` / `--rule` | `#b9c6bd` / `#cdd7d0` | `#3a4741` / `#2a332f` | outer rules / inner rules |
+| `--text` / `--muted` | `#18201c` / `#4b5751` | `#e4ebe6` / `#a1aea7` | body / secondary text |
+| `--board` | `#1f2422` | `#0a0d0c` | nav rail, phone top bar, lamp board |
+| `--lamp-run` | `#2fa35a` | same | running, in review, merged, deploying |
+| `--lamp-call` | `#f2c230` | same | waits on you: approvals; medium risk; brand square |
+| `--lamp-stop` | `#d7342a` | same | stopped: blocked, failed, denied; high risk |
+| `--lamp-done` | `#7f9d8c` | `#6f8e7d` | done, healthy |
+| `--lamp-off` | `#3a423e` | `#2c3430` | idle, queued, cancelled, paused |
 
-Type: system UI stack, 14px base, 1.5 line height; headings 20/16/14px semibold. Monospace
-(`ui-monospace, SFMono-Regular, Menlo, monospace`, 12.5px) for logs, IDs, SHAs, config.
-Radius 8px on cards, 6px on controls, 999px on pills. Spacing scale 4/8/12/16/24/32.
+Status colours as text (`--ok`, `--warn`, `--danger`, ...) are darker or lighter versions of the
+lamps chosen for 4.5:1 contrast on the ground. The primary button is ink-filled (`--accent` is
+the text colour), not a lamp colour, so lamp colours keep their meaning.
+
+Type: Barlow (text, 15px, line height 1.5) and Barlow Condensed (page titles 30px, section
+labels and table headers in 13-15px caps, board window names), both self-hosted from
+`src/assets/fonts/` (SIL Open Font License) because the CSP allows same-origin fonts only.
+Monospace (`ui-monospace, SFMono-Regular, Menlo, monospace`, 13px) only for logs, IDs, SHAs and
+config. Radius 0 on sheets, 2px on controls and pills. Numbers in tables and counts use tabular
+figures. Motion: lamps switch, never fade: state changes are a two-step at 90ms, and running work
+blinks on and off rather than pulsing; both stop under `prefers-reduced-motion`.
 
 ## Shared components
 
-- **StatusPill** — dot + label, colour by status: queued `--muted`, running `--info` with a
-  pulsing dot, review `--review`, awaiting_approval `--accent`, merged and deploying `--info`,
-  done `--ok`, blocked/failed `--danger`, cancelled `--muted`. Runs: starting/running `--info`,
-  succeeded `--ok`, failed/stalled/timed_out/denied `--danger`, cancelled `--muted`.
-  Deployments: pending/deploying/verifying `--info`, healthy `--ok`, failed/rolled_back `--danger`.
-- **RiskBadge** — outlined pill: low `--ok`, medium `--warn`, high `--danger`.
-- **RelTime** — "3m ago", full timestamp in `title`.
-- **IdChip** — last 8 chars of an ID in monospace (IDs are UUIDv7, whose leading chars are a
+- **StatusPill**: a square lamp plus the status in words, on a 1px-ruled chip. Lamp by status:
+  queued and cancelled off; running (blinking), review, merged and deploying run green;
+  awaiting_approval call yellow; done done-green; blocked and failed stop red. Runs:
+  starting/running run (blinking), succeeded done, failed/stalled/timed_out/denied stop,
+  cancelled off. Deployments: pending/deploying/verifying run, healthy done, failed/rolled_back
+  stop. The tone names in `src/lib/status.ts` are unchanged; the stylesheet maps them to lamps.
+- **RiskBadge**: condensed caps on one fixed ramp, the same everywhere: low outlined, medium on
+  call yellow, high on stop red, unrated as quiet muted text.
+- **RelTime**: "3m ago", full timestamp in `title`.
+- **IdChip**: last 8 chars of an ID in monospace (IDs are UUIDv7, whose leading chars are a
   timestamp shared by IDs created close together), copies the full ID on click.
-- **Empty** — muted centred line saying what would appear here and why it is empty.
-- **Markdown** — marked + dompurify; code blocks in `--panel-2` monospace.
-- Buttons: primary (accent fill, dark text), secondary (panel-2 fill), danger (danger outline).
-  Every destructive action asks for confirmation inline (button turns into "Confirm?" for 3s).
+- **Empty**: muted centred line in a dashed rule saying what would appear here and why it is
+  empty.
+- **Markdown**: marked + dompurify; code blocks in `--panel-2` monospace.
+- **ApprovalCard**: a call item (see Overview). Under the title: status, kind, project, task,
+  when requested. Then the gate: the task's risk badge and risk reasons, and the commit the
+  approval covers (short SHA, PR link, "a new push withdraws this approval"). Then the reason
+  (clamped to 3 lines), the decision (optional note, "Approve merge" for merge approvals or
+  "Approve", and Reject), and only then "What changed" and the reviewer's summary, each clamped
+  to 3 lines with "show more", so the decision stays in the first screen on a phone.
+- Buttons: primary (ink fill), secondary (ink outline), danger (stop-red outline), danger-fill,
+  ghost. Every destructive action asks for confirmation inline (button turns into "Confirm?"
+  for 3s).
 
 ## Shell
 
-- Left sidebar 224px (`--panel`, right border): wordmark "foundry" in semibold with a 10px
-  amber square before it; nav items with counts where useful: Overview, Projects, Chat, Tasks,
-  Approvals (accent count badge when > 0), Runs, Deploys, Signals, Friction, Loops, Agents,
-  Config. Active item: `--panel-2` background and a 2px accent bar on the left.
-- Sidebar footer: the **pause switch** — a full-width button. Running: secondary
-  "Pause factory". Paused: danger fill "Paused — no new runs. Resume". Below it the live
-  indicator: green dot "live" when the event stream is connected, amber "reconnecting…".
-- Main area: page header (title left, page actions right) then content, max width 1280px,
-  24px padding.
-- Under 760px wide the sidebar becomes a top bar (wordmark, approvals badge, menu button)
-  with the nav in a slide-down drawer; tables become stacked cards (title row, then
-  `label: value` lines).
+- Left rail 216px in `--board`: wordmark "foundry" in Barlow Condensed with a 12px call-yellow
+  square before it; nav items: Overview, Projects, Chat, Tasks, Approvals, Runs, Deploys,
+  Signals, Friction, Loops, Agents, Config. Approvals carries a yellow count badge when
+  approvals wait; Tasks a red one when tasks are blocked (each count has screen-reader text).
+  The active item is lit (`--board-2` background, white text).
+- Rail footer: the **pause switch**, the line's cord: a dark window with the line's state on the
+  left (green lamp "Running", or red lamp "Paused" with "No new runs start." and a red rule) and
+  the action on the right (an outlined "Pause", or a filled "Resume"). Below it the live
+  indicator: green square "live" when the event stream is connected, yellow "reconnecting…".
+- Main area: content up to 1360px wide, 28px top and 32px side padding.
+- Under 760px wide the rail becomes a charcoal top bar (wordmark, "1 approval" and "1 blocked"
+  badges in words, menu button) with the nav in a full-height drawer; tables become stacked
+  sheets (title row, then `label: value` lines).
+
 
 ## Auth
 
@@ -75,10 +100,10 @@ removed from the URL.
 ## Install on a phone
 
 The UI is an installable web app (it has a web app manifest, `/manifest.webmanifest`, and an
-amber-square icon, `/icon.svg`), so it can sit on a phone home screen and open without browser
-chrome. Open foundry's URL on the phone first. From another network that needs remote access,
-such as Tailscale, and the name you use must be in `server.allowed_hosts`, or the server answers
-421. Then:
+icon of a yellow lamp square on charcoal, `/icon.svg`), so it can sit on a phone home screen
+and open without browser chrome. Open foundry's URL on the phone first. From another network
+that needs remote access, such as Tailscale, and the name you use must be in
+`server.allowed_hosts`, or the server answers 421. Then:
 
 - iOS (Safari): Share → Add to Home Screen.
 - Android (Chrome): menu → Install app (or Add to Home screen).
@@ -95,16 +120,30 @@ fallback.
 
 ## Pages
 
-**Overview** (`/`) — a row of five stat cards: Active runs, Queued, Awaiting approval,
-Blocked, Cost today; each links to the filtered list. Below, two columns (one column on
-mobile):
-- Left: **Needs you** — pending approvals (title, reason, Approve / Reject with optional
-  note) and blocked tasks (title, `blocked_reason` in a danger callout, Retry with note,
-  Cancel). Empty: "Nothing needs you. The factory is handling everything in flight."
-  Then **Live runs** — each active run: role · project, task title, elapsed time, "last
-  output 12s ago" (turns `--warn` after 5 minutes), Cancel.
-- Right: **Activity** — the event feed, newest first, each row: type tag (muted mono), the
-  event message, RelTime, links to task/run when present. Live events prepend.
+**Overview** (`/`): the andon board, then the work.
+- **Board**: a charcoal band with one window per project (from `/projects`). A window's lamp
+  bar is lit by what the project needs (`src/lib/lamp.ts`): red when a task is blocked, yellow
+  when approvals wait, off when paused, green when tasks run or are in review, off when only
+  queued or idle. Under the project name the reason in words ("1 blocked", "2 need you",
+  "3 running") and the other non-zero counts. A window links to the project's tasks. At the
+  right end, the line window: "Line running" or "Line paused", active runs, queued tasks and cost
+  today. Empty: "No projects yet." On a phone the board is a compact strip (two windows across,
+  no detail lines, the line window on one row) so the first decision fits in the first screen.
+- Below, two columns (one on a phone, board windows two across):
+- Left: **Needs you**, with "N waiting · oldest 14m" beside the heading. Pending approvals
+  (ApprovalCard) and blocked tasks, each a call item: a sheet with a lit lamp before the title
+  (yellow for approvals, red for blocked), a muted line under it, then the body. Blocked items:
+  "Blocked · project · attempt 2 of 3 · 11m ago", the `blocked_reason` in a stop callout, Retry
+  with note and Cancel. Empty: "Nothing needs you. The factory is handling everything in flight."
+- Right: **Live runs** on one shared time axis (`src/lib/runbar.ts`; 10m, 20m, 30m, 1h, ...
+  whichever fits the longest run). Each run: task title (links to the run), Cancel, "role ·
+  project", elapsed time and "output 12s ago", then a bar whose length is the elapsed time:
+  green up to the last output, yellow after it once the run has been quiet for 5 minutes ("quiet
+  for 7m" in the text). Then **Activity**: the event feed, newest first, in fixed columns:
+  clock time, event type in words, message with one "task" (or "run") link. Ten rows show, with
+  "Show all N" to expand in place. Live events prepend.
+- Not built yet: a compact lamp row on pages other than Overview, and fuller window details on
+  focus. The nav badges carry "needs you" and "blocked" everywhere meanwhile.
 
 **Projects** (`/projects`) — one card per project, in a responsive grid (one column on
 mobile). Card header: project name (semibold), repo as a muted link to

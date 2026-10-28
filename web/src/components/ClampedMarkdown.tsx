@@ -7,9 +7,17 @@ export function ClampedMarkdown({ text, lines }: { text: string; lines: number }
   const [overflows, setOverflows] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Measure again whenever the box changes size (a rotated phone, a resized window, fonts
+  // arriving), or text that fit at one width stays clamped at another with no way to open it.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && !open) setOverflows(el.scrollHeight > el.clientHeight + 1);
+    if (!el || open) return;
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [text, open]);
 
   return (

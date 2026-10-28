@@ -179,3 +179,29 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] UI reachable over Tailscale (`tailscale serve --https=7797`); the instance's local config `$DOGFOOD/foundry.yaml` sets `public_url`
 - [x] `examples/dogfood/update.sh`: one-step update of the maintainer's instance to `main`; AGENTS.md says to run it after every change to `main`. Tested live (47a21fe → 68d139d, then a no-op run); the undo-on-failed-health path is untested
 - [x] stale branches deleted (factory branches of cancelled/rejected tasks, merged `init`, local `service-doctor`)
+
+## UI redesign "Andon Board" and accounts — 2026-10-28 (branch `ui-rework`)
+
+Product facts: `PRODUCT.md`. Direction contract: `.impeccable/surfaces/web-src-pages-overview-tsx.md`.
+Shared files (one agent at a time): `web/src/styles.css`, `web/src/components/Shell.tsx`,
+`docs/ui.md`, `web/src/types.ts`.
+
+Stream A — visual world (main agent sets the system, then delegates page rollout)
+- [x] Fonts self-hosted (`web/src/assets/fonts/`, Barlow + Barlow Condensed, OFL)
+- [x] Lamp and run-bar rules with tests (`web/src/lib/lamp.ts`, `web/src/lib/runbar.ts`)
+- [x] Tokens, base components and shell in `styles.css`; `Shell.tsx`; `AndonBoard.tsx`
+- [x] Overview rebuilt to the contract; checked desktop, dark and 390px against a seeded throwaway daemon, and on a built binary (CSP, fonts, live stream)
+- [x] Finish review (fresh agent): fix, then fixes 1-7 resolved; DESIGN.md via documenter; `docs/ui.md` rewritten
+- [ ] Deferred: compact lamp row on non-Overview pages; window details on focus; replace the ▸ glyph
+      marker in `LogViewer.tsx` with a drawn icon (Run detail rollout)
+- [ ] Rollout: Task detail, Run detail, Chat, Approvals, phone layout, then remaining pages
+
+Stream B — accounts, sign-in and in-app config editor (own PR, after Overview lands)
+Decided with the owner: open first-run setup page creates the first account; users have roles
+(owner, operator, viewer); the browser signs in with password only; the API token stays for the
+CLI and orchestrator and can never save config or manage users; PBKDF2 (stdlib) hashes.
+- [ ] Design note in `docs/design.md` and the invariants (safety model change, owner sign-off)
+- [ ] Store: users + sessions (new migration); API: login/logout/setup/me, session cookie,
+      role checks; config read/write endpoints (write = owner session only, strict validation,
+      comments preserved, reload)
+- [ ] UI: sign-in and setup pages replacing Connect; visual config editor with raw YAML tab

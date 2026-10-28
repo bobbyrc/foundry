@@ -4,51 +4,37 @@ import { useQuery } from '@tanstack/react-query';
 import { getEventsHistory } from '../api';
 import { subscribe } from '../events';
 import { keys } from '../keys';
-import { formatCost } from '../lib/format';
-import { elapsedMs, formatDuration, parseTime } from '../lib/time';
+import { formatClock } from '../lib/format';
+import { elapsedMs, formatDuration, formatRelative, parseTime } from '../lib/time';
+import { axisMinutes, axisTicks, runBar } from '../lib/runbar';
 import { useNow } from '../lib/clock';
+import { AndonBoard } from '../components/AndonBoard';
 import { ApprovalCard } from '../components/ApprovalCard';
 import { Button } from '../components/Button';
 import { Callout } from '../components/Callout';
 import { Empty } from '../components/Empty';
 import { ErrorLine } from '../components/ErrorLine';
-import { IdChip } from '../components/IdChip';
 import { RelTime } from '../components/RelTime';
-import { StatCard } from '../components/StatCard';
-import { StatusPill } from '../components/StatusPill';
-import { PageHeader } from '../components/PageHeader';
 import { RetryTaskControl, CancelTaskButton } from '../components/TaskActions';
-import { useApprovals, useCancelRun, usePausedProjects, useRuns, useStats, useTask, useTasks } from '../queries';
+import { useApprovals, useCancelRun, useRuns, useTask, useTasks } from '../queries';
 import type { FoundryEvent, Run, Task } from '../types';
 
 const STALE_OUTPUT_MS = 5 * 60_000;
 const ACTIVITY_LIMIT = 100;
+/** Rows shown before "Show all": enough to see what just happened without burying the page. */
+const ACTIVITY_SHOWN = 10;
 
 export function Overview() {
-  const stats = useStats();
-  const s = stats.data;
-  const byStatus = s?.tasks_by_status ?? {};
-  const paused = usePausedProjects();
-
   return (
     <>
-      <PageHeader title="Overview" />
-      <div className="stat-row">
-        <StatCard label="Active runs" value={s?.active_runs} href="/runs?status=starting%2Crunning" />
-        <StatCard label="Queued" value={byStatus.queued} href="/tasks?status=queued" />
-        <StatCard label="Awaiting approval" value={s?.approvals_pending} href="/approvals" />
-        <StatCard label="Blocked" value={byStatus.blocked} href="/tasks?status=blocked" />
-        <StatCard label="Cost today" value={s ? formatCost(s.cost_today_usd) : undefined} href="/runs" />
-      </div>
-      {paused.length > 0 ? (
-        <p className="muted small">Paused projects: {paused.join(', ')} — their queued work will not start.</p>
-      ) : null}
-      <div className="two-col">
-        <div className="col">
-          <NeedsYou />
+      <h1 className="sr-only">Overview</h1>
+      <AndonBoard />
+      <div className="overview-grid">
+        <NeedsYou />
+        <div className="overview-side">
           <LiveRuns />
+          <Activity />
         </div>
-        <Activity />
       </div>
     </>
   );
@@ -58,32 +44,51 @@ function NeedsYou() {
   const approvals = useApprovals('pending');
   const blocked = useTasks({ status: 'blocked', limit: 50 });
   const loaded = approvals.isSuccess && blocked.isSuccess;
-  const empty = loaded && approvals.data.length === 0 && blocked.data.length === 0;
+  const count = (approvals.data?.length ?? 0) + (blocked.data?.length ?? 0);
+  const oldest = useMemo(() => {
+    const times = [...(approvals.data ?? []).map((a) => a.created_at), ...(blocked.data ?? []).map((t) => t.updated_at)]
+      .map((t) => parseTime(t)?.getTime())
+      .filter((t): t is number => t !== undefined);
+    return times.length > 0 ? new Date(Math.min(...times)) : null;
+  }, [approvals.data, blocked.data]);
+  const now = useNow();
 
   return (
-    <section className="section">
-      <h2>Needs you</h2>
+    <section className="section" aria-labelledby="needs-you">
+      <h2 id="needs-you">
+        Needs you
+        {loaded && count > 0 ? (
+          <span className="section-note">
+            {count} waiting{oldest ? ` · oldest ${formatRelative(oldest, now)}` : ''}
+          </span>
+        ) : null}
+      </h2>
       <ErrorLine error={approvals.error ?? blocked.error} />
       {approvals.data?.map((approval) => <ApprovalCard key={approval.id} approval={approval} />)}
       {blocked.data?.map((task) => <BlockedTaskCard key={task.id} task={task} />)}
-      {empty ? <Empty>Nothing needs you. The factory is handling everything in flight.</Empty> : null}
+      {loaded && count === 0 ? <Empty>Nothing needs you. The factory is handling everything in flight.</Empty> : null}
     </section>
   );
 }
 
 function BlockedTaskCard({ task }: { task: Task }) {
   return (
-    <article className="card">
-      <header className="card-head">
+    <article className="call-item is-stop">
+      <div className="call-title">
+        <span className="lamp lamp-stop" aria-hidden="true" />
         <h3>
           <Link to={`/tasks/${task.id}`}>{task.title}</Link>
         </h3>
-        <StatusPill status={task.status} />
-      </header>
-      <Callout title="Blocked">{task.blocked_reason || 'No reason was recorded.'}</Callout>
-      <div className="row-actions">
-        <RetryTaskControl taskId={task.id} />
-        <CancelTaskButton taskId={task.id} />
+      </div>
+      <p className="call-meta">
+        Blocked · {task.project} · attempt {task.attempts} of {task.max_attempts} · <RelTime value={task.updated_at} />
+      </p>
+      <div className="call-body">
+        <Callout>{task.blocked_reason || 'No reason was recorded.'}</Callout>
+        <div className="row-actions">
+          <RetryTaskControl taskId={task.id} />
+          <CancelTaskButton taskId={task.id} />
+        </div>
       </div>
     </article>
   );
@@ -91,49 +96,74 @@ function BlockedTaskCard({ task }: { task: Task }) {
 
 function LiveRuns() {
   const runs = useRuns({ status: 'starting,running', limit: 50 });
+  const now = useNow();
+  const longest = Math.max(0, ...(runs.data ?? []).map((r) => now - (parseTime(r.started_at)?.getTime() ?? now)));
+  const scale = axisMinutes(longest);
+  const count = runs.data?.length ?? 0;
+
   return (
-    <section className="section">
-      <h2>Live runs</h2>
+    <section className="section" aria-labelledby="live-runs">
+      <h2 id="live-runs">
+        Live runs
+        {count > 0 ? <span className="section-note">{count} active</span> : null}
+      </h2>
       <ErrorLine error={runs.error} />
-      {runs.isSuccess && runs.data.length === 0 ? <Empty>No runs are active. Queued work starts when a slot is free.</Empty> : null}
-      {runs.data?.map((run) => <RunRow key={run.id} run={run} />)}
+      {runs.isSuccess && count === 0 ? <Empty>No runs are active. Queued work starts when a slot is free.</Empty> : null}
+      {count > 0 ? (
+        <>
+          <div className="run-axis" aria-hidden="true">
+            <div className="run-axis-ticks">
+              {axisTicks(scale).map((tick) => (
+                <span key={tick}>{tick}</span>
+              ))}
+            </div>
+          </div>
+          <ul className="run-list">
+            {runs.data?.map((run) => <RunItem key={run.id} run={run} scale={scale} now={now} />)}
+          </ul>
+        </>
+      ) : null}
     </section>
   );
 }
 
-function RunRow({ run }: { run: Run }) {
-  const now = useNow();
+function RunItem({ run, scale, now }: { run: Run; scale: number; now: number }) {
   const task = useTask(run.task_id);
   const cancel = useCancelRun(run.id);
   const started = parseTime(run.started_at);
   const lastOutput = parseTime(run.last_output_at);
-  const stale = lastOutput !== null && now - lastOutput.getTime() > STALE_OUTPUT_MS;
+  const quietMs = lastOutput ? now - lastOutput.getTime() : started ? now - started.getTime() : 0;
+  const stale = quietMs > STALE_OUTPUT_MS;
+  const bar = started ? runBar(started.getTime(), lastOutput?.getTime() ?? null, now, scale, STALE_OUTPUT_MS) : { flow: 0, quiet: 0 };
 
   return (
-    <article className="card run-row">
-      <header className="card-head">
-        <span className="muted small">
-          {run.role} · {run.project}
-        </span>
-        <StatusPill kind="run" status={run.status} />
-      </header>
-      <h3>
+    <li className="run-item">
+      <div className="run-item-head">
         <Link to={`/runs/${run.id}`}>{task.data?.task.title ?? 'Loading task…'}</Link>
-      </h3>
-      <p className="small muted">
-        {started ? `running ${formatDuration(elapsedMs(started, null, now))}` : 'starting'}
-        {' · '}
-        <span className={stale ? 'warn-text' : undefined}>
-          last output {lastOutput ? <RelTime value={run.last_output_at} /> : 'none yet'}
-        </span>
-      </p>
-      <div className="row-actions">
-        <Button variant="danger" confirm disabled={cancel.isPending} onClick={() => cancel.mutate()}>
+        <Button variant="ghost" confirm disabled={cancel.isPending} onClick={() => cancel.mutate()}>
           Cancel
         </Button>
       </div>
+      <div className="run-item-meta">
+        <span>
+          {run.role} · {run.project}
+        </span>
+        <span>
+          {started ? formatDuration(elapsedMs(started, null, now)) : 'starting'}
+          {' · '}
+          {stale ? (
+            <span className="warn-text">quiet for {formatDuration(quietMs)}</span>
+          ) : (
+            <>output {lastOutput ? <RelTime value={run.last_output_at} /> : 'none yet'}</>
+          )}
+        </span>
+      </div>
+      <div className="run-track" aria-hidden="true">
+        <span className="run-flow" style={{ width: `${bar.flow}%` }} />
+        {bar.quiet > 0 ? <span className="run-quiet" style={{ left: `${bar.flow}%`, width: `${bar.quiet}%` }} /> : null}
+      </div>
       <ErrorLine error={cancel.error} />
-    </article>
+    </li>
   );
 }
 
@@ -144,6 +174,7 @@ function Activity() {
     refetchInterval: 30_000,
   });
   const [live, setLive] = useState<FoundryEvent[]>([]);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(
     () =>
@@ -170,23 +201,55 @@ function Activity() {
   }, [live, history.data]);
 
   return (
-    <section className="section">
-      <h2>Activity</h2>
+    <section className="section" aria-labelledby="activity">
+      <h2 id="activity">
+        Activity <span className="section-note">newest first</span>
+      </h2>
       <ErrorLine error={history.error} />
       {history.isSuccess && events.length === 0 ? <Empty>No activity yet. Events appear here as work moves.</Empty> : null}
       <ol className="feed">
-        {events.map((ev, index) => (
-          <li key={ev.id > 0 ? ev.id : `${ev.type}-${index}`} className="feed-row">
-            <span className="tag mono">{ev.type}</span>
-            <span className="feed-message">{ev.message}</span>
-            <span className="feed-links">
-              {ev.task_id ? <Link to={`/tasks/${ev.task_id}`}><IdChip id={ev.task_id} /></Link> : null}
-              {ev.run_id ? <Link to={`/runs/${ev.run_id}`}><IdChip id={ev.run_id} /></Link> : null}
-            </span>
-            <RelTime value={ev.time} />
-          </li>
-        ))}
+        {(showAll ? events : events.slice(0, ACTIVITY_SHOWN)).map((ev, index) => {
+          const time = parseTime(ev.time);
+          return (
+            <li key={ev.id > 0 ? ev.id : `${ev.type}-${index}`} className="feed-row">
+              <time className="feed-time" dateTime={time?.toISOString()} title={time?.toLocaleString()}>
+                {time ? formatClock(time) : '—'}
+              </time>
+              <span className="tag" title={ev.type}>
+                {eventLabel(ev.type)}
+              </span>
+              <span className="feed-message">
+                {ev.message}
+                {ev.task_id ? (
+                  <>
+                    {' '}
+                    <Link to={`/tasks/${ev.task_id}`} className="feed-link">
+                      task
+                    </Link>
+                  </>
+                ) : ev.run_id ? (
+                  <>
+                    {' '}
+                    <Link to={`/runs/${ev.run_id}`} className="feed-link">
+                      run
+                    </Link>
+                  </>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
       </ol>
+      {events.length > ACTIVITY_SHOWN ? (
+        <button type="button" className="link-button small feed-more" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>
+          {showAll ? 'Show fewer' : `Show all ${events.length}`}
+        </button>
+      ) : null}
     </section>
   );
+}
+
+/** "approval.requested" reads as "approval requested". */
+function eventLabel(type: string): string {
+  return type.replace(/[._]/g, ' ');
 }

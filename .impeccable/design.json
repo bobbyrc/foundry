@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T16:40:29Z",
+  "title": "Design System: Foundry",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Machine Enamel",
+        "canonical": "#e3eae4",
+        "dark": "#111614",
+        "tonalRamp": ["#0b0b0b", "#232623", "#3e443f", "#5d635e", "#7e847f", "#a0a7a1", "#c6cbc6", "#eeefee"],
+        "rampSource": "synthesized in OKLCH from the light value; not defined in the build"
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Sheet Mist",
+        "canonical": "#f5f8f5",
+        "dark": "#181e1b",
+        "tonalRamp": ["#0b0b0b", "#242524", "#404340", "#5f625f", "#808380", "#a3a6a3", "#c8cac8", "#eeeeee"],
+        "rampSource": "synthesized in OKLCH from the light value; not defined in the build"
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Ink Green Black",
+        "canonical": "#18201c",
+        "dark": "#e4ebe6",
+        "tonalRamp": ["#0a0b0b", "#222624", "#3c4440", "#5a645f", "#7b8580", "#9ea8a3", "#c4cbc7", "#edefee"],
+        "rampSource": "synthesized in OKLCH from the light value; not defined in the build"
+      },
+      "board": {
+        "role": "neutral",
+        "displayName": "Charcoal Board",
+        "canonical": "#1f2422",
+        "dark": "#0a0d0c",
+        "tonalRamp": ["#0b0b0b", "#232625", "#3e4341", "#5d6360", "#7e8481", "#a0a7a4", "#c6cac8", "#eeefee"],
+        "rampSource": "synthesized in OKLCH from the light value; not defined in the build"
+      },
+      "lamp-run": {
+        "role": "signal",
+        "displayName": "Run Green",
+        "canonical": "#2fa35a",
+        "dark": "#2fa35a",
+        "tonalRamp": ["#050e07", "#00300d", "#00560e", "#007731", "#239b52", "#50bf74", "#93dea6", "#e4f3e7"],
+        "rampSource": "synthesized in OKLCH from the lamp value; not defined in the build"
+      },
+      "lamp-call": {
+        "role": "signal",
+        "displayName": "Call Yellow",
+        "canonical": "#f2c230",
+        "dark": "#f2c230",
+        "tonalRamp": ["#0f0b02", "#372000", "#633700", "#855800", "#a87a00", "#cd9e00", "#e7c56d", "#f5eedd"],
+        "rampSource": "synthesized in OKLCH from the lamp value; not defined in the build"
+      },
+      "lamp-stop": {
+        "role": "signal",
+        "displayName": "Stop Red",
+        "canonical": "#d7342a",
+        "dark": "#d7342a",
+        "tonalRamp": ["#160605", "#4f0000", "#900000", "#b80206", "#e13f33", "#ff6757", "#ffa392", "#ffe7e3"],
+        "rampSource": "synthesized in OKLCH from the lamp value; not defined in the build"
+      }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Page titles (30px; 26px under 760px). Condensed caps are not used here." },
+      "section-label": { "displayName": "Section label", "purpose": "Section and table-head labels, caps, Barlow Condensed." },
+      "board-name": { "displayName": "Board name", "purpose": "A project's name on its Overview board window." },
+      "title": { "displayName": "Title", "purpose": "Item and card titles." },
+      "body": { "displayName": "Body", "purpose": "Running text; paragraphs 8px apart." },
+      "nav": { "displayName": "Nav", "purpose": "Rail and drawer navigation." },
+      "label": { "displayName": "Label", "purpose": "Field labels, small notes, pill text." },
+      "control": { "displayName": "Control", "purpose": "Button text." },
+      "mono": { "displayName": "Mono", "purpose": "Logs, IDs, SHAs, branch names and config only." }
+    },
+    "shadows": [
+      {
+        "name": "overlay-modal",
+        "value": "0 16px 40px rgb(10 13 12 / 0.35)",
+        "purpose": "Lifts the modal sheet off its 60% ink scrim. The only shadow in the build; no content takes one."
+      }
+    ],
+    "motion": [
+      {
+        "name": "switch",
+        "value": "90ms steps(2, jump-none)",
+        "purpose": "State changes of buttons and board lamps: two steps, never a fade. Removed under prefers-reduced-motion."
+      },
+      {
+        "name": "blink",
+        "value": "1.6s steps(1, end) infinite",
+        "purpose": "Running work only (running task, starting or running run). On 60% of the cycle, then off at 25% opacity. Stops under prefers-reduced-motion."
+      },
+      {
+        "name": "caret",
+        "value": "1s steps(2, start) infinite",
+        "purpose": "Streaming chat caret. Stops under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      { "name": "narrow", "value": "760px", "purpose": "Below this width (max-width 759px): charcoal top bar and nav drawer, single column, compact board, stacked tables." }
+    ],
+    "focus": [
+      { "name": "focus-light", "value": "2px solid #18201c, offset 2px", "purpose": "Focus ring on the ground and in sheets." },
+      { "name": "focus-board", "value": "2px solid #f2c230, offset 2px", "purpose": "Focus ring on the charcoal rail, board and phone top bar, and in dark mode." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one action of a decision, ink-filled. Approve merge, Retry, Save.",
+      "html": "<button class=\"ds-btn-primary\">Approve merge</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--accent, #18201c); border-radius: 2px; background: var(--accent, #18201c); color: var(--accent-ink, #ffffff); font-family: var(--font, Barlow, system-ui, sans-serif); font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 90ms steps(2, jump-none), border-color 90ms steps(2, jump-none), color 90ms steps(2, jump-none); } .ds-btn-primary:hover { background: color-mix(in srgb, var(--accent, #18201c) 85%, var(--bg, #e3eae4)); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus, #18201c); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Transparent with an ink outline, for the other action beside a primary.",
+      "html": "<button class=\"ds-btn-secondary\">Pause</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--text, #18201c); border-radius: 2px; background: transparent; color: var(--text, #18201c); font-family: var(--font, Barlow, system-ui, sans-serif); font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 90ms steps(2, jump-none), color 90ms steps(2, jump-none); } .ds-btn-secondary:hover { background: var(--panel-2, #eaf0eb); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--focus, #18201c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive action: Stop Red outline. Asks Confirm? for 3 seconds before it acts.",
+      "html": "<button class=\"ds-btn-danger\">Reject</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--danger, #b0251c); border-radius: 2px; background: transparent; color: var(--danger, #b0251c); font-family: var(--font, Barlow, system-ui, sans-serif); font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 90ms steps(2, jump-none), color 90ms steps(2, jump-none); } .ds-btn-danger:hover { background: color-mix(in srgb, #d7342a 10%, transparent); } .ds-btn-danger:focus-visible { outline: 2px solid var(--focus, #18201c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Field Input",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "Text field. Its 1px stroke is below 3:1 against the field (a known gap, not a model for new controls).",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Note (optional)\">",
+      "css": ".ds-input { font: inherit; font-size: 15px; color: var(--text, #18201c); background: var(--input, #ffffff); border: 1px solid var(--border, #b9c6bd); border-radius: 2px; padding: 6px 10px; min-width: 0; } .ds-input:hover { border-color: var(--muted, #4b5751); } .ds-input::placeholder { color: var(--muted, #4b5751); } .ds-input:focus-visible { outline: 2px solid var(--focus, #18201c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Rail Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Navigation on the charcoal rail. Active is lit with Board Lift and weight 600.",
+      "html": "<a class=\"ds-nav-item ds-nav-active\" href=\"#\"><span>Approvals</span></a>",
+      "css": ".ds-nav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 20px; color: var(--board-muted, #a9b5ae); font-family: var(--font, Barlow, system-ui, sans-serif); font-size: 15px; font-weight: 500; text-decoration: none; } .ds-nav-item:hover { color: var(--board-text, #eef3ef); background: var(--board-2, #2b312e); } .ds-nav-item.ds-nav-active { color: var(--board-text, #eef3ef); background: var(--board-2, #2b312e); font-weight: 600; } .ds-nav-item:focus-visible { outline: 2px solid var(--lamp-call, #f2c230); outline-offset: -2px; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "A square lamp and the status in words on a 1px-ruled chip. Only running work blinks.",
+      "html": "<span class=\"ds-pill\"><span class=\"ds-lamp ds-lamp-run\"></span>Running</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-family: var(--font, Barlow, system-ui, sans-serif); font-size: 13.5px; font-weight: 500; line-height: 20px; padding: 1px 8px; border: 1px solid var(--border, #b9c6bd); border-radius: 2px; background: var(--panel, #f5f8f5); color: var(--text, #18201c); } .ds-lamp { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 0; background: var(--lamp-off-light, #a3b0a8); } .ds-lamp-run { background: var(--lamp-run, #2fa35a); } .ds-lamp-call { background: var(--lamp-call, #f2c230); } .ds-lamp-stop { background: var(--lamp-stop, #d7342a); }"
+    },
+    {
+      "name": "Risk Badge",
+      "kind": "chip",
+      "refersTo": "risk-badge",
+      "description": "Risk on one fixed ramp: low outlined, medium on call yellow, high on stop red.",
+      "html": "<span class=\"ds-badge ds-badge-high\">high</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; white-space: nowrap; font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; line-height: 20px; padding: 1px 8px; border: 1px solid var(--border, #b9c6bd); border-radius: 2px; background: var(--panel, #f5f8f5); color: var(--text, #18201c); } .ds-badge-medium { background: var(--lamp-call, #f2c230); border-color: var(--lamp-call, #f2c230); color: #18201c; } .ds-badge-high { background: var(--lamp-stop, #d7342a); border-color: var(--lamp-stop, #d7342a); color: #ffffff; }"
+    },
+    {
+      "name": "Board Window",
+      "kind": "custom",
+      "refersTo": "board-window",
+      "description": "Signature. One window per project on the charcoal board: a 12px lamp bar, the name in caps, the count in words.",
+      "html": "<a class=\"ds-board-window ds-lamp-call\" href=\"#\"><span class=\"ds-board-lamp\"></span><span class=\"ds-board-name\">foundry</span><span class=\"ds-board-count\">2 need you</span></a>",
+      "css": ".ds-board-window { display: flex; flex-direction: column; min-width: 0; background: var(--board-3, #151917); color: var(--board-text, #eef3ef); padding-bottom: 12px; text-decoration: none; transition: none; } .ds-board-lamp { height: 12px; background: var(--lamp-off, #3a423e); transition: background-color 90ms steps(2, jump-none); } .ds-board-window.ds-lamp-run .ds-board-lamp { background: var(--lamp-run, #2fa35a); } .ds-board-window.ds-lamp-call .ds-board-lamp { background: var(--lamp-call, #f2c230); } .ds-board-window.ds-lamp-stop .ds-board-lamp { background: var(--lamp-stop, #d7342a); } .ds-board-name { font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: 0.03em; text-transform: uppercase; padding: 10px 14px 0; overflow-wrap: anywhere; } .ds-board-count { padding: 2px 14px 0; font-weight: 600; font-size: 14px; color: var(--board-text, #eef3ef); } .ds-board-window.ds-lamp-call .ds-board-count { color: var(--lamp-call, #f2c230); } .ds-board-window.ds-lamp-stop .ds-board-count { color: #ff8a80; } .ds-board-window:focus-visible { outline: 2px solid var(--lamp-call, #f2c230); outline-offset: 2px; }"
+    },
+    {
+      "name": "Call Item",
+      "kind": "card",
+      "refersTo": "call-item",
+      "description": "A sheet that needs the owner, with a lit lamp before its title. The decision sits in the first screen.",
+      "html": "<article class=\"ds-call-item ds-call-stop\"><div class=\"ds-call-title\"><span class=\"ds-lamp ds-lamp-stop\"></span><h3>Blocked: tests fail on main</h3></div><p class=\"ds-call-meta\">Blocked · foundry · attempt 2 of 3</p></article>",
+      "css": ".ds-call-item { background: var(--panel, #f5f8f5); border: 1px solid var(--border, #b9c6bd); border-radius: 0; padding: 16px 18px; margin-bottom: 12px; color: var(--text, #18201c); } .ds-call-item.ds-call-stop { border-color: color-mix(in srgb, var(--lamp-stop, #d7342a) 55%, var(--border, #b9c6bd)); } .ds-call-title { display: flex; align-items: baseline; gap: 10px; } .ds-call-title .ds-lamp { width: 12px; height: 12px; transform: translateY(1px); } .ds-call-title h3 { flex: 1; min-width: 0; font-size: 17px; font-weight: 600; line-height: 1.35; margin: 0; } .ds-call-meta { margin: 4px 0 0 22px; color: var(--muted, #4b5751); font-size: 13.5px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Andon Board",
+    "overview": "Foundry's interface is a factory's andon board: the lamp board on a production line that shows, at a glance, whether the line runs. A healthy line is quiet green. A project that needs its owner lights yellow. A line that stopped itself lights red. The whole system exists to make that readable in one look, on a phone or a second monitor.\n\nThe surface is a pale machine-green enamel ground, with a charcoal board carrying the navigation rail, the phone top bar, the Overview's board of project windows, and the connect card. Structure is drawn with 1px rules and square sheets. There are no content shadows, no gradients, and no decorative colour: a colour that appears is a state. The density is that of a control room. The Overview is a board of short windows and two dense columns, not a grid of same-size stat tiles.\n\nThe system refuses the category dashboard of stat cards and uniform cards. Counts are set into lamp windows and one line window, and each card earns its place by what it asks of the user.",
+    "keyCharacteristics": [
+      "A charcoal board over a machine-green enamel ground; charcoal is reserved for the board.",
+      "State is carried by a square lamp and a word together. Colour alone never signals anything.",
+      "Lamps switch in two steps of 90ms. Nothing fades. Running work blinks.",
+      "Structure is 1px rules and square sheets; controls and pills have 2px corners.",
+      "Two faces: Barlow Condensed caps for names and labels, Barlow for text, monospace for machine text (logs, IDs, SHAs, config).",
+      "Light by default; dark follows the system's dark preference with the same roles."
+    ],
+    "rules": [
+      { "name": "The Lamp Is State Rule", "body": "A lamp colour means a state and nothing else. The two decorative uses the build carries (the wordmark square and the text selection colour) are both call yellow; no new decorative use follows them.", "section": "colors" },
+      { "name": "The Ink Not Lamp Rule", "body": "The primary action is ink, never a lamp colour, so a lamp keeps its meaning on every screen.", "section": "colors" },
+      { "name": "The Word Beside Lamp Rule", "body": "A lamp, a tone or a risk level is never the only signal. Each carries a word: \"Stop\", \"Waiting on you\", \"1 blocked\", \"quiet for 7m\", \"high\".", "section": "colors" },
+      { "name": "The Two Faces Rule", "body": "Condensed caps name things: projects, sections, columns, risk, the line. Regular Barlow says what happened. Monospace is for text a machine wrote, and nothing else.", "section": "typography" },
+      { "name": "The Flat Sheet Rule", "body": "Content sits on 1px rules and tonal layers. A shadow appears only on an overlay that covers the page.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do pair every lamp, tone and risk level with a word on the same line.",
+      "Do keep the primary action ink-filled (accent on accent-ink), one per decision.",
+      "Do switch state colours in two steps at 90ms. Use steps(2, jump-none).",
+      "Do blink only running work (steps(1, end), 1.6s), and stop the blink under prefers-reduced-motion.",
+      "Do use 1px rules and 0px sheets for structure; 2px corners on controls and pills only.",
+      "Do keep the charcoal board to the rail, the phone top bar, the Overview board and the connect card.",
+      "Do set table cells, count badges, board counts and feed times in tabular figures.",
+      "Do set monospace only for logs, IDs, SHAs, branch names and config."
+    ],
+    "donts": [
+      "Don't fade a lamp or animate a colour over time. A state changes in two steps or not at all.",
+      "Don't put a content shadow on a sheet, card, call item, or button. The modal overlay is the only shadow.",
+      "Don't fill a button with a lamp colour, except the Stop Red fill on Resume of a paused project.",
+      "Don't introduce a decorative lamp colour. The wordmark square and text selection are the only exceptions.",
+      "Don't use colour alone for a state. Each state needs its word.",
+      "Don't set a control or sheet at more than 2px radius (sheets 0px, controls and pills 2px).",
+      "Don't set body text in monospace.",
+      "Don't use the charcoal board for a content sheet.",
+      "Don't copy the 1px field stroke as a control boundary; it is below 3:1 (see Fields)."
+    ]
+  }
+}

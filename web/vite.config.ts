@@ -11,7 +11,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': { target: 'http://127.0.0.1:7777' },
+      // FOUNDRY_API points the dev server at another daemon (the default is the local one).
+      '/api': { target: process.env.FOUNDRY_API ?? 'http://127.0.0.1:7777' },
     },
   },
   test: {
