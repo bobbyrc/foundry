@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loopHealth, normaliseProject, repoUrl, type RawProjectView } from './projects';
+import { loopHealth, loopSummary, normaliseProject, repoUrl, type RawProjectView } from './projects';
 import type { LoopView } from '../types';
 
 const loop = (extra: Partial<LoopView> = {}): LoopView => ({
@@ -83,5 +83,23 @@ describe('normaliseProject', () => {
   it('keeps the given counts and fills the rest', () => {
     expect(normaliseProject({ ...base, counts: { queued: 2 } }).counts.queued).toBe(2);
     expect(normaliseProject({ ...base, counts: { queued: 2 } }).counts.blocked).toBe(0);
+  });
+});
+
+describe('loopSummary', () => {
+  it('counts loops on and off and lists only the ones whose last run failed', () => {
+    const summary = loopSummary([
+      loop({ name: 'a' }),
+      loop({ name: 'b', enabled: false }),
+      loop({ name: 'c', last_error: 'gh: 502' }),
+      loop({ name: 'd', enabled: false, last_error: 'old' }),
+    ]);
+    expect(summary.on).toBe(2);
+    expect(summary.off).toBe(2);
+    expect(summary.failing.map((l) => l.name)).toEqual(['c']);
+  });
+
+  it('is all zeros with no loops', () => {
+    expect(loopSummary([])).toEqual({ on: 0, off: 0, failing: [] });
   });
 });

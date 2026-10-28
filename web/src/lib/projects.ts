@@ -22,6 +22,19 @@ export function loopHealth(loop: LoopView): LoopHealth {
   return 'ok';
 }
 
+/** A project's loops in one line: how many run, how many are off, and which failed last time. */
+export interface LoopSummary {
+  on: number;
+  off: number;
+  failing: LoopView[];
+}
+
+export function loopSummary(loops: LoopView[]): LoopSummary {
+  const failing = loops.filter((loop) => loopHealth(loop) === 'danger');
+  const on = loops.filter((loop) => loop.enabled).length;
+  return { on, off: loops.length - on, failing };
+}
+
 const HEALTH_LABEL: Record<LoopHealth, string> = {
   ok: 'last run ok',
   danger: 'last run failed',

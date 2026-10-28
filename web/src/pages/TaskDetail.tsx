@@ -55,7 +55,7 @@ export function TaskDetail() {
         }
         actions={task.status === 'blocked' ? null : actions}
       />
-      <p className="task-kicker muted">
+      <p className="task-meta muted">
         <span>{kicker}</span>
         <IdChip id={task.id} />
       </p>

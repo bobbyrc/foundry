@@ -1699,80 +1699,6 @@ a.board-window:hover .board-name {
   color: var(--danger);
 }
 
-/* ---- projects ---- */
-
-.projects-grid .card {
-  margin-bottom: 0;
-}
-
-.project-title {
-  flex: 1;
-  min-width: 0;
-}
-
-.project-title h3 {
-  overflow-wrap: anywhere;
-}
-
-.project-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  margin: 12px 0;
-}
-
-.project-count.is-zero {
-  color: var(--muted);
-}
-
-.project-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 12px;
-}
-
-.project-config-pause {
-  white-space: nowrap;
-}
-
-.loop-pills {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.loop-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.loop-pill .dot {
-  width: 8px;
-  height: 8px;
-}
-
-.loop-pill .dot.tone-ok {
-  background: var(--lamp-run);
-}
-
-.loop-pill .dot.tone-danger {
-  background: var(--lamp-stop);
-}
-
-.loop-pill .dot.tone-muted {
-  background: var(--lamp-off-light);
-}
-
 /* ---- agents and auth ---- */
 
 .agent-card h3 {
@@ -2004,10 +1930,6 @@ a.board-window:hover .board-name {
 
   .gate dd + dt {
     margin-top: 6px;
-  }
-
-  .projects-grid {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .table-wrap {

@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Run } from '../types';
-import { useRuns } from '../queries';
+import { useRuns, useTask } from '../queries';
 import { useParamState } from '../useParamState';
 import { Field } from '../components/Field';
 import { IdChip } from '../components/IdChip';
@@ -13,6 +14,7 @@ import { ErrorLine } from '../components/ErrorLine';
 import { formatCost } from '../lib/format';
 import { elapsedMs, formatDuration, parseTime } from '../lib/time';
 import { useNow } from '../lib/clock';
+import './Runs.css';
 
 const STATUS_OPTIONS: [string, string][] = [
   ['', 'Any status'],
@@ -25,6 +27,32 @@ const STATUS_OPTIONS: [string, string][] = [
   ['cancelled', 'Cancelled'],
 ];
 
+const isActive = (run: Run) => run.status === 'starting' || run.status === 'running';
+
+/** The run's task: its title links to the run, and a line under it names the project and task. */
+function TaskCell({ run }: { run: Run }) {
+  const task = useTask(run.task_id);
+  return (
+    <div className="run-task">
+      {task.isSuccess ? (
+        <Link className="run-task-title" to={`/runs/${run.id}`}>
+          {task.data.task.title}
+        </Link>
+      ) : task.isError ? (
+        <span className="run-task-title muted">Task unavailable</span>
+      ) : (
+        <span className="run-task-title muted">Loading task…</span>
+      )}
+      <span className="run-task-meta">
+        {run.project} · task{' '}
+        <Link to={`/tasks/${run.task_id}`}>
+          <IdChip id={run.task_id} />
+        </Link>
+      </span>
+    </div>
+  );
+}
+
 export function Runs() {
   const [project, setProject] = useParamState('project');
   const [status, setStatus] = useParamState('status');
@@ -35,8 +63,16 @@ export function Runs() {
     ? STATUS_OPTIONS
     : [...STATUS_OPTIONS, [status, status] as [string, string]];
 
+  // The server returns runs newest first. Array sort is stable, so moving active runs to the top
+  // keeps that order inside each group.
+  const rows = useMemo(
+    () => (runs.data ? [...runs.data].sort((a, b) => Number(isActive(b)) - Number(isActive(a))) : []),
+    [runs.data],
+  );
+
   const columns: Column<Run>[] = [
     { key: 'status', header: 'Status', cell: (r) => <StatusPill kind="run" status={r.status} /> },
+    { key: 'task', header: 'Task', cell: (r) => <TaskCell run={r} /> },
     { key: 'role', header: 'Role', cell: (r) => r.role },
     {
       key: 'harness',
@@ -48,8 +84,6 @@ export function Runs() {
         </>
       ),
     },
-    { key: 'project', header: 'Project', cell: (r) => r.project },
-    { key: 'task', header: 'Task', cell: (r) => <Link to={`/tasks/${r.task_id}`}><IdChip id={r.task_id} /></Link> },
     { key: 'started', header: 'Started', cell: (r) => <RelTime value={r.started_at} /> },
     {
       key: 'duration',
@@ -59,7 +93,7 @@ export function Runs() {
         return start ? formatDuration(elapsedMs(start, parseTime(r.ended_at), now)) : '—';
       },
     },
-    { key: 'cost', header: 'Cost', cell: (r) => <Link to={`/runs/${r.id}`}>{formatCost(r.cost_usd, r.cost_estimated)}</Link> },
+    { key: 'cost', header: 'Cost', cell: (r) => formatCost(r.cost_usd, r.cost_estimated) },
   ];
 
   return (
@@ -80,7 +114,7 @@ export function Runs() {
       <ErrorLine error={runs.error} />
       {runs.isPending ? <p className="muted">Loading runs…</p> : null}
       {runs.isSuccess ? (
-        <Table columns={columns} rows={runs.data} rowKey={(r) => r.id} empty="No runs match these filters." />
+        <Table columns={columns} rows={rows} rowKey={(r) => r.id} empty="No runs match these filters." />
       ) : null}
     </>
   );

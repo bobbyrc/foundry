@@ -213,4 +213,17 @@ prompts.
 - [x] Verify on a throwaway daemon (setup, sign-in, viewer, users, visual save keeps comments,
       token 403 on config/users); defect review: 7 of 10 fixed, 3 documented (setup page open by
       decision, Secure cookie behind a proxy needs public_url, file access needs agent isolation)
-- [ ] PR, CI, owner decides merge (after merge the dogfood instance asks for an owner account)
+- [x] PR #54 merged; instance updated; owner account created. Follow-up #55: API answers are
+      never cached (a restored Firefox tab had replayed the pre-setup sign-in state)
+
+## Rename to onlet and the remaining pages — 2026-10-28
+
+- [x] Rename foundry -> onlet everywhere (PR #56, clean break; repo renamed to bobbyrc/onlet;
+      the dogfood instance migrated to ~/.local/share/onlet-dogfood; upgrade note
+      docs/renamed-from-foundry.md)
+- [x] Task detail (task line), Run detail (time strip, log), Chat (start screen), Approvals (PR #57)
+- [x] Rail lamp row on every page but Overview; Projects as board windows; Runs with task titles;
+      Loops as a lamp grid
+- [x] DESIGN.md refreshed from the built pages (task line, spec sheet, per-page CSS files); drift
+      it found fixed (composer outline, count label face, colour-only rail and loop states)
+

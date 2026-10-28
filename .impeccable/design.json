@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-28T18:22:40Z",
+  "generatedAt": "2026-10-28T20:39:03Z",
   "title": "Design System: Onlet",
   "extensions": {
     "colorMeta": {
@@ -176,11 +176,18 @@
       "description": "A sheet that needs the owner, with a lit lamp before its title. The decision sits in the first screen.",
       "html": "<article class=\"ds-call-item ds-call-stop\"><div class=\"ds-call-title\"><span class=\"ds-lamp ds-lamp-stop\"></span><h3>Blocked: tests fail on main</h3></div><p class=\"ds-call-meta\">Blocked · onlet · attempt 2 of 3</p></article>",
       "css": ".ds-call-item { background: var(--panel, #f5f8f5); border: 1px solid var(--border, #b9c6bd); border-radius: 0; padding: 16px 18px; margin-bottom: 12px; color: var(--text, #18201c); } .ds-call-item.ds-call-stop { border-color: color-mix(in srgb, var(--lamp-stop, #d7342a) 55%, var(--border, #b9c6bd)); } .ds-call-title { display: flex; align-items: baseline; gap: 10px; } .ds-call-title .ds-lamp { width: 12px; height: 12px; transform: translateY(1px); } .ds-call-title h3 { flex: 1; min-width: 0; font-size: 17px; font-weight: 600; line-height: 1.35; margin: 0; } .ds-call-meta { margin: 4px 0 0 22px; color: var(--muted, #4b5751); font-size: 13.5px; }"
+    },
+    {
+      "name": "Task Line",
+      "kind": "custom",
+      "description": "The task's path through its stations: 12px lamps joined by a 2px rule, the current station lit and the stop word in place of a stopped label.",
+      "html": "<ol class=\"ds-task-line\" aria-label=\"Progress\"><li class=\"ds-station ds-passed\"><span class=\"ds-task-lamp\"></span><span class=\"ds-station-label\">Queued</span></li><li class=\"ds-station ds-current\"><span class=\"ds-task-lamp\"></span><span class=\"ds-station-label\">Running</span></li><li class=\"ds-station ds-ahead\"><span class=\"ds-task-lamp\"></span><span class=\"ds-station-label\">Review</span></li><li class=\"ds-station ds-ahead\"><span class=\"ds-task-lamp\"></span><span class=\"ds-station-label\">Done</span></li></ol>",
+      "css": ".ds-task-line { position: relative; display: grid; grid-template-columns: repeat(4, minmax(56px, 1fr)); margin: 0; padding: 0; list-style: none; } .ds-task-line::before { content: ''; position: absolute; top: 5px; left: calc(100% / 8); right: calc(100% / 8); height: 2px; background: var(--border, #b9c6bd); } .ds-station { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; text-align: center; } .ds-task-lamp { position: relative; z-index: 1; display: block; width: 12px; height: 12px; background: var(--lamp-off, #3a423e); } .ds-passed .ds-task-lamp { background: var(--lamp-done, #7f9d8c); } .ds-current .ds-task-lamp { background: var(--lamp-run, #2fa35a); } .ds-ahead .ds-task-lamp { background: var(--lamp-off-light, #a3b0a8); opacity: 0.4; } .ds-station-label { font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted, #4b5751); } .ds-current .ds-station-label { color: var(--text, #18201c); }"
     }
   ],
   "narrative": {
     "northStar": "The Andon Board",
-    "overview": "Onlet's interface is a factory's andon board: the lamp board on a production line that shows, at a glance, whether the line runs. A healthy line is quiet green. A project that needs its owner lights yellow. A line that stopped itself lights red. The whole system exists to make that readable in one look, on a phone or a second monitor.\n\nThe surface is a pale machine-green enamel ground, with a charcoal board carrying the navigation rail, the phone top bar, the Overview's board of project windows, and the connect card. Structure is drawn with 1px rules and square sheets. There are no content shadows, no gradients, and no decorative colour: a colour that appears is a state. The density is that of a control room. The Overview is a board of short windows and two dense columns, not a grid of same-size stat tiles.\n\nThe system refuses the category dashboard of stat cards and uniform cards. Counts are set into lamp windows and one line window, and each card earns its place by what it asks of the user.",
+    "overview": "Onlet's interface is a factory's andon board: the lamp board on a production line that shows, at a glance, whether the line runs. A healthy line is quiet green. A project that needs its owner lights yellow. A line that stopped itself lights red. The whole system exists to make that readable in one look, on a phone or a second monitor.\n\nThe surface is a pale machine-green enamel ground, with a charcoal board carrying the navigation rail (its project lamps, the account panel and the pause cord), the phone top bar, the Overview's board of project windows, the connect card and the config editor's save bar. Structure is drawn with 1px rules and square sheets. There are no content shadows, no gradients, and no decorative colour: a colour that appears is a state. The density is that of a control room. The Overview is a board of short windows and two dense columns, not a grid of same-size stat tiles.\n\nThe system refuses the category dashboard of stat cards and uniform cards. Counts are set into lamp windows and one line window, and each card earns its place by what it asks of the user.",
     "keyCharacteristics": [
       "A charcoal board over a machine-green enamel ground; charcoal is reserved for the board.",
       "State is carried by a square lamp and a word together. Colour alone never signals anything.",
@@ -198,13 +205,14 @@
     ],
     "dos": [
       "Do pair every lamp, tone and risk level with a word on the same line.",
-      "Do keep the primary action ink-filled (accent on accent-ink), one per decision.",
+      "Do keep the primary action ink-filled (accent on accent-ink), one per decision. On the charcoal board, the filled action is Board Text on charcoal.",
       "Do switch state colours in two steps at 90ms. Use steps(2, jump-none).",
       "Do blink only running work (steps(1, end), 1.6s), and stop the blink under prefers-reduced-motion.",
       "Do use 1px rules and 0px sheets for structure; 2px corners on controls and pills only.",
-      "Do keep the charcoal board to the rail, the phone top bar, the Overview board and the connect card.",
-      "Do set table cells, count badges, board counts and feed times in tabular figures.",
-      "Do set monospace only for logs, IDs, SHAs, branch names and config."
+      "Do keep the charcoal board to the rail (its nav, project lamps, account and pause cord), the phone top bar, the Overview board, the connect card and the config save bar.",
+      "Do set table cells, count badges, board counts, stat numerals, feed times, the run time strip and log line counts in tabular figures.",
+      "Do set monospace only for logs, IDs, SHAs, branch names and config.",
+      "Do keep each task-line station labelled and give a stopped station its stop word (\"Blocked\", \"Failed\", \"Cancelled\") in place of its own label."
     ],
     "donts": [
       "Don't fade a lamp or animate a colour over time. A state changes in two steps or not at all.",
@@ -215,6 +223,7 @@
       "Don't set a control or sheet at more than 2px radius (sheets 0px, controls and pills 2px).",
       "Don't set body text in monospace.",
       "Don't use the charcoal board for a content sheet.",
+      "Don't copy the 1px field stroke as a control boundary; it is below 3:1 (see Fields).",
       "Don't outline a control with the Outer Rule (#b9c6bd); control boundaries use the Field Rule (see Fields)."
     ]
   }
