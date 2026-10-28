@@ -18,9 +18,10 @@ cheap to revisit; the ones most worth a second look are marked **(review)**.
    produces no output for `limits.stall_timeout`, is stopped, its task becomes `blocked`, and you
    are notified with the exact reason. Foundry never retries a denial or rephrases around it.
 3. **Everything is a plugin.** Harnesses, SCM, deployers, observers and notifiers are Go
-   interfaces with built-in implementations plus an `exec` implementation that runs any external
-   program speaking a small JSON protocol, so you can add a harness or provider in any language
-   without recompiling.
+   interfaces with built-in implementations. Harnesses, observers and notifiers also have an
+   `exec` type that runs any external program speaking a small JSON protocol, and the `command`
+   deployer runs any shell commands, so you can add a harness or provider in any language
+   without recompiling. (The code host is GitHub only in v0.)
 4. **Configuration is a file you own.** `foundry.yaml` (plus per-repo `.foundry/` overrides) is
    the source of truth for projects, agents, policies and loops. The database holds only runtime
    state (tasks, runs, events). Put the config in your dotfiles repo if you like.
@@ -95,8 +96,9 @@ queued ─► running ─► review ─► merged ─► deploying ─► done
   you were asked, foundry withdraws the approval request and re-checks.
 - Every automatic status change is guarded by the status it expects, atomically. A run or loop
   that finishes after you cancelled or blocked a task cannot revive it.
-- Failing CI or "request changes" from the reviewer re-queues the task for another implementer
-  run on the same branch, up to `max_attempts`, then `blocked`.
+- An agent-reported failure, failing CI, a merge conflict or "request changes" from the
+  reviewer re-queues the task for another implementer run on the same branch, up to
+  `max_attempts`, then `blocked` (`running → queued → running …`; not drawn above).
 - After merge, if the project has a deployer, the deploy watch takes it through `deploying`;
   a failed health window rolls back, opens an `incident` task, and notifies you.
 
@@ -122,8 +124,10 @@ infra, dependency manifests with major bumps, `.foundry/`; default size limit 40
 `deployer.deploy(ref)` (or, for platforms that deploy on push such as Vercel, locate the
 deployment for the merge commit) → poll until ready → health window (`verify_for`, default
 10m): health URL must stay 2xx and observers must not report new signals above threshold for
-this release. On failure: `deployer.rollback(previous healthy)`, record it, open an `incident`
-task with the evidence, notify.
+this release. If verification fails: `deployer.rollback(previous healthy)`, record it, open an
+`incident` task with the evidence, notify. A release that fails before it is ready (build
+error, or still not ready after `deploy.timeout`) is failed without a rollback, since nothing
+new is serving; it still opens an incident and blocks the task.
 
 ### Production watch
 
