@@ -2,7 +2,10 @@ import { useControl, useTogglePause } from '../queries';
 import { Button } from './Button';
 import { ErrorLine } from './ErrorLine';
 
-/** Pause or resume the whole factory. While paused no run starts and no loop acts. */
+/**
+ * Pause or resume the whole factory. While paused no new run starts and no new work is picked up;
+ * release verification/rollback and production watching continue.
+ */
 export function PauseSwitch() {
   const control = useControl();
   const toggle = useTogglePause();
@@ -16,7 +19,7 @@ export function PauseSwitch() {
         disabled={!control.data || toggle.isPending}
         onClick={() => toggle.mutate(!paused)}
       >
-        {paused ? 'Paused — nothing starts. Resume' : 'Pause factory'}
+        {paused ? 'Paused — no new runs. Resume' : 'Pause factory'}
       </Button>
       <ErrorLine error={toggle.error ?? control.error} />
     </div>

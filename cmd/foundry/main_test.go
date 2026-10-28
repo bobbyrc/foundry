@@ -91,7 +91,7 @@ func TestTaskListRendersTable(t *testing.T) {
 		assert.Equal(t, "queued,running", r.URL.Query().Get("status"))
 		assert.Equal(t, "foundry", r.URL.Query().Get("project"))
 		writeJSON(w, http.StatusOK, []map[string]any{
-			{"id": "task-1", "status": "queued", "kind": "feature", "project": "foundry", "title": "Short"},
+			{"id": "task-1", "status": "queued", "kind": "feature", "project": "foundry", "title": "Short", "pr_number": 123, "risk": "low"},
 			{"id": "task-2", "status": "running", "kind": "bugfix", "project": "foundry", "title": long},
 		})
 	})
@@ -101,8 +101,9 @@ func TestTaskListRendersTable(t *testing.T) {
 	require.Equal(t, 0, code, errOut)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.Len(t, lines, 3)
-	assert.Regexp(t, `^ID\s+STATUS\s+KIND\s+PROJECT\s+TITLE$`, lines[0])
-	assert.Contains(t, lines[1], "task-1")
+	assert.Regexp(t, `^ID\s+STATUS\s+KIND\s+PROJECT\s+PR\s+RISK\s+TITLE$`, lines[0])
+	assert.Regexp(t, `task-1\s+queued\s+feature\s+foundry\s+#123\s+low\s+Short$`, lines[1])
+	assert.Regexp(t, `task-2\s+running\s+bugfix\s+foundry\s+-\s+-\s+x`, lines[2])
 	assert.Contains(t, lines[2], strings.Repeat("x", 57)+"...")
 	assert.NotContains(t, out, long)
 }
@@ -173,6 +174,32 @@ func TestCostToday(t *testing.T) {
 	assert.Equal(t, "$7.53 of $25.00 daily budget", costToday(client.Stats{CostTodayUSD: 7.53, DailyBudgetUSD: 25}))
 	assert.Equal(t, "$25.00 of $25.00 daily budget (budget reached — no new runs until midnight)",
 		costToday(client.Stats{CostTodayUSD: 25, DailyBudgetUSD: 25}))
+}
+
+func TestStatusPausedWording(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"paused": true})
+	})
+	mux.HandleFunc("GET /api/v1/control", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"paused": true})
+	})
+	mux.HandleFunc("GET /api/v1/approvals", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, []any{})
+	})
+	mux.HandleFunc("GET /api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, []any{})
+	})
+	mux.HandleFunc("GET /api/v1/runs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, []any{})
+	})
+	fakeAPI(t, mux)
+
+	code, out, errOut := runCLI("status")
+	require.Equal(t, 0, code, errOut)
+	assert.Contains(t, out, "Factory: PAUSED. No new runs start and no new work is picked up; "+
+		"release verification/rollback and production watching continue. `foundry resume` to continue.")
+	assert.NotContains(t, out, "no loops act")
 }
 
 func TestStatusJSON(t *testing.T) {

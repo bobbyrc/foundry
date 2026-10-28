@@ -105,6 +105,8 @@ Put `foundry` on your PATH to drop the `./`. Before you point foundry at a real 
 [docs/getting-started.md](docs/getting-started.md): it starts with a throwaway repository and a
 paused project.
 
+To use the web UI on a phone, add it to the home screen; see [docs/ui.md](docs/ui.md#install-on-a-phone).
+
 ### Run it as a service
 
 On macOS, `foundry service install` keeps the daemon running in the background and restarts it if it
