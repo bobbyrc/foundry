@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -36,6 +37,9 @@ func redactSecrets(s string, env []string) string {
 			continue
 		}
 		secrets = append(secrets, value)
+		if hasURLCredentials(value) {
+			secrets = append(secrets, urlPasswordSecrets(value)...)
+		}
 	}
 	sort.SliceStable(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
 	for _, v := range secrets {
@@ -62,6 +66,30 @@ func isSecretEnvName(name string) bool {
 func hasURLCredentials(value string) bool {
 	_, rest, ok := strings.Cut(value, "://")
 	return ok && strings.Contains(rest, "@")
+}
+
+// minURLPasswordLen is the shortest URL password redactSecrets replaces on its own. A password is
+// often printed alone (a connect error names only the password), and the whole URL does not match
+// that text.
+const minURLPasswordLen = 6
+
+// urlPasswordSecrets returns the password of the URL value, and its query-escaped form when that
+// differs, if the password is at least minURLPasswordLen bytes. It returns nil when value does not
+// parse or has no password.
+func urlPasswordSecrets(value string) []string {
+	u, err := url.Parse(value)
+	if err != nil || u.User == nil {
+		return nil
+	}
+	pw, ok := u.User.Password()
+	if !ok || len(pw) < minURLPasswordLen {
+		return nil
+	}
+	out := []string{pw}
+	if q := url.QueryEscape(pw); q != pw {
+		out = append(out, q)
+	}
+	return out
 }
 
 // evidenceEnv returns the environment that the deploy and logs commands of p run with: foundry's

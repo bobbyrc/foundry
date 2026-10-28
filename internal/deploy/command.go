@@ -228,9 +228,10 @@ func removeTemp(f *os.File) {
 // tailWriter keeps the last max bytes written to it, so a chatty command cannot grow foundry's
 // memory. It is safe for the concurrent writes of a child's stdout and stderr.
 type tailWriter struct {
-	mu  sync.Mutex
-	max int
-	buf []byte
+	mu      sync.Mutex
+	max     int
+	buf     []byte
+	dropped bool // bytes were discarded from the front of buf
 }
 
 func (w *tailWriter) Write(p []byte) (int, error) {
@@ -239,22 +240,43 @@ func (w *tailWriter) Write(p []byte) (int, error) {
 	w.buf = append(w.buf, p...)
 	if len(w.buf) > 2*w.max {
 		w.buf = append([]byte(nil), w.buf[len(w.buf)-w.max:]...)
+		w.dropped = true
 	}
 	return len(p), nil
 }
 
-// String returns the last max bytes written, starting on a rune boundary.
+// String returns the last max bytes written, starting on a line boundary when bytes were dropped
+// (see DropPartialLine).
 func (w *tailWriter) String() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	b := w.buf
+	dropped := w.dropped
 	if len(b) > w.max {
 		b = b[len(b)-w.max:]
+		dropped = true
 	}
 	for len(b) > 0 && !utf8.RuneStart(b[0]) {
 		b = b[1:]
 	}
-	return string(b)
+	return DropPartialLine(string(b), dropped)
+}
+
+// DropPartialLine makes a kept tail of output safe to show once bytes were dropped from its front.
+// The first line of such a tail may start in the middle of a line, and so in the middle of a
+// secret that redaction of the output can no longer match. When dropped is false, s is returned
+// unchanged. Otherwise the text up to and including its first newline is removed and "[…]\n" is
+// prefixed to mark the cut. If s has no newline, the result is "[…]" alone: a fragment of one line
+// is worse than none.
+func DropPartialLine(s string, dropped bool) string {
+	if !dropped {
+		return s
+	}
+	i := strings.IndexByte(s, '\n')
+	if i < 0 {
+		return "[…]"
+	}
+	return "[…]\n" + s[i+1:]
 }
 
 type deployLine struct {

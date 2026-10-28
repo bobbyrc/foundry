@@ -106,7 +106,10 @@ func TestCommandDeployOutputKeepsLastFourKilobytes(t *testing.T) {
 	h, err := d.Deploy(context.Background(), "sha")
 	require.NoError(t, err)
 	assert.Equal(t, "https://last.example", h.URL)
-	assert.LessOrEqual(t, len(h.Output), deployOutputTail)
+	// The cut start is marked with "[…]\n" (see DropPartialLine), which may take the output a few
+	// bytes past the tail size.
+	assert.LessOrEqual(t, len(h.Output), deployOutputTail+len("[…]\n"))
+	assert.True(t, strings.HasPrefix(h.Output, "[…]\n"), h.Output[:20])
 	assert.True(t, strings.HasSuffix(h.Output, "line 9999\nhttps://last.example\n"), h.Output[len(h.Output)-40:])
 	assert.NotContains(t, h.Output, "line 100\n")
 }

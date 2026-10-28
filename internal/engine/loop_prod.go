@@ -109,6 +109,13 @@ func (e *Engine) prodLoop(ctx context.Context, p *config.Project) error {
 // signal qualifies and has no open task. A task that finished before the signal was last seen
 // is reopened as a regression.
 func (e *Engine) handleObservation(ctx context.Context, p *config.Project, source string, o domain.SignalObservation, minRank int, minCount int64) error {
+	// The text fields come from an external service's error messages, which can echo a secret
+	// (a URL with credentials, a token in an exception). They are redacted before storage, so the
+	// signal, its event and the incident task never hold them.
+	env := evidenceEnv(p)
+	o.Title = redactSecrets(o.Title, env)
+	o.Culprit = redactSecrets(o.Culprit, env)
+	o.URL = redactSecrets(o.URL, env)
 	s, isNew, err := e.d.Store.UpsertSignal(ctx, domain.Signal{Project: p.Name, Source: source, SignalObservation: o})
 	if err != nil {
 		return err

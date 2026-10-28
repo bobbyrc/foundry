@@ -216,18 +216,22 @@ func (e *Engine) runLoopOnce(ctx context.Context, name, project string, manual b
 	prev := st.LastError
 	st.LastRunAt = e.d.Now().UTC()
 	st.LastError = ""
+	// The message can carry a command's output tail, so it is redacted before it is stored,
+	// emitted or logged. The error returned to the caller is not redacted.
+	var msg string
 	if err != nil {
-		st.LastError = err.Error()
+		msg = redactSecrets(err.Error(), evidenceEnv(p))
+		st.LastError = msg
 	}
 	if serr := e.d.Store.SaveLoopState(ctx, st); serr != nil {
 		e.d.Logger.Error("save loop state", "loop", name, "project", project, "err", serr)
 	}
 	if err != nil {
-		e.d.Logger.Error("loop failed", "loop", name, "project", project, "err", err)
+		e.d.Logger.Error("loop failed", "loop", name, "project", project, "err", msg)
 		if st.LastError != prev {
 			e.d.Bus.Emit(ctx, domain.EvLoopError, project, "", "",
-				fmt.Sprintf("%s: %s", name, st.LastError),
-				map[string]string{"loop": name, "error": st.LastError})
+				fmt.Sprintf("%s: %s", name, msg),
+				map[string]string{"loop": name, "error": msg})
 		}
 	}
 	return err

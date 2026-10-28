@@ -505,21 +505,25 @@ func projectEnvPairs(env map[string]string) []string {
 
 // tailBuffer keeps the last max bytes written to it. It is not safe for concurrent use.
 type tailBuffer struct {
-	max int
-	buf []byte
+	max     int
+	buf     []byte
+	dropped bool // bytes were discarded from the front of buf
 }
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
 	b.buf = append(b.buf, p...)
 	if len(b.buf) > 2*b.max {
 		b.buf = append([]byte(nil), b.buf[len(b.buf)-b.max:]...)
+		b.dropped = true
 	}
 	return len(p), nil
 }
 
-// String returns the last max bytes written, starting on a rune boundary.
+// String returns the last max bytes written, starting on a line boundary when bytes were dropped
+// (see deploy.DropPartialLine).
 func (b *tailBuffer) String() string {
-	return lastBytes(string(b.buf), b.max)
+	s := string(b.buf)
+	return deploy.DropPartialLine(lastBytes(s, b.max), b.dropped || len(s) > b.max)
 }
 
 // lastBytes returns the last n bytes of s, starting on a rune boundary.
