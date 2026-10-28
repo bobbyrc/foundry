@@ -46,7 +46,9 @@ func TestSecurityHeadersOnRejectedHost(t *testing.T) {
 func TestCSPAllowsBuiltUIWithoutInlineScripts(t *testing.T) {
 	// The built index.html must reference its script and stylesheet by URL only.
 	body, err := fs.ReadFile(DefaultWeb(), "index.html")
-	require.NoError(t, err)
+	if err != nil {
+		t.Skipf("web UI not built (run npm run build in web/): %v", err)
+	}
 	assert.Contains(t, string(body), `<script type="module" crossorigin src="/assets/`)
 	assert.NotContains(t, string(body), "<script>")
 	assert.NotContains(t, string(body), "<style")
