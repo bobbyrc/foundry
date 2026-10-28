@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/foundry/internal/sysproc"
 )
 
 const (
@@ -27,6 +28,9 @@ const (
 	procStderrTail = 20
 	// procKillGrace is how long Cancel waits after SIGTERM before SIGKILL.
 	procKillGrace = 10 * time.Second
+	// procExitGrace is how long a process group left behind by an exited leader gets after
+	// SIGTERM, and then again after SIGKILL, before its pipes are cut.
+	procExitGrace = 2 * time.Second
 )
 
 // ProcSpec describes one child process whose stdout is parsed into Events.
@@ -34,8 +38,11 @@ type ProcSpec struct {
 	// Command is the binary and its full argument list.
 	Command []string
 	Dir     string
-	// Env is added to os.Environ(); entries win over inherited values.
+	// Env is added to the agent environment (sysproc.AgentEnv); entries win over inherited values.
 	Env map[string]string
+	// InheritEnv names foundry environment variables to pass through, on top of the base
+	// allowlist. Everything else in foundry's environment is withheld.
+	InheritEnv []string
 	// Stdin is written to the process and then closed. Empty means no stdin.
 	Stdin string
 	// ParseLine turns one stdout line into zero or more events. It is called from a single
@@ -52,6 +59,9 @@ type Proc struct {
 	cmd    *exec.Cmd
 	events chan Event
 	onExit func(int, error) (Result, error)
+
+	stdout *os.File // read end of the stdout pipe
+	stderr *os.File // read end of the stderr pipe
 
 	readers  sync.WaitGroup // stdout and stderr readers
 	exited   chan struct{}  // closed after cmd.Wait returns
@@ -79,10 +89,9 @@ func StartProcess(ctx context.Context, p ProcSpec) (*Proc, error) {
 	}
 	cmd := exec.Command(p.Command[0], p.Command[1:]...)
 	cmd.Dir = p.Dir
-	cmd.Env = os.Environ()
-	for k, v := range p.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
-	}
+	cmd.Env = sysproc.AgentEnv(p.InheritEnv, p.Env)
+	// Own process group, so Cancel and reapGroup can signal everything the agent started.
+	// sysproc.Configure is not used: it needs exec.CommandContext, and this uses Cancel itself.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if p.Stdin != "" {
 		cmd.Stdin = strings.NewReader(p.Stdin)
@@ -113,6 +122,8 @@ func StartProcess(ctx context.Context, p ProcSpec) (*Proc, error) {
 		cmd:    cmd,
 		events: make(chan Event, procEventBuffer),
 		onExit: p.OnExit,
+		stdout: outR,
+		stderr: errR,
 		exited: make(chan struct{}),
 		done:   make(chan struct{}),
 	}
@@ -129,6 +140,7 @@ func StartProcess(ctx context.Context, p ProcSpec) (*Proc, error) {
 		}
 		proc.waitErr = waitErr
 		close(proc.exited)
+		proc.reapGroup()
 	}()
 	go func() {
 		proc.readers.Wait()
@@ -264,6 +276,46 @@ func (p *Proc) Cancel() {
 			}
 		}()
 	})
+}
+
+// reapGroup runs once the leader has exited. A background child the leader started (`cmd &`)
+// is still in its process group, and it holds the stdout pipe open, so the readers would never
+// see EOF. The group gets SIGTERM, then SIGKILL procExitGrace later if the readers still have
+// not finished. A process that moved itself out of the group (setsid) can still hold the pipe;
+// as a last resort the read ends get an expired deadline so the readers stop. That last step
+// can drop output still buffered in the pipe, but only after the consumer has stalled for
+// several seconds.
+func (p *Proc) reapGroup() {
+	pgid := p.cmd.Process.Pid
+	readersDone := make(chan struct{})
+	go func() {
+		p.readers.Wait()
+		close(readersDone)
+	}()
+
+	_ = sysproc.KillGroup(pgid, syscall.SIGTERM)
+	if waitChan(readersDone, procExitGrace) {
+		return
+	}
+	_ = sysproc.KillGroup(pgid, syscall.SIGKILL)
+	if waitChan(readersDone, procExitGrace) {
+		return
+	}
+	_ = p.stdout.SetReadDeadline(time.Now())
+	_ = p.stderr.SetReadDeadline(time.Now())
+	<-readersDone
+}
+
+// waitChan reports whether ch closed within d.
+func waitChan(ch <-chan struct{}, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ch:
+		return true
+	case <-t.C:
+		return false
+	}
 }
 
 // StderrTail returns the last lines the process wrote to stderr, oldest first. Its value is

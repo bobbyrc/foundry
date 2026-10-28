@@ -59,11 +59,12 @@ func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session,
 
 	ps := newParser()
 	p, err := harness.StartProcess(ctx, harness.ProcSpec{
-		Command:   command,
-		Dir:       spec.Workdir,
-		Env:       env,
-		Stdin:     spec.Prompt,
-		ParseLine: ps.parseLine,
+		Command:    command,
+		Dir:        spec.Workdir,
+		Env:        env,
+		InheritEnv: r.cfg.InheritEnv,
+		Stdin:      spec.Prompt,
+		ParseLine:  ps.parseLine,
 		OnExit: func(exitCode int, _ error) (harness.Result, error) {
 			removeFiles()
 			return ps.result(exitCode), nil

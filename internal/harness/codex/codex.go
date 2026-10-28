@@ -35,11 +35,12 @@ func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session,
 	ps := newParser()
 	var proc *harness.Proc
 	p, err := harness.StartProcess(ctx, harness.ProcSpec{
-		Command:   buildArgs(r.cfg, spec),
-		Dir:       spec.Workdir,
-		Env:       mergeEnv(r.cfg.Env, spec.Env),
-		Stdin:     stdinText(spec),
-		ParseLine: ps.parseLine,
+		Command:    buildArgs(r.cfg, spec),
+		Dir:        spec.Workdir,
+		Env:        mergeEnv(r.cfg.Env, spec.Env),
+		InheritEnv: r.cfg.InheritEnv,
+		Stdin:      stdinText(spec),
+		ParseLine:  ps.parseLine,
 		// proc is assigned before StartProcess returns, and OnExit only runs from Wait.
 		OnExit: func(exitCode int, _ error) (harness.Result, error) {
 			var tail []string

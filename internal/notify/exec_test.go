@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,6 +47,20 @@ func TestExecNotifyDefaultsPriorityToNormal(t *testing.T) {
 	got, err := os.ReadFile(out)
 	require.NoError(t, err)
 	assert.Equal(t, "normal", string(got))
+}
+
+func TestExecTimeoutKillsProcessGroup(t *testing.T) {
+	old := execTimeout
+	execTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { execTimeout = old })
+
+	// The forked sleep must die with its shell, or the pipe stays open and Notify hangs.
+	n, err := newExec(map[string]any{"command": "sleep 30 & sleep 30"})
+	require.NoError(t, err)
+	start := time.Now()
+	err = n.Notify(context.Background(), Notification{Title: "t"})
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 3*time.Second)
 }
 
 func TestExecNotifyNonZeroExitIsError(t *testing.T) {

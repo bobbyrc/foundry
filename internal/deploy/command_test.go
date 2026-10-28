@@ -160,11 +160,12 @@ func TestCommandRollbackNonZeroExit(t *testing.T) {
 }
 
 func TestCommandTimeoutKillsCommand(t *testing.T) {
-	d := newTestCommand(t, map[string]any{"deploy": `sleep 10`, "timeout": "200ms"}, nil)
+	// The forked sleep must die with its shell: a timeout that kills only sh leaves the pipe open.
+	d := newTestCommand(t, map[string]any{"deploy": `sleep 30 & sleep 30`, "timeout": "200ms"}, nil)
 	start := time.Now()
 	_, err := d.Deploy(context.Background(), "sha")
 	require.Error(t, err)
-	assert.Less(t, time.Since(start), 5*time.Second)
+	assert.Less(t, time.Since(start), 3*time.Second)
 }
 
 func TestCommandFactoryErrors(t *testing.T) {

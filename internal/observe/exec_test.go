@@ -86,6 +86,15 @@ func TestExecTimeout(t *testing.T) {
 	assert.Less(t, time.Since(start), 5*time.Second)
 }
 
+func TestExecTimeoutKillsProcessGroup(t *testing.T) {
+	// The forked sleep must die with its shell, or the pipe stays open and Poll hangs.
+	o := newTestExec(t, map[string]any{"command": `sleep 30 & sleep 30`, "timeout": "200ms"}, nil)
+	start := time.Now()
+	_, err := o.Poll(context.Background(), time.Now())
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 3*time.Second)
+}
+
 func TestExecFactoryRequiresCommand(t *testing.T) {
 	_, err := New(Config{Name: "probe", Type: "exec", Options: map[string]any{}})
 	require.Error(t, err)

@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/foundry/internal/sysproc"
 )
 
 // outputTail is how many trailing bytes of a failed command's output go into its error.
@@ -61,8 +62,9 @@ func (o *execObserver) Poll(ctx context.Context, since time.Time) ([]domain.Sign
 	cmd.Env = append(append(os.Environ(), o.env...), "FOUNDRY_SINCE="+since.UTC().Format(time.RFC3339))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	// Kill sh on timeout, and stop waiting on pipes a grandchild still holds open.
-	cmd.WaitDelay = 5 * time.Second
+	// On timeout the whole process group is killed, not just sh, and Wait does not block on pipes a
+	// grandchild still holds open.
+	sysproc.Configure(cmd)
 	if err := cmd.Run(); err != nil {
 		output := strings.TrimSpace(stdout.String() + stderr.String())
 		return nil, fmt.Errorf("observer %q: command failed: %w: output: %s", o.name, err, tail(output))

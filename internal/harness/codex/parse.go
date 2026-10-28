@@ -57,9 +57,14 @@ type parser struct {
 	sessionID string
 	announced bool
 	lastText  string
-	errored   bool
-	input     int64
-	output    int64
+	// turnFailed is set by turn.failed, which always fails the run.
+	turnFailed bool
+	// errorPending is set by a top-level error event and cleared by turn.completed. Codex also
+	// emits non-fatal errors (for example "Reconnecting... 1/5") that a successful turn recovers
+	// from, so an error alone does not fail the run.
+	errorPending bool
+	input        int64
+	output       int64
 }
 
 func newParser() *parser {
@@ -83,6 +88,7 @@ func (p *parser) parseLine(line string) []harness.Event {
 		events = append(events, event(domain.LogSystem, "session started (thread "+sl.ThreadID+")"))
 	case "turn.started":
 	case "turn.completed":
+		p.errorPending = false
 		if sl.Usage != nil {
 			p.input += sl.Usage.InputTokens
 			p.output += sl.Usage.OutputTokens
@@ -92,10 +98,10 @@ func (p *parser) parseLine(line string) []harness.Event {
 		if sl.Error != nil && sl.Error.Message != "" {
 			msg = sl.Error.Message
 		}
-		p.errored = true
+		p.turnFailed = true
 		events = append(events, event(domain.LogError, msg))
 	case "error":
-		p.errored = true
+		p.errorPending = true
 		events = append(events, event(domain.LogError, sl.Message))
 	case "item.started":
 		events = p.itemEvents(sl.Item, true)
@@ -175,7 +181,7 @@ func (p *parser) result(exitCode int, stderrTail []string) harness.Result {
 		FinalText:    p.lastText,
 		InputTokens:  p.input,
 		OutputTokens: p.output,
-		IsError:      p.errored || exitCode != 0,
+		IsError:      p.turnFailed || p.errorPending || exitCode != 0,
 	}
 	if p.lastText == "" && exitCode != 0 && len(stderrTail) > 0 {
 		res.FinalText = strings.Join(stderrTail, "\n")

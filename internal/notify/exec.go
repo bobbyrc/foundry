@@ -8,9 +8,12 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/bobbyrc/foundry/internal/sysproc"
 )
 
-const execTimeout = 30 * time.Second
+// execTimeout bounds one notification command. It is a variable so tests can shorten it.
+var execTimeout = 30 * time.Second
 
 func init() {
 	Register("exec", func(cfg Config) (Notifier, error) {
@@ -36,6 +39,9 @@ func (e *execNotifier) Notify(ctx context.Context, n Notification) error {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", e.command)
+	// On timeout the whole process group is killed, and Wait does not block on pipes a background
+	// child still holds open. Without this a single backgrounded child blocked every notification.
+	sysproc.Configure(cmd)
 	cmd.Env = append(os.Environ(),
 		"FOUNDRY_NOTIFY_TITLE="+n.Title,
 		"FOUNDRY_NOTIFY_BODY="+n.Body,

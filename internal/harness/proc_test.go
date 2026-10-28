@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -231,4 +234,55 @@ func TestCompactJSON(t *testing.T) {
 	assert.Equal(t, `{"a":1}`, CompactJSON([]byte("{\n  \"a\": 1\n}"), 100))
 	assert.Equal(t, `{"a":1...`, CompactJSON([]byte(`{"a": 1}`), 6))
 	assert.Equal(t, "not json", CompactJSON([]byte("not json"), 100))
+}
+
+func TestBackgroundChildDoesNotKeepWaitOpen(t *testing.T) {
+	p := startSh(t, "sleep 25 & echo $!; echo done", ProcSpec{})
+	events := drain(p)
+	require.Len(t, events, 2, "the child's pid, then done")
+	pid, err := strconv.Atoi(events[0].Text)
+	require.NoError(t, err)
+
+	start := time.Now()
+	res, err := p.Wait()
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), 3*time.Second, "a background child must not hold Wait open")
+	assert.Equal(t, 0, res.ExitCode)
+	assert.Equal(t, "done", events[1].Text)
+
+	gone := false
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		if syscall.Kill(pid, 0) == syscall.ESRCH {
+			gone = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	assert.True(t, gone, "the background sleep must be killed after the leader exits")
+}
+
+func TestAgentEnvWithholdsForeignCredentials(t *testing.T) {
+	t.Setenv("GH_TOKEN", "gh-secret")
+	p := startSh(t, "env", ProcSpec{})
+	events := drain(p)
+	_, err := p.Wait()
+	require.NoError(t, err)
+	for _, ev := range events {
+		assert.False(t, strings.HasPrefix(ev.Text, "GH_TOKEN="), "agent saw GH_TOKEN")
+	}
+}
+
+func TestInheritEnvPassesNamedVariable(t *testing.T) {
+	t.Setenv("FOUNDRY_TEST_INHERIT", "passed")
+	p := startSh(t, "env", ProcSpec{InheritEnv: []string{"FOUNDRY_TEST_INHERIT"}})
+	events := drain(p)
+	_, err := p.Wait()
+	require.NoError(t, err)
+	var found bool
+	for _, ev := range events {
+		if ev.Text == "FOUNDRY_TEST_INHERIT=passed" {
+			found = true
+		}
+	}
+	assert.True(t, found, "a name listed in InheritEnv must reach the child")
 }

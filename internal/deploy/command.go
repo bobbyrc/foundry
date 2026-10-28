@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/bobbyrc/foundry/internal/sysproc"
 )
 
 // outputTail is how many trailing bytes of a failed command's output go into its error.
@@ -119,8 +121,9 @@ func (d *commandDeployer) run(ctx context.Context, label, command string, extra 
 	cmd.Env = append(append(os.Environ(), d.env...), extra...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	// Kill sh on timeout, and stop waiting on pipes a grandchild (e.g. sleep) still holds open.
-	cmd.WaitDelay = 5 * time.Second
+	// On timeout the whole process group is killed, not just sh, and Wait does not block on pipes a
+	// grandchild still holds open.
+	sysproc.Configure(cmd)
 	if err := cmd.Run(); err != nil {
 		output := strings.TrimSpace(stdout.String() + stderr.String())
 		return "", fmt.Errorf("deploy: %s command failed: %w: output: %s", label, err, tail(output))

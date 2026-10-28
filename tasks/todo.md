@@ -73,4 +73,10 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] CI workflow for foundry itself (.github/workflows/ci.yml): go vet/test -race, gofmt, web typecheck/test/build
 - [ ] cleanup: budget once-per-day state and any other package-level maps keyed by *Engine move into the Engine struct
 - [x] docs/api.md corrections from the OpenAPI pass: history limit 500; approvals status=approved|rejected; live events carry id 0 in data; unknown JSON fields → 400; /config redacts option secrets and harness env
-- [ ] docs: running Go (and other toolchains) under Codex's sandbox — point build caches at /tmp (GOCACHE), GOFLAGS=-mod=readonly, GOPROXY=off; caches outside the worktree are read-only
+- [ ] docs: toolchains under Codex's sandbox — GOCACHE in /tmp, GOFLAGS=-mod=readonly -buildvcs=false, GOPROXY=off. Codex's sandbox blocks all network incl. binding localhost (httptest); options: use the Claude implementer for such repos, or the OWNER opts in to `-c sandbox_workspace_write.network_access=true` (the agent-side enable was refused as weakening the sandbox — owner decision)
+- [ ] CI grace: right after a push GitHub may report no checks yet (looks like "no CI" → passes). Treat CI "none" as pending until `policy.ci_grace` (default 3m) after foundry's last push (Task.PushedAt)
+- [ ] cosmetic: policy.decision message "risk low: " with no reasons → "risk low"
+- [ ] re-runs on an existing PR should refresh its description (`gh pr edit --body`) with the latest summary — PR #1's body omitted the CI-fix test changes
+- [ ] after unit P lands: merge `dogfood` (PR #1: loop wake interval) back into `init`, keeping init's root-cause timeout fix over the loosened test timings
+- [ ] SSE ?after=0 should replay from the start (store treats AfterID 0 as 'newest 500')
+- [ ] deploy/observe/notify: exit 0 with a lingering background child must stay a success (kill the group), not ErrWaitDelay → a good release failed/rolled back
