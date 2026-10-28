@@ -4,11 +4,11 @@ import { useStats } from '../queries';
 import { LiveIndicator } from './LiveIndicator';
 import { PauseSwitch } from './PauseSwitch';
 
-const NAV: { to: string; label: string; end?: boolean; approvals?: boolean }[] = [
+const NAV: { to: string; label: string; end?: boolean; approvals?: boolean; blocked?: boolean }[] = [
   { to: '/', label: 'Overview', end: true },
   { to: '/projects', label: 'Projects' },
   { to: '/chat', label: 'Chat' },
-  { to: '/tasks', label: 'Tasks' },
+  { to: '/tasks', label: 'Tasks', blocked: true },
   { to: '/approvals', label: 'Approvals', approvals: true },
   { to: '/runs', label: 'Runs' },
   { to: '/deploys', label: 'Deploys' },
@@ -28,6 +28,16 @@ function Wordmark() {
   );
 }
 
+/** A lit count on the nav: yellow for what waits on you, red for what stopped. */
+function CallBadge({ count, label, stop = false, spoken = true }: { count: number; label: string; stop?: boolean; spoken?: boolean }) {
+  return (
+    <span className={`count-badge${stop ? ' stop' : ''}`}>
+      {count}
+      <span className={spoken ? 'sr-only' : undefined}> {label}</span>
+    </span>
+  );
+}
+
 /** Sidebar on wide screens; a top bar with a slide-down drawer under 760px. */
 export function Shell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -35,6 +45,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const sidebarRef = useRef<HTMLElement>(null);
   const stats = useStats();
   const pending = stats.data?.approvals_pending ?? 0;
+  const blocked = stats.data?.tasks_by_status.blocked ?? 0;
   const close = () => setMenuOpen(false);
 
   // While the drawer is open, Escape and a tap outside it close it. Taps on the menu button are
@@ -58,14 +69,22 @@ export function Shell({ children }: { children: ReactNode }) {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [menuOpen]);
-  const badge = pending > 0 ? <span className="count-badge">{pending}</span> : null;
 
   return (
     <div className="app">
       <header className="topbar">
         <Wordmark />
         <span className="topbar-right">
-          {pending > 0 ? <NavLink to="/approvals" className="topbar-approvals" onClick={close}>{badge}</NavLink> : null}
+          {pending > 0 ? (
+            <NavLink to="/approvals" className="topbar-approvals" onClick={close}>
+              <CallBadge count={pending} label={pending === 1 ? 'approval' : 'approvals'} spoken={false} />
+            </NavLink>
+          ) : null}
+          {blocked > 0 ? (
+            <NavLink to="/tasks?status=blocked" className="topbar-approvals" onClick={close}>
+              <CallBadge count={blocked} label="blocked" stop spoken={false} />
+            </NavLink>
+          ) : null}
           <button
             ref={menuButtonRef}
             type="button"
@@ -92,7 +111,8 @@ export function Shell({ children }: { children: ReactNode }) {
               onClick={close}
             >
               <span>{item.label}</span>
-              {item.approvals && pending > 0 ? <span className="count-badge">{pending}</span> : null}
+              {item.approvals && pending > 0 ? <CallBadge count={pending} label="awaiting approval" /> : null}
+              {item.blocked && blocked > 0 ? <CallBadge count={blocked} label="blocked" stop /> : null}
             </NavLink>
           ))}
         </nav>
