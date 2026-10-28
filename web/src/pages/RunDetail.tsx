@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { formatCost, formatTokens, shortId } from '../lib/format';
+import { cx, formatCost, formatTokens, shortId } from '../lib/format';
 import { isActiveRun } from '../lib/status';
 import { elapsedMs, formatDuration, parseTime } from '../lib/time';
 import { useNow } from '../lib/clock';
@@ -51,11 +51,13 @@ export function RunDetail() {
 
       <dl className="meta">
         <MetaItem label="Task">
-          <Link to={`/tasks/${r.task_id}`}>{task.data?.task.title ?? shortId(r.task_id)}</Link>
+          {r.task_id ? <Link to={`/tasks/${r.task_id}`}>{task.data?.task.title ?? shortId(r.task_id)}</Link> : '—'}
         </MetaItem>
-        <MetaItem label="Project">{r.project}</MetaItem>
+        <MetaItem label="Project">{r.project || '—'}</MetaItem>
         <MetaItem label="Branch">{r.branch ? <span className="mono">{r.branch}</span> : '—'}</MetaItem>
-        <MetaItem label="Workdir">{r.workdir ? <span className="mono">{r.workdir}</span> : '—'}</MetaItem>
+        <MetaItem label="Workdir" wide>
+          {r.workdir ? <span className="mono">{r.workdir}</span> : '—'}
+        </MetaItem>
         <MetaItem label="Session">{r.session_id ? <span className="mono">{r.session_id}</span> : '—'}</MetaItem>
         <MetaItem label="Exit code">{r.exit_code}</MetaItem>
         <MetaItem label="Cost">{formatCost(r.cost_usd)}</MetaItem>
@@ -75,9 +77,9 @@ export function RunDetail() {
   );
 }
 
-function MetaItem({ label, children }: { label: string; children: ReactNode }) {
+function MetaItem({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="meta-item">
+    <div className={cx('meta-item', wide && 'meta-item-wide')}>
       <dt>{label}</dt>
       <dd>{children}</dd>
     </div>

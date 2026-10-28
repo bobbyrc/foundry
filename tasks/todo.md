@@ -40,7 +40,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] policy.Evaluate: unrecognised agent risk string → treat as high (today it passes through)
 - [x] config: unset `${NAME}` → load error naming the variable (decision: fail loudly on missing secrets)
 - [x] foundry.example.yaml: "five built-in roles" lists six; max_attempts exhaustion → "blocked", not "failed"
-- [x] merge docs/plugins-deploy-observe.md into docs/plugins.md
+- [ ] merge docs/plugins-deploy-observe.md into docs/plugins.md
 - [x] workspace.Manager: per-repo mutex (concurrent fetch/worktree-add on one clone collide on git's lock)
 - [x] scm/github OpenPR: add labels with `gh pr edit`, not `gh issue edit`
 - [x] web IdChip: UUIDv7 IDs share their first 8 chars (timestamp) — show the last 8
@@ -66,3 +66,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] L2 agents never commit (codex sandboxes .git read-only even with --add-dir); before a re-run on an existing branch foundry merges origin/<default> and lists conflicted files in the prompt
 - [x] L3 loop kick channels move from a package-level map into the Engine struct
 - [x] L4 UI: closed mobile drawer renders through the page; "active" preset chip highlighting; search field alignment; show "project paused" on queued tasks
+- [x] shepherd: pinned auto-merge refused because the PR head moved → leave in review and re-evaluate (block only if the head is unchanged)
+- [ ] README + docs/getting-started.md
+- [ ] `foundry service install|uninstall|status` (launchd KeepAlive) and `foundry doctor`
+- [x] UI polish: tool_use ▸ marker inline with its text; "—" for empty Task/Project on chat runs; workdir gets a full-width row

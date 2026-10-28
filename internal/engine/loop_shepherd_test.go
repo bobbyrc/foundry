@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -377,5 +378,49 @@ func TestMergeTaskMergesAwaitingApproval(t *testing.T) {
 	}
 	if n := len(env.e.loopKickChan(loopDeployWatch)); n != 1 {
 		t.Fatalf("deploy watch kicks = %d, want 1", n)
+	}
+}
+
+// A push between the shepherd's evaluation and the merge makes MergePR refuse the judged head.
+// That is not a failure: the task stays in review so the next pass judges the new head.
+func TestLoopShepherdHeadMovedBeforeMergeStaysInReview(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.ApprovedSHA = "sha-1" })
+	// The first read (the shepherd's evaluation) sees sha-1; every later read sees a push.
+	reads := 0
+	env.fake.HeadSHA = func(string) string {
+		reads++
+		if reads == 1 {
+			return "sha-1"
+		}
+		return "sha-2"
+	}
+
+	env.run(loopPRShepherd)
+
+	got := env.task(task.ID)
+	if got.Status != domain.TaskReview || got.BlockedReason != "" {
+		t.Fatalf("task = %s %q, want review and not blocked after a push", got.Status, got.BlockedReason)
+	}
+	if len(env.fake.Merged) != 0 {
+		t.Fatalf("merged despite the moved head: %v", env.fake.Merged)
+	}
+}
+
+// A merge refused at the head the shepherd judged is a real failure and still blocks the task.
+func TestLoopShepherdMergeFailureAtSameHeadBlocks(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.ApprovedSHA = "sha-1" })
+	env.fake.MergeErr = errors.New("branch protection rejected the merge")
+
+	env.run(loopPRShepherd)
+
+	got := env.task(task.ID)
+	if got.Status != domain.TaskBlocked || !strings.Contains(got.BlockedReason, "merge failed: ") ||
+		!strings.Contains(got.BlockedReason, "branch protection rejected the merge") {
+		t.Fatalf("task = %s %q, want blocked with the merge failure", got.Status, got.BlockedReason)
+	}
+	if len(env.fake.Merged) != 0 {
+		t.Fatalf("merged despite the merge error: %v", env.fake.Merged)
 	}
 }

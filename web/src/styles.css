@@ -734,6 +734,10 @@ input[type='checkbox'] {
   overflow-wrap: anywhere;
 }
 
+.meta-item-wide {
+  grid-column: 1 / -1;
+}
+
 .reasons {
   margin: 4px 0 0;
   padding-left: 18px;
@@ -1025,8 +1029,24 @@ input[type='checkbox'] {
   min-width: 0;
 }
 
+/* tool_use: the marker sits inline at the start of the text; wrapped lines hang under the text. */
+.log-tool {
+  display: flex;
+  align-items: flex-start;
+}
+
+.log-tool pre {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .log-marker {
+  flex: none;
+  margin-right: 1ch;
   color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .kind-tool_result {

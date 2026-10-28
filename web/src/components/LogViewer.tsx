@@ -138,14 +138,21 @@ function LogRow({ line, expanded, onToggle }: { line: LogLine; expanded: boolean
   const collapsible = kind === 'tool_result' && textLines.length > TOOL_RESULT_PREVIEW_LINES;
   const shown = collapsible && !expanded ? textLines.slice(0, TOOL_RESULT_PREVIEW_LINES).join('\n') : line.text;
   const time = parseTime(line.time);
+  const text = <pre>{shown}</pre>;
 
   return (
     <div className={cx('log-line', `kind-${kind}`)}>
       <span className="gutter">{time ? formatClock(time) : ''}</span>
       <div className="log-body">
         {kind === 'denial' ? <span className="tag tag-danger">DENIED</span> : null}
-        {kind === 'tool_use' ? <span className="log-marker" aria-hidden="true">▸ </span> : null}
-        <pre>{shown}</pre>
+        {kind === 'tool_use' ? (
+          <div className="log-tool">
+            <span className="log-marker" aria-hidden="true">▸</span>
+            {text}
+          </div>
+        ) : (
+          text
+        )}
         {collapsible ? (
           <button type="button" className="link-button" onClick={onToggle}>
             {expanded ? 'show less' : 'show more'}

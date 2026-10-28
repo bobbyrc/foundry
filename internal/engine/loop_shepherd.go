@@ -170,11 +170,30 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 		case errors.As(err, &notMergeable):
 			return nil // the task moved on since the re-read; the next pass sees where it is
 		case err != nil:
-			e.blockTask(ctx, t.ID, "merge failed: "+err.Error())
+			return e.mergeRefused(ctx, s, t, pr.HeadSHA, err)
 		}
 		return nil
 	}
 	return e.requestMergeApproval(ctx, p, t, pr, d)
+}
+
+// mergeRefused handles a failed auto-merge at judged, the head the shepherd evaluated. A push to
+// the PR after that evaluation is normal, and MergePR refuses the old head. In that case the task
+// stays in review so the next pass judges the new head. Only a failure at an unchanged head blocks.
+func (e *Engine) mergeRefused(ctx context.Context, s scm.SCM, t domain.Task, judged string, mergeErr error) error {
+	pr, err := s.GetPR(ctx, t.PRNumber)
+	if err != nil {
+		e.d.Logger.Error("merge refused and PR could not be re-read; task stays in review",
+			"task", t.ID, "pr", t.PRNumber, "merge_err", mergeErr, "err", err)
+		return nil
+	}
+	if pr.HeadSHA != judged {
+		e.d.Logger.Info("PR head moved before auto-merge; task stays in review for re-evaluation",
+			"task", t.ID, "pr", t.PRNumber, "judged", judged, "head", pr.HeadSHA)
+		return nil
+	}
+	e.blockTask(ctx, t.ID, "merge failed: "+mergeErr.Error())
+	return nil
 }
 
 // ensureReview makes sure a reviewer run exists for the PR's current head commit, and waits for
