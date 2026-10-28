@@ -156,6 +156,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	for _, p := range e.Config().Projects {
 		e.goTracked(func() { e.sweepWorktrees(ctx, p) })
 	}
+	e.goTracked(func() { e.housekeepLoop(ctx) }) // housekeeping.go
 	e.wg.Add(1)
 	go func() {
 		defer e.wg.Done()

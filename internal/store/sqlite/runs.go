@@ -102,6 +102,19 @@ func (s *Store) AppendRunLogs(ctx context.Context, runID string, lines []domain.
 	return out, nil
 }
 
+// PruneRunLogs deletes run log lines whose time is before before and returns how many it deleted.
+func (s *Store) PruneRunLogs(ctx context.Context, before time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM run_logs WHERE time < ?`, nanos(before))
+	if err != nil {
+		return 0, fmt.Errorf("prune run logs: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("prune run logs: rows affected: %w", err)
+	}
+	return n, nil
+}
+
 // ListRunLogs returns the run's lines with Seq > afterSeq in ascending order.
 func (s *Store) ListRunLogs(ctx context.Context, runID string, afterSeq int64, limit int) ([]domain.LogLine, error) {
 	out, err := queryRows(ctx, s.db, func(r rowScanner) (domain.LogLine, error) {

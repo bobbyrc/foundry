@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/store"
@@ -31,6 +32,19 @@ func (s *Store) AppendEvent(ctx context.Context, e domain.Event) (domain.Event, 
 	}
 	e.ID = id
 	return e, nil
+}
+
+// PruneEvents deletes events whose time is before before and returns how many it deleted.
+func (s *Store) PruneEvents(ctx context.Context, before time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM events WHERE time < ?`, nanos(before))
+	if err != nil {
+		return 0, fmt.Errorf("prune events: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("prune events: rows affected: %w", err)
+	}
+	return n, nil
 }
 
 const eventColumns = `id, time, type, project, task_id, run_id, message, data`

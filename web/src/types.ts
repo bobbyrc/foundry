@@ -289,6 +289,9 @@ export interface ServerConfig {
   addr: string;
   data_dir: string;
   public_url: string;
+  /** Go duration string, e.g. "720h". */
+  retain_events?: string;
+  retain_run_logs?: string;
 }
 
 export interface LimitsConfig {

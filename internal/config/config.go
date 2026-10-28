@@ -40,6 +40,12 @@ type Server struct {
 	// A wildcard bind (0.0.0.0, ::) adds no name: to reach foundry remotely (e.g. over
 	// Tailscale), list the name you use here, or requests get 421 Misdirected Request.
 	AllowedHosts []string `yaml:"allowed_hosts" json:"allowed_hosts,omitempty"`
+	// RetainEvents and RetainRunLogs bound how long the event history and agent run logs are
+	// kept; older rows are deleted once a day, so a daemon that runs for months does not grow
+	// without limit. Tasks, runs, deployments and approvals are kept. Defaults 720h (30 days)
+	// and 2160h (90 days); a very large value (e.g. 876000h) keeps them in practice forever.
+	RetainEvents  Duration `yaml:"retain_events" json:"retain_events"`
+	RetainRunLogs Duration `yaml:"retain_run_logs" json:"retain_run_logs"`
 }
 
 type Limits struct {

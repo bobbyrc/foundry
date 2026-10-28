@@ -120,6 +120,12 @@ func applyServerDefaults(c *Config) {
 	if c.Server.PublicURL == "" {
 		c.Server.PublicURL = LocalURL(c.Server.Addr)
 	}
+	if c.Server.RetainEvents.Duration == 0 {
+		c.Server.RetainEvents.Duration = 720 * time.Hour
+	}
+	if c.Server.RetainRunLogs.Duration == 0 {
+		c.Server.RetainRunLogs.Duration = 2160 * time.Hour
+	}
 }
 
 // LocalURL is the http URL a client on this machine uses to reach a server listening on addr.

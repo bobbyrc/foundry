@@ -1697,6 +1697,12 @@ components:
           type: string
         public_url:
           type: string
+        retain_events:
+          $ref: '#/components/schemas/Duration'
+          description: Event history kept this long, default 720h.
+        retain_run_logs:
+          $ref: '#/components/schemas/Duration'
+          description: Agent run logs kept this long, default 2160h.
 
     Limits:
       type: object

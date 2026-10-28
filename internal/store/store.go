@@ -71,6 +71,11 @@ type Store interface {
 	// the newest Limit events in ascending order.
 	ListEvents(ctx context.Context, f EventFilter) ([]domain.Event, error)
 
+	// PruneEvents deletes events older than before and returns how many it deleted.
+	PruneEvents(ctx context.Context, before time.Time) (int64, error)
+	// PruneRunLogs deletes run log lines older than before and returns how many it deleted.
+	PruneRunLogs(ctx context.Context, before time.Time) (int64, error)
+
 	CreateApproval(ctx context.Context, a domain.Approval) (domain.Approval, error)
 	GetApproval(ctx context.Context, id string) (domain.Approval, error)
 	ListApprovals(ctx context.Context, status domain.ApprovalStatus) ([]domain.Approval, error)

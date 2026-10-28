@@ -179,6 +179,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if c.Server.RetainEvents.Duration < 0 {
+		add("server.retain_events: must be 0 (default 720h) or greater, not %v", c.Server.RetainEvents.Duration)
+	}
+	if c.Server.RetainRunLogs.Duration < 0 {
+		add("server.retain_run_logs: must be 0 (default 2160h) or greater, not %v", c.Server.RetainRunLogs.Duration)
+	}
+
 	// Notifications link to the server with this URL, so a bare "host:port" would make broken links.
 	if u, err := url.Parse(c.Server.PublicURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		add("server.public_url %q must be an absolute http or https URL", c.Server.PublicURL)

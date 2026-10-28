@@ -12,6 +12,8 @@ server:
   addr: 127.0.0.1:7777                 # address the HTTP API and UI listen on (default 127.0.0.1:7777)
   data_dir: ~/.local/share/foundry     # database, logs and default clones live here (default shown)
   public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>, with 0.0.0.0 or :: shown as loopback)
+  retain_events: 720h                  # event history kept this long; older events are deleted daily (default 720h = 30 days)
+  retain_run_logs: 2160h               # agent run logs kept this long (default 2160h = 90 days)
 
 # Limits: caps on how much runs at once and how long a run may go.
 limits:
