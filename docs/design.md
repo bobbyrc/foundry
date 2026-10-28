@@ -134,6 +134,18 @@ this release. If verification fails: `deployer.rollback(previous healthy)`, reco
 error, or still not ready after `deploy.timeout`) is failed without a rollback, since nothing
 new is serving; it still opens an incident and blocks the task.
 
+The evidence on a release and its incident is the deploy command's output tail and, on failure,
+the output of the project's `deploy.logs` command. Secret values (environment variables named
+like `*_TOKEN`, `*_SECRET`, `*_KEY`, ..., and URLs with credentials) are replaced with `***` before
+anything is stored or handed to an agent. A task blocked because its own release failed becomes
+done when a later healthy release contains its merge commit: the code shipped, so nothing is left
+to do for it.
+
+A deploy command that exits 0 may leave a service running in the background, and that service
+keeps running. A failed or timed-out deploy has its whole process group killed. The command's
+output goes to temporary files rather than pipes, so a service that keeps printing is not killed
+when foundry stops reading.
+
 ### Production watch
 
 Each observer is polled every `prod_watch.every`. New signals (by fingerprint) above the
@@ -195,6 +207,16 @@ web/                  React + Vite + TypeScript UI (built into internal/api/webd
   configured per agent profile (`claude-code` defaults to `acceptEdits` plus an allowed-tools
   list; `codex` defaults to `--approve-for-me`, its workspace-write sandbox with automatic review of escalations).
 - Secrets for providers come from the environment or `~/.config/foundry/secrets.env`.
+- Agents get an allowlist of foundry's environment (PATH, HOME, locale, their own provider
+  keys), plus what a harness's `inherit_env` and the project's `env` add. Foundry's GitHub and
+  observer tokens never reach them. A project's `setup` and `checks` commands run with the same
+  environment, because they execute code the agent may have written.
+- The server answers only requests whose Host header is localhost, a loopback address, the bind
+  host, the `public_url` host, or `server.allowed_hosts`. This blocks DNS rebinding, where a web
+  page points its own name at 127.0.0.1. Responses carry a strict CSP and refuse framing.
+- Agent text that foundry posts to GitHub (PR bodies, issues, comments) has @mentions outside
+  code wrapped in backticks, so an agent cannot notify people. Release evidence is redacted
+  (see Deploy watch).
 
 ### Known limits of the harnesses
 
