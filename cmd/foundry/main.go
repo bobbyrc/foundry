@@ -56,6 +56,7 @@ func commandList() []command {
 		{"config", "print the redacted config, or --reload it", cmdConfig},
 		{"task", "create, list, show, cancel and retry tasks", cmdTask},
 		{"run", "list, show, cancel and tail agent runs", cmdRun},
+		{"deploys", "list releases, or show one with its log: deploys show ID", cmdDeploys},
 		{"approvals", "list approvals waiting for a decision", cmdApprovals},
 		{"approve", "approve or reject an approval", cmdApprove},
 		{"events", "show history, or follow the event stream", cmdEvents},
