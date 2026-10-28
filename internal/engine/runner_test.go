@@ -289,13 +289,15 @@ func TestRunnerBlockedNotifies(t *testing.T) {
 	got := env.waitStatus(task.ID, domain.TaskBlocked)
 	assert.Equal(t, "agent needs a human: fake needs a human", got.BlockedReason)
 
-	var notified bool
-	for _, ev := range env.events() {
-		if ev.Type == domain.EvNotification && strings.Contains(ev.Message, "Blocked:") {
-			notified = true
+	// The status flips before the notification is emitted, so wait for the event.
+	rtWait(t, 5*time.Second, "a blocked notification event", func() bool {
+		for _, ev := range env.events() {
+			if ev.Type == domain.EvNotification && strings.Contains(ev.Message, "Blocked:") {
+				return true
+			}
 		}
-	}
-	assert.True(t, notified, "a notification event was emitted")
+		return false
+	})
 }
 
 func TestRunnerDeniedBlocksWithoutRetry(t *testing.T) {
