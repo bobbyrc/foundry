@@ -297,6 +297,56 @@ There are two switches:
 For one project, set `paused: true` under it and run `./foundry config --reload`. Pausing does not
 stop agents that are already running. They finish, and nothing new starts.
 
+## 14. Run toolchains under Codex's sandbox
+
+Codex is the agent behind the `implementer` and `improver` roles. Its default `workspace-write`
+sandbox can write only to the task's worktree and `/tmp`, and it has no network. Build tools that
+write caches under `$HOME` or download dependencies fail inside it, usually with a permission error.
+
+**Keep caches in the worktree or `/tmp`.** For Go, point the build cache (and, if needed, the module
+cache and temp directory) at `/tmp`:
+
+```sh
+export GOCACHE=/tmp/foundry-go/gocache
+export GOMODCACHE=/tmp/foundry-go/mod     # only if the default module cache is not writable
+export GOTMPDIR=/tmp/foundry-go/tmp       # only if Go cannot create temp files
+mkdir -p "$GOCACHE" "$GOMODCACHE" "$GOTMPDIR"
+```
+
+Other toolchains need the same treatment: `CARGO_HOME` and `CARGO_TARGET_DIR` for Rust,
+`npm_config_cache` (or `npm ci --cache /tmp/npm`) for npm, `XDG_CACHE_HOME` and `PIP_CACHE_DIR` for
+Python.
+
+**Go: when modules are already cached, stop it reaching out.** With no network, a missing module
+makes Go wait on the proxy, and VCS stamping runs `git`. These settings make Go use only what is on
+disk:
+
+```sh
+export GOFLAGS="-mod=readonly -buildvcs=false"
+export GOPROXY=off
+```
+
+`GOPROXY=off` makes a missing module fail at once instead of hanging, so warm the module cache
+before the run if the task needs new dependencies.
+
+**Local listeners are blocked too.** The default sandbox denies all network access, including
+binding or connecting to localhost. A test suite that starts an `httptest` server or any other local
+listener fails with errors such as `listen tcp6 [::1]:0: bind: operation not permitted`. There are
+two ways out:
+
+1. **Route those tasks to the Claude-based implementer role**, `implementer-claude`, which has no such
+   restriction. Define it under `agents:` with `harness: claude` (see step 4) and send the task kind
+   to it under `routing:`.
+2. **Opt the Codex implementer in to network access.** The owner adds this to the harness `args`:
+
+   ```yaml
+   args: ["-c", "sandbox_workspace_write.network_access=true"]
+   ```
+
+Option 2 is an owner decision with a security trade-off: the agent can then reach the network from
+inside the sandbox, so a prompt-injected or mistaken run can send data out or fetch code. Agents must
+never enable it themselves; if a task cannot be verified without it, report it as blocked.
+
 ## Troubleshooting
 
 - **`no config at ...: run foundry init`**: the CLI cannot find the config file. Run `foundry init`, or
