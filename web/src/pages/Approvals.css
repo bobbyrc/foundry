@@ -1,0 +1,5 @@
+/* Approvals page. The list stops at 920px so the agent-written prose stays readable. */
+
+.approvals-page .approvals-list {
+  max-width: 920px;
+}

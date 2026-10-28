@@ -5,18 +5,21 @@ const MIN = 60_000;
 
 describe('axisMinutes', () => {
   it('picks the smallest axis that fits the longest run', () => {
-    expect(axisMinutes(0)).toBe(10);
-    expect(axisMinutes(9 * MIN)).toBe(10);
-    expect(axisMinutes(11 * MIN)).toBe(20);
+    expect(axisMinutes(0)).toBe(20);
+    expect(axisMinutes(9 * MIN)).toBe(20);
+    expect(axisMinutes(25 * MIN)).toBe(40);
     expect(axisMinutes(45 * MIN)).toBe(60);
     expect(axisMinutes(10 * 60 * MIN)).toBe(600);
   });
 });
 
 describe('axisTicks', () => {
-  it('labels four evenly spaced marks, switching to hours on whole hours', () => {
-    expect(axisTicks(30)).toEqual(['0m', '10m', '20m', '30m']);
-    expect(axisTicks(180)).toEqual(['0m', '1h', '2h', '3h']);
+  it('labels five quarter marks in minutes under an hour', () => {
+    expect(axisTicks(20)).toEqual(['0m', '5m', '10m', '15m', '20m']);
+  });
+
+  it('switches to hours on whole hours and mixes them otherwise', () => {
+    expect(axisTicks(120)).toEqual(['0m', '30m', '1h', '1h30m', '2h']);
   });
 });
 

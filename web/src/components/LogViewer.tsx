@@ -115,10 +115,15 @@ export function LogViewer({ runId, active }: { runId: string; active: boolean })
     <section className="log-panel" aria-label="Run log">
       <div className="log-toolbar">
         <h2>Log</h2>
-        <label className="toggle">
-          <input type="checkbox" checked={follow} onChange={(event) => setFollow(event.target.checked)} />
-          Follow
-        </label>
+        <div className="log-toolbar-end">
+          <span className="log-count muted">
+            {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+          </span>
+          <label className="toggle">
+            <input type="checkbox" checked={follow} onChange={(event) => setFollow(event.target.checked)} />
+            Follow
+          </label>
+        </div>
       </div>
       {error ? <ErrorLine error={error} /> : null}
       {!error && !loaded ? <p className="muted">Loading log…</p> : null}
@@ -129,6 +134,15 @@ export function LogViewer({ runId, active }: { runId: string; active: boolean })
         ))}
       </div>
     </section>
+  );
+}
+
+/** The marker on a tool_use line: a small drawn chevron, in the run colour. */
+function Chevron() {
+  return (
+    <svg className="log-chevron" viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false">
+      <polyline points="3,2 7,5 3,8" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
   );
 }
 
@@ -144,10 +158,10 @@ function LogRow({ line, expanded, onToggle }: { line: LogLine; expanded: boolean
     <div className={cx('log-line', `kind-${kind}`)}>
       <span className="gutter">{time ? formatClock(time) : ''}</span>
       <div className="log-body">
-        {kind === 'denial' ? <span className="tag tag-danger">DENIED</span> : null}
+        {kind === 'denial' ? <span className="log-denied">DENIED</span> : null}
         {kind === 'tool_use' ? (
           <div className="log-tool">
-            <span className="log-marker" aria-hidden="true">▸</span>
+            <Chevron />
             {text}
           </div>
         ) : (

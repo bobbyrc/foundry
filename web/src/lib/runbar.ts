@@ -4,18 +4,21 @@
 
 const MINUTE = 60_000;
 /** Axis lengths to choose from, in minutes. The axis is the smallest that fits the longest run. */
-const SCALES = [10, 20, 30, 60, 120, 240, 480];
+const SCALES = [20, 40, 60, 120, 240, 480];
 
 export function axisMinutes(longestElapsedMs: number): number {
   const minutes = longestElapsedMs / MINUTE;
   return SCALES.find((s) => minutes <= s) ?? Math.ceil(minutes / 60) * 60;
 }
 
-/** Tick labels for an axis: 0 and three more evenly spaced marks. */
+/** Tick labels for an axis: 0 and four quarter marks. Under an hour: "15m"; whole hours: "2h"; else "1h30m". */
 export function axisTicks(scaleMinutes: number): string[] {
-  return [0, 1, 2, 3].map((i) => {
-    const m = (scaleMinutes / 3) * i;
-    return m >= 60 && m % 60 === 0 ? `${m / 60}h` : `${Math.round(m)}m`;
+  return [0, 1, 2, 3, 4].map((i) => {
+    const m = Math.round((scaleMinutes / 4) * i);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    const rest = m % 60;
+    return rest === 0 ? `${h}h` : `${h}h${rest}m`;
   });
 }
 

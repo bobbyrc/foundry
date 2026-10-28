@@ -1,0 +1,235 @@
+/* Task detail: the line of stations, the two-column body and the spec sheet. Colours are tokens
+   from styles.css; no shadows, no coloured side stripes. */
+
+.task-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+/* ---- the line: stations joined by a rule through the lamp centres ---- */
+
+.task-line-scroll {
+  margin: 20px 0 28px;
+  overflow-x: auto;
+}
+
+.task-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(56px, 1fr));
+  width: 100%;
+  min-width: 392px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The rule runs from the first lamp's centre to the last one's: 1/14 in from each end. */
+.task-line::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: calc(100% / 14);
+  right: calc(100% / 14);
+  height: 2px;
+  background: var(--border);
+}
+
+.task-station {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: center;
+}
+
+.task-lamp {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid transparent;
+  background: var(--lamp-off);
+}
+
+.task-lamp--done {
+  background: var(--lamp-done);
+}
+
+.task-lamp--run {
+  background: var(--lamp-run);
+}
+
+.task-lamp--call {
+  background: var(--lamp-call);
+}
+
+.task-lamp--off {
+  background: var(--lamp-off);
+}
+
+.task-lamp--off-light {
+  background: var(--lamp-off-light);
+}
+
+.task-lamp--stop {
+  background: var(--lamp-stop);
+}
+
+.task-lamp--skipped {
+  border-color: var(--lamp-done);
+  background: transparent;
+}
+
+.task-lamp--ahead {
+  background: var(--lamp-off-light);
+  opacity: 0.4;
+}
+
+.task-station-label {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.task-station--current .task-station-label,
+.task-station--stopped .task-station-label {
+  color: var(--text);
+}
+
+/* ---- the body: main column and the spec sheet ---- */
+
+.task-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 32px;
+  align-items: start;
+}
+
+.task-main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-width: 0;
+}
+
+.task-rest {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-width: 0;
+}
+
+.task-body .section {
+  margin-top: 0;
+}
+
+.task-needs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.spec-sheet {
+  position: sticky;
+  top: 16px;
+  margin: 0;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.spec-item:last-child dd {
+  margin-bottom: 0;
+}
+
+.spec-sheet dt {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.spec-sheet dd {
+  margin: 2px 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.spec-sub {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.spec-sheet .reasons {
+  margin-top: 6px;
+}
+
+/* ---- decided approvals: one compact ruled row each ---- */
+
+.decided-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.decided-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.decided-title {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.decided-note {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+/* ---- narrow screens: one column, with the spec sheet between "Needs you" and the rest ---- */
+
+@media (max-width: 959px) {
+  .task-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .task-main {
+    display: contents;
+  }
+
+  .task-needs {
+    order: 1;
+  }
+
+  .spec-sheet {
+    position: static;
+    order: 2;
+  }
+
+  .task-rest {
+    order: 3;
+  }
+}

@@ -1,3 +1,4 @@
+import './Approvals.css';
 import { useState } from 'react';
 import { useApprovals } from '../queries';
 import { ApprovalCard } from '../components/ApprovalCard';
@@ -11,7 +12,7 @@ export function Approvals() {
   const approvals = useApprovals(scope);
 
   return (
-    <>
+    <div className="approvals-page">
       <PageHeader
         title="Approvals"
         actions={
@@ -26,16 +27,18 @@ export function Approvals() {
         }
       />
       <ErrorLine error={approvals.error} />
-      {approvals.isSuccess && approvals.data.length === 0 ? (
-        <Empty>
-          {scope === 'pending'
-            ? 'No pending approvals. Merges and unblocks that need you will appear here.'
-            : 'No approvals yet.'}
-        </Empty>
-      ) : null}
-      {approvals.data?.map((approval) => (
-        <ApprovalCard key={approval.id} approval={approval} />
-      ))}
-    </>
+      <div className="approvals-list">
+        {approvals.isSuccess && approvals.data.length === 0 ? (
+          <Empty>
+            {scope === 'pending'
+              ? 'Nothing waits on you. Approvals appear here when a change needs your sign-off.'
+              : 'No approvals yet.'}
+          </Empty>
+        ) : null}
+        {approvals.data?.map((approval) => (
+          <ApprovalCard key={approval.id} approval={approval} />
+        ))}
+      </div>
+    </div>
   );
 }
