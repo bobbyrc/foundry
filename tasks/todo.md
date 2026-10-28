@@ -101,7 +101,7 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [ ] friction: semantic duplicates need judgment — periodically queue a triager task "consolidate duplicate friction issues" (close dupes with a link)
 - [x] openapi.yaml + web/src/types.ts: add 'retro' to the loop names / loops config shape
 - [ ] OWNER: approve or reject dogfood PR #14 (retro's implementer-prompt change; high risk = foundry's own instructions). My approval attempt was refused as self-approval — correctly; it is yours. My read: safe and useful; one hint (GOMODCACHE→/tmp with GOPROXY=off) is slightly off.
-- [ ] OWNER: close duplicate friction issues #3 (dup of #5) and #6 (dup of #4), as the retro agent recommended
+- [ ] OWNER: friction #4, #5, #6 are all the Codex sandbox (no localhost listeners, no module cache); they resolve with your Codex network decision. #3 closed as a duplicate of #5
 - [x] per-project `checks:` — commands foundry runs in the worktree after the agent and before commit/push (generic replacement for the cancelled Go-specific follow-ups); failure re-queues with the output
 - [x] policy rule criterion `sources` + default rule: work foundry assigned itself (followup, retro) is at least medium — tonight 2 of 2 retro follow-ups had design problems (owner may relax)
 - [x] approval card: include the task's latest agent summary and the reviewer's verdict/summary (so the owner can decide without opening GitHub); spacing between PR link and Note label
@@ -164,4 +164,6 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] orchestrator chat delegation verified on a throwaway project: it queued a correctly scoped chore via the CLI in 28s and did not do the work itself (minor: it did not notice the factory was paused)
 - [x] REVIEW ROUND 3 (fresh reviewer over 8488593..35e2d79): no way found for the sweep to delete a live or foreign worktree, or for the stranded-branch fix to publish a task that should be done. Fixed: mention neutralising (fences in lists or after HTML, unclosed fences, \@ and entity forms); project add could truncate a trailing block scalar → it now never steps into one, and a semantic guard refuses any insertion that changes existing settings; manual loop-run errors returned unredacted (the orchestrator holds a token) → redacted wrapper; reverted reverts; needless fetch. Skipped (cosmetic or narrow): ZWSP inside URLs and paths; stale base right after Prepare
 - [x] PR #47 init → main opened for the owner (not merged): summary, safety gap, decisions
+- [x] Friction page shows which filed issues are closed (the friction loop refreshes issue states) and lists open ones by default: 5 open of 11
+- [x] friction #46 (agent-reported): incident evidence is now labelled as data, not instructions; the SRE noticed my drill's log line read like an instruction
 
