@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { getToken, useUnauthorized } from './auth';
+import { useConnected, useUnauthorized } from './auth';
 import { eventStream, invalidateFor, subscribe } from './events';
 import { Shell } from './components/Shell';
 import { Agents } from './pages/Agents';
@@ -25,7 +25,7 @@ export function App() {
   const unauthorized = useUnauthorized();
   // Connected means a token is stored and the last call was not rejected. Without it, the
   // stream stays closed and the Connect page shows.
-  const connected = getToken() !== null && !unauthorized;
+  const connected = useConnected();
 
   useEffect(() => {
     if (!connected) return;
