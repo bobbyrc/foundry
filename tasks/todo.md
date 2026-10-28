@@ -88,7 +88,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] OWNER: close duplicate friction issues #3 (dup of #5) and #6 (dup of #4), as the retro agent recommended
 - [x] per-project `checks:` — commands foundry runs in the worktree after the agent and before commit/push (generic replacement for the cancelled Go-specific follow-ups); failure re-queues with the output
 - [x] policy rule criterion `sources` + default rule: work foundry assigned itself (followup, retro) is at least medium — tonight 2 of 2 retro follow-ups had design problems (owner may relax)
-- [ ] approval card: include the task's latest agent summary and the reviewer's verdict/summary (so the owner can decide without opening GitHub); spacing between PR link and Note label
+- [x] approval card: include the task's latest agent summary and the reviewer's verdict/summary (so the owner can decide without opening GitHub); spacing between PR link and Note label
 
 ## Third review round (all confirmed by main agent; fixed and committed)
 - [x] follow-up kinds allowlisted (an implementer could file a `review` follow-up on its own PR)
@@ -109,7 +109,14 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] deploy/rollback output to temp files, not pipes (b167957): a service that keeps printing after the deploy returned died of SIGPIPE
 - [x] ROLLBACK TEST (real): killed staging during PR #30's verify window → release e697fd5 rolled_back, staging back on healthy 8f8fefa within ~1.5 min, incident opened. The SRE's diagnosis was stale (no logs: daemon predated the evidence change); induced incident cancelled, its PR #31 closed. Dogfood daemon now runs 3f1ecbd with `deploy.logs` set
 - [x] closed fixed friction issues #25 (CI/web build) and #27 (nohup service killed)
-- [ ] factory queue: #28 (health-failure reason names URL, count, elapsed; spec in the body) and #33 (intake includes OWNER/MEMBER/COLLABORATOR comments; public repo, so others are ignored)
+- [x] factory queue: #28 (health-failure reason names URL, count, elapsed; spec in the body) and #33 (intake includes OWNER/MEMBER/COLLABORATOR comments; public repo, so others are ignored)
 - [ ] OWNER: PR #19 now conflicts with dogfood (foundry.example.yaml); approve → the factory must rebase it first, or reject
 - [ ] OWNER: friction #32 — the dogfood release scripts live outside the repo (scratchpad), so agents can't fix them by PR; decide whether a staging setup belongs in the repo
+- [x] factory merged #34 (#33: intake includes OWNER/MEMBER/COLLABORATOR comments) and #35 (#28: health-failure reason names URL, count, elapsed). Both auto-merged at low risk, released and verified healthy on staging, and their issues closed automatically
+- [x] defect review of 47ee9be..b167957 (two fresh reviewers) → fixed: wildcard bind address broke the CLI, foundry open and orchestrator chat (Host guard 421) → LocalURL; public_url validated; exec intake over 1 MB is an error; secrets redacted from deploy/logs evidence and failure notes; deploy stdout bounded to a 64 KB tail; issue outcome comments serialised (no double post)
+- [x] SECURITY: checks ran with foundry's full env (GH_TOKEN), and a check such as `go test` runs agent-written code. Checks and the new `setup` commands now run with the agent's environment
+- [x] project `setup` commands (friction #20): run in each fresh worktree before the agent. The dogfood project now runs `npm ci` for web/
+- [ ] factory: #36 Deploys page shows a release's evidence log. It is also the first real run of web setup; if it goes well, close friction #20
+- [ ] cleanup: the deployHealth tally (package-level map) moves into the Engine struct
+- [ ] known gaps from review: prod_watch runs deploy.logs synchronously (30s max per new incident); an issue report lost at shutdown is not retried; issue comments post agent summaries verbatim (no @mention or #ref neutralising)
 
