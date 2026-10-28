@@ -8,14 +8,14 @@ import (
 	"math/big"
 	"path/filepath"
 
-	"github.com/bobbyrc/foundry/internal/auth"
-	"github.com/bobbyrc/foundry/internal/store"
-	"github.com/bobbyrc/foundry/internal/store/sqlite"
+	"github.com/bobbyrc/onlet/internal/auth"
+	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onlet/internal/store/sqlite"
 )
 
-// userHelp is the usage text for `foundry user`.
-const userHelp = "usage: foundry user reset-password NAME [--config P]\n" +
-	"Run \"foundry user <verb> -h\" for a verb's flags."
+// userHelp is the usage text for `onlet user`.
+const userHelp = "usage: onlet user reset-password NAME [--config P]\n" +
+	"Run \"onlet user <verb> -h\" for a verb's flags."
 
 // resetPasswordLength is the length of the random password `user reset-password` prints.
 const resetPasswordLength = 20
@@ -25,7 +25,7 @@ const passwordAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01
 
 func cmdUser(e *env, args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: foundry user reset-password NAME")
+		return usagef("usage: onlet user reset-password NAME")
 	}
 	sub, rest := args[0], args[1:]
 	if isHelpFlag(sub) || sub == "help" {
@@ -43,7 +43,7 @@ func cmdUser(e *env, args []string) error {
 // It writes the database directly, so it needs shell access to the machine, the same as serve.
 func resetUserPassword(e *env, args []string) error {
 	fs := newFlagSet("user reset-password", e)
-	cfgFlag := fs.String("config", "", "config file (default $FOUNDRY_CONFIG or ~/.config/foundry/foundry.yaml)")
+	cfgFlag := fs.String("config", "", "config file (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func resetUserPassword(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	st, err := sqlite.Open(filepath.Join(cfg.Server.DataDir, "foundry.db"))
+	st, err := sqlite.Open(filepath.Join(cfg.Server.DataDir, "onlet.db"))
 	if err != nil {
 		return err
 	}

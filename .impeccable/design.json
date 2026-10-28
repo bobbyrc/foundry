@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-10-28T18:22:40Z",
-  "title": "Design System: Foundry",
+  "title": "Design System: Onlet",
   "extensions": {
     "colorMeta": {
       "bg": {
@@ -166,7 +166,7 @@
       "kind": "custom",
       "refersTo": "board-window",
       "description": "Signature. One window per project on the charcoal board: a 12px lamp bar, the name in caps, the count in words.",
-      "html": "<a class=\"ds-board-window ds-lamp-call\" href=\"#\"><span class=\"ds-board-lamp\"></span><span class=\"ds-board-name\">foundry</span><span class=\"ds-board-count\">2 need you</span></a>",
+      "html": "<a class=\"ds-board-window ds-lamp-call\" href=\"#\"><span class=\"ds-board-lamp\"></span><span class=\"ds-board-name\">onlet</span><span class=\"ds-board-count\">2 need you</span></a>",
       "css": ".ds-board-window { display: flex; flex-direction: column; min-width: 0; background: var(--board-3, #151917); color: var(--board-text, #eef3ef); padding-bottom: 12px; text-decoration: none; transition: none; } .ds-board-lamp { height: 12px; background: var(--lamp-off, #3a423e); transition: background-color 90ms steps(2, jump-none); } .ds-board-window.ds-lamp-run .ds-board-lamp { background: var(--lamp-run, #2fa35a); } .ds-board-window.ds-lamp-call .ds-board-lamp { background: var(--lamp-call, #f2c230); } .ds-board-window.ds-lamp-stop .ds-board-lamp { background: var(--lamp-stop, #d7342a); } .ds-board-name { font-family: 'Barlow Condensed', Barlow, system-ui, sans-serif; font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: 0.03em; text-transform: uppercase; padding: 10px 14px 0; overflow-wrap: anywhere; } .ds-board-count { padding: 2px 14px 0; font-weight: 600; font-size: 14px; color: var(--board-text, #eef3ef); } .ds-board-window.ds-lamp-call .ds-board-count { color: var(--lamp-call, #f2c230); } .ds-board-window.ds-lamp-stop .ds-board-count { color: #ff8a80; } .ds-board-window:focus-visible { outline: 2px solid var(--lamp-call, #f2c230); outline-offset: 2px; }"
     },
     {
@@ -174,13 +174,13 @@
       "kind": "card",
       "refersTo": "call-item",
       "description": "A sheet that needs the owner, with a lit lamp before its title. The decision sits in the first screen.",
-      "html": "<article class=\"ds-call-item ds-call-stop\"><div class=\"ds-call-title\"><span class=\"ds-lamp ds-lamp-stop\"></span><h3>Blocked: tests fail on main</h3></div><p class=\"ds-call-meta\">Blocked · foundry · attempt 2 of 3</p></article>",
+      "html": "<article class=\"ds-call-item ds-call-stop\"><div class=\"ds-call-title\"><span class=\"ds-lamp ds-lamp-stop\"></span><h3>Blocked: tests fail on main</h3></div><p class=\"ds-call-meta\">Blocked · onlet · attempt 2 of 3</p></article>",
       "css": ".ds-call-item { background: var(--panel, #f5f8f5); border: 1px solid var(--border, #b9c6bd); border-radius: 0; padding: 16px 18px; margin-bottom: 12px; color: var(--text, #18201c); } .ds-call-item.ds-call-stop { border-color: color-mix(in srgb, var(--lamp-stop, #d7342a) 55%, var(--border, #b9c6bd)); } .ds-call-title { display: flex; align-items: baseline; gap: 10px; } .ds-call-title .ds-lamp { width: 12px; height: 12px; transform: translateY(1px); } .ds-call-title h3 { flex: 1; min-width: 0; font-size: 17px; font-weight: 600; line-height: 1.35; margin: 0; } .ds-call-meta { margin: 4px 0 0 22px; color: var(--muted, #4b5751); font-size: 13.5px; }"
     }
   ],
   "narrative": {
     "northStar": "The Andon Board",
-    "overview": "Foundry's interface is a factory's andon board: the lamp board on a production line that shows, at a glance, whether the line runs. A healthy line is quiet green. A project that needs its owner lights yellow. A line that stopped itself lights red. The whole system exists to make that readable in one look, on a phone or a second monitor.\n\nThe surface is a pale machine-green enamel ground, with a charcoal board carrying the navigation rail, the phone top bar, the Overview's board of project windows, and the connect card. Structure is drawn with 1px rules and square sheets. There are no content shadows, no gradients, and no decorative colour: a colour that appears is a state. The density is that of a control room. The Overview is a board of short windows and two dense columns, not a grid of same-size stat tiles.\n\nThe system refuses the category dashboard of stat cards and uniform cards. Counts are set into lamp windows and one line window, and each card earns its place by what it asks of the user.",
+    "overview": "Onlet's interface is a factory's andon board: the lamp board on a production line that shows, at a glance, whether the line runs. A healthy line is quiet green. A project that needs its owner lights yellow. A line that stopped itself lights red. The whole system exists to make that readable in one look, on a phone or a second monitor.\n\nThe surface is a pale machine-green enamel ground, with a charcoal board carrying the navigation rail, the phone top bar, the Overview's board of project windows, and the connect card. Structure is drawn with 1px rules and square sheets. There are no content shadows, no gradients, and no decorative colour: a colour that appears is a state. The density is that of a control room. The Overview is a board of short windows and two dense columns, not a grid of same-size stat tiles.\n\nThe system refuses the category dashboard of stat cards and uniform cards. Counts are set into lamp windows and one line window, and each card earns its place by what it asks of the user.",
     "keyCharacteristics": [
       "A charcoal board over a machine-green enamel ground; charcoal is reserved for the board.",
       "State is carried by a square lamp and a word together. Colour alone never signals anything.",

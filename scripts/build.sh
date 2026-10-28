@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build foundry with the web UI embedded. OUT overrides the output path (default ./foundry).
+# Build onlet with the web UI embedded. OUT overrides the output path (default ./onlet).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -12,8 +12,8 @@ fi
 
 version=$(git describe --tags --always --dirty 2>/dev/null || true)
 version=${version:-dev}
-out=${OUT:-./foundry}
+out=${OUT:-./onlet}
 
-go build -trimpath -ldflags "-X main.version=${version}" -o "$out" ./cmd/foundry
+go build -trimpath -ldflags "-X main.version=${version}" -o "$out" ./cmd/onlet
 
 echo "built $out (version $version)"

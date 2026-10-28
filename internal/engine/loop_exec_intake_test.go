@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // lpIntakeScript writes a shell script with body into a temp dir and returns the command that runs

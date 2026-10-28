@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 	maxRawChars    = 500  // unrecognised lines shown in the log
 )
 
-// streamLine is the subset of Claude Code's stream-json lines that foundry reads. Each line has
+// streamLine is the subset of Claude Code's stream-json lines that onlet reads. Each line has
 // a "type": "system" (init, hooks), "assistant", "user", "result" or "rate_limit_event".
 type streamLine struct {
 	Type              string          `json:"type"`

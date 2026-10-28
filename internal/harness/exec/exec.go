@@ -1,4 +1,4 @@
-// Package exec runs any external program as a foundry harness of type "exec". The program
+// Package exec runs any external program as an onlet harness of type "exec". The program
 // receives the task through files and environment variables and reports through JSON lines on
 // stdout; see docs/plugins.md for the protocol.
 package exec
@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/harness"
 )
 
 const harnessType = "exec"
@@ -28,14 +28,14 @@ type runner struct {
 }
 
 // Start runs the plugin. The prompt and instructions are written to temporary files whose paths
-// are passed in FOUNDRY_PROMPT_FILE and FOUNDRY_INSTRUCTIONS_FILE; the prompt is also written to
+// are passed in ONLET_PROMPT_FILE and ONLET_INSTRUCTIONS_FILE; the prompt is also written to
 // stdin. The files are removed when the process has exited and Wait has been called.
 func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session, error) {
-	promptPath, err := writeTemp("foundry-prompt-*.txt", spec.Prompt)
+	promptPath, err := writeTemp("onlet-prompt-*.txt", spec.Prompt)
 	if err != nil {
 		return nil, err
 	}
-	instructionsPath, err := writeTemp("foundry-instructions-*.md", spec.Instructions)
+	instructionsPath, err := writeTemp("onlet-instructions-*.md", spec.Instructions)
 	if err != nil {
 		_ = os.Remove(promptPath)
 		return nil, err
@@ -51,10 +51,10 @@ func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session,
 	command = append(command, spec.Args...)
 
 	env := mergeEnv(map[string]string{
-		"FOUNDRY_PROMPT_FILE":       promptPath,
-		"FOUNDRY_INSTRUCTIONS_FILE": instructionsPath,
-		"FOUNDRY_MODEL":             spec.Model,
-		"FOUNDRY_RESUME_SESSION":    spec.ResumeSessionID,
+		"ONLET_PROMPT_FILE":       promptPath,
+		"ONLET_INSTRUCTIONS_FILE": instructionsPath,
+		"ONLET_MODEL":             spec.Model,
+		"ONLET_RESUME_SESSION":    spec.ResumeSessionID,
 	}, r.cfg.Env, spec.Env)
 
 	ps := newParser()

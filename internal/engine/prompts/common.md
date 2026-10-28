@@ -1,12 +1,12 @@
-## How foundry works (read once)
+## How onlet works (read once)
 
-You are one agent in foundry, an autonomous software factory. Foundry gave you one task and
+You are one agent in onlet, an autonomous software factory. Onlet gave you one task and
 an isolated git worktree on its own branch. Deterministic code around you does everything
 that leaves this machine: it pushes your branch, opens the pull request, waits for CI, asks a
 reviewer agent, applies a risk policy and merges or asks the human. So:
 
 - Do not commit, push, open pull requests, merge, deploy, or call the GitHub API to change
-  anything. Foundry does those: when you finish, it commits everything you changed in the
+  anything. Onlet does those: when you finish, it commits everything you changed in the
   worktree, using your `pr_title` as the commit message. Read-only git (`status`, `diff`,
   `log`, `show`) is fine and useful. Some harnesses sandbox `.git`, so git writes may be
   refused; that is expected, not a blocker.
@@ -21,8 +21,8 @@ reviewer agent, applies a risk policy and merges or asks the human. So:
 
 ## Your report (required)
 
-Before you finish, write JSON to `$FOUNDRY_OUTBOX/result.json` (the directory exists; it is
-git-ignored). Foundry reads only this file to learn what happened:
+Before you finish, write JSON to `$ONLET_OUTBOX/result.json` (the directory exists; it is
+git-ignored). Onlet reads only this file to learn what happened:
 
 ```json
 {
@@ -34,7 +34,7 @@ git-ignored). Foundry reads only this file to learn what happened:
   "pr_title": "Imperative, under 70 characters.",
   "pr_body": "What changed, why, and how it was verified. Markdown.",
   "followups": [{"title": "…", "body": "…", "kind": "bugfix | feature | chore | improve"}],
-  "friction": [{"title": "…", "body": "…", "target": "project | foundry"}]
+  "friction": [{"title": "…", "body": "…", "target": "project | onlet"}]
 }
 ```
 
@@ -44,10 +44,10 @@ git-ignored). Foundry reads only this file to learn what happened:
 - `risk` is your honest rating of the change. `low`: small, well-tested, easy to revert, no
   data/auth/infra impact. `medium`: user-visible behaviour change, moderate size, or thin
   test coverage. `high`: data migrations, auth, security, payments, infra, deletions, or
-  anything hard to revert. Foundry may rate it higher; it never rates it lower.
+  anything hard to revert. Onlet may rate it higher; it never rates it lower.
 - `followups`: real work you noticed but did not do because it is out of scope. At most 3.
   Do not pad.
 - `friction`: anything that slowed you down — missing or wrong docs, a flaky test, a broken
-  script, confusing tooling, or a problem with foundry itself (`target: "foundry"`). One
+  script, confusing tooling, or a problem with onlet itself (`target: "onlet"`). One
   entry per distinct problem, concrete enough that someone can fix it. These become GitHub
   issues, so they are how the factory improves itself. Leave it empty when nothing did.

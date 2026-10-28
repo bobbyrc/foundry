@@ -8,13 +8,13 @@ user changes. Decisions made with the owner are marked **(decided)**.
 
 Two things the owner asked for, which turn out to be one change:
 
-1. Edit `foundry.yaml` from the web UI, with a visual editor by default and the raw file as an
+1. Edit `onlet.yaml` from the web UI, with a visual editor by default and the raw file as an
    option.
 2. Sign in with a username and password instead of pasting the API token.
 
 They belong together because of the safety model. Today the browser, the CLI and the
 orchestrator agent all hold the same API token (`<data_dir>/token`; the orchestrator gets it as
-`FOUNDRY_TOKEN`). A config-write endpoint behind that token would let the orchestrator agent
+`ONLET_TOKEN`). A config-write endpoint behind that token would let the orchestrator agent
 rewrite its own policy (lowering risk, breaking "risk only goes up") or add an `inherit_env`
 entry that hands itself credentials (breaking "agents get no credentials"). So config writes
 must need something agents never hold: a person signed in with a password.
@@ -49,13 +49,13 @@ use it, but scripts may).
   it only if the users table is still empty, inside one transaction, so two racing visitors
   cannot both succeed. Risk, accepted by the owner: on a remotely reachable instance, whoever
   reaches it first claims it. The default bind is loopback, which limits this to the machine
-  itself; `docs/getting-started.md` will say to create the account before exposing foundry.
+  itself; `docs/getting-started.md` will say to create the account before exposing onlet.
 - **Passwords** are hashed with PBKDF2-HMAC-SHA256 from Go's standard library
   (`crypto/pbkdf2`), 600,000 iterations, 16-byte random salt, stored as
   `pbkdf2-sha256$600000$<salt>$<hash>` (base64), so the iteration count can rise later. Minimum
   length 12. No new dependency.
 - **Sessions**: a 32-byte random value in an `HttpOnly`, `SameSite=Strict` cookie named
-  `foundry_session`, `Secure` when `public_url` is https. The database stores only its SHA-256,
+  `onlet_session`, `Secure` when `public_url` is https. The database stores only its SHA-256,
   with the user, created and expiry times. Sessions last 30 days; signing out deletes the row;
   changing a password deletes that user's other sessions.
 - **Cross-site requests**: state-changing requests that carry the cookie must pass Go's
@@ -64,8 +64,8 @@ use it, but scripts may).
 - **Guessing**: after 5 failed sign-ins for one username within 15 minutes, further attempts for
   that name answer 429 until the window passes (in memory; a restart clears it). Unknown
   usernames cost the same hashing time as known ones.
-- **Forgotten password**: `foundry user reset-password <name>` on the machine, which writes the
-  database directly (shell access to the machine already means full control of foundry).
+- **Forgotten password**: `onlet user reset-password <name>` on the machine, which writes the
+  database directly (shell access to the machine already means full control of onlet).
 
 ## Config editing
 
@@ -86,7 +86,7 @@ The file stays the source of truth **(design principle 4)**; the UI edits the fi
   on; if the file changed since, the save is refused with 409 and the UI offers to reload. The new
   text is parsed and validated exactly like a load (`config.Parse`: unknown keys and invalid
   values are errors, listed by setting path) before anything is written. Then it is written
-  atomically (temp file and rename, as `foundry project add` already does) and the running
+  atomically (temp file and rename, as `onlet project add` already does) and the running
   daemon reloads it. Settings read only at start-up (`server.addr`, `data_dir`, `allowed_hosts`,
   `notify`) are reported back as "takes effect after a restart".
 - **Who**: only an owner session reads the raw file or the document tree, and only an owner
@@ -121,7 +121,7 @@ with a session (viewer: GET only; operator and owner: all of today's routes).
 ## What stays open
 
 - The boundary is the API's. Agents run as the owner's OS user, so an agent that can write
-  `foundry.yaml` or `foundry.db` directly can still change them (then `POST /config/reload` is
+  `onlet.yaml` or `onlet.db` directly can still change them (then `POST /config/reload` is
   an Operate action). Closing that needs agent isolation (`docs/proposals/agent-isolation.md`).
 - The first-run setup page is open until the owner account exists (accepted).
 - The session cookie is marked Secure from `public_url` or a direct TLS connection; behind an
@@ -147,4 +147,4 @@ Units with disjoint files, after this proposal is approved:
    `docs/api.md`, `docs/openapi.yaml`.
 5. Web: setup and sign-in pages, session handling, users page, role-aware actions.
 6. Web: the config page (visual editor and raw tab).
-7. CLI `foundry user reset-password`, docs, invariants.
+7. CLI `onlet user reset-password`, docs, invariants.

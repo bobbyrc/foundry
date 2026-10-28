@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // configHarness points the fake controller at a real config file in a temp dir. The file has a
@@ -21,7 +21,7 @@ func configHarness(t *testing.T) (*harness, string, string) {
 	t.Helper()
 	x := newHarness(t)
 	dir := t.TempDir()
-	path := filepath.Join(dir, "foundry.yaml")
+	path := filepath.Join(dir, "onlet.yaml")
 	text := fmt.Sprintf("# keep me\nserver:\n  addr: 127.0.0.1:7777\n  data_dir: %s\n", dir)
 	require.NoError(t, os.WriteFile(path, []byte(text), 0o600))
 	cfg, err := config.Parse([]byte(text), path)

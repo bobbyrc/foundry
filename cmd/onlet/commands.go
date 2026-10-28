@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/client"
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/client"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // Timings for the commands that wait on the server. They are variables so tests can shorten
@@ -45,7 +45,7 @@ func splitList(s string) []string {
 
 // ---- status ----
 
-// statusSnapshot is what `foundry status` gathers in one pass.
+// statusSnapshot is what `onlet status` gathers in one pass.
 type statusSnapshot struct {
 	Stats     client.Stats        `json:"stats"`
 	Control   client.ControlState `json:"control"`
@@ -105,7 +105,7 @@ func costToday(s client.Stats) string {
 
 func writeStatus(w io.Writer, s statusSnapshot) error {
 	if s.Control.Paused {
-		fmt.Fprintln(w, "Factory: PAUSED. No new runs start and no new work is picked up; release verification/rollback and production watching continue. `foundry resume` to continue.")
+		fmt.Fprintln(w, "Factory: PAUSED. No new runs start and no new work is picked up; release verification/rollback and production watching continue. `onlet resume` to continue.")
 	} else {
 		fmt.Fprintln(w, "Factory: running.")
 	}
@@ -232,7 +232,7 @@ func cmdVersion(e *env, args []string) error {
 	if err := requireArgs(args, 0, "version"); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.out, "foundry %s (%s %s/%s)\n", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(e.out, "onlet %s (%s %s/%s)\n", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	return nil
 }
 
@@ -240,7 +240,7 @@ func cmdVersion(e *env, args []string) error {
 
 func cmdTask(e *env, args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: foundry task create|list|show|cancel|retry ...")
+		return usagef("usage: onlet task create|list|show|cancel|retry ...")
 	}
 	sub, rest := args[0], args[1:]
 	if isHelpFlag(sub) || sub == "help" {
@@ -319,7 +319,7 @@ func taskPauseNotice(c *client.Client, project string, errOut io.Writer) {
 	ctx := context.Background()
 	stats, err := c.Stats(ctx)
 	if err == nil && stats.Paused {
-		fmt.Fprintln(errOut, `note: the factory is paused; this task waits until "foundry resume"`)
+		fmt.Fprintln(errOut, `note: the factory is paused; this task waits until "onlet resume"`)
 		return
 	}
 	projects, err := c.Projects(ctx)
@@ -331,10 +331,10 @@ func taskPauseNotice(c *client.Client, project string, errOut io.Writer) {
 			continue
 		}
 		if p.PausedBy == "config" {
-			fmt.Fprintf(errOut, "note: project %s is paused in foundry.yaml (paused: true); this task waits until that is removed\n", p.Name)
+			fmt.Fprintf(errOut, "note: project %s is paused in onlet.yaml (paused: true); this task waits until that is removed\n", p.Name)
 			return
 		}
-		fmt.Fprintf(errOut, "note: project %s is paused (by %s); this task waits until \"foundry project resume %s\"\n", p.Name, p.PausedBy, p.Name)
+		fmt.Fprintf(errOut, "note: project %s is paused (by %s); this task waits until \"onlet project resume %s\"\n", p.Name, p.PausedBy, p.Name)
 		return
 	}
 }
@@ -533,7 +533,7 @@ func taskRetry(e *env, args []string) error {
 
 func cmdRun(e *env, args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: foundry run list|show|cancel|logs ...")
+		return usagef("usage: onlet run list|show|cancel|logs ...")
 	}
 	sub, rest := args[0], args[1:]
 	if isHelpFlag(sub) || sub == "help" {
@@ -906,7 +906,7 @@ func cmdLoop(e *env, args []string) error {
 		return nil
 	}
 	if len(args) == 0 || args[0] != "run" {
-		return usagef("usage: foundry loop run NAME [--project P]")
+		return usagef("usage: onlet loop run NAME [--project P]")
 	}
 	fs := newFlagSet("loop run", e)
 	project := fs.String("project", "", "run the loop for this project only (default: every project)")
@@ -918,7 +918,7 @@ func cmdLoop(e *env, args []string) error {
 		return err
 	}
 	if strings.HasPrefix(positional[0], "-") {
-		return usagef("usage: foundry loop run NAME [--project P]")
+		return usagef("usage: onlet loop run NAME [--project P]")
 	}
 	c, err := apiClient()
 	if err != nil {
@@ -937,11 +937,11 @@ func cmdLoop(e *env, args []string) error {
 
 // ---- pause, resume ----
 
-// cmdProject adds a project to the config, or pauses or resumes one: `foundry project add NAME`,
-// `foundry project pause NAME`.
+// cmdProject adds a project to the config, or pauses or resumes one: `onlet project add NAME`,
+// `onlet project pause NAME`.
 func cmdProject(e *env, args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: foundry project add|pause|resume NAME")
+		return usagef("usage: onlet project add|pause|resume NAME")
 	}
 	sub, rest := args[0], args[1:]
 	if isHelpFlag(sub) || sub == "help" {
@@ -966,7 +966,7 @@ func setProjectPaused(e *env, sub string, args []string) error {
 		return err
 	}
 	if strings.HasPrefix(args[0], "-") {
-		return usagef("usage: foundry project %s NAME (NAME cannot start with \"-\")", sub)
+		return usagef("usage: onlet project %s NAME (NAME cannot start with \"-\")", sub)
 	}
 	c, err := apiClient()
 	if err != nil {
@@ -1016,7 +1016,7 @@ func setPaused(e *env, args []string, pause bool) error {
 	ctx := context.Background()
 	if pause {
 		_, err = c.Pause(ctx)
-		fmt.Fprintln(e.out, "paused: no new runs start; release verification/rollback and production watching continue (`foundry resume` to continue)")
+		fmt.Fprintln(e.out, "paused: no new runs start; release verification/rollback and production watching continue (`onlet resume` to continue)")
 	} else {
 		_, err = c.Resume(ctx)
 		fmt.Fprintln(e.out, "resumed")
@@ -1037,7 +1037,7 @@ func cmdChat(e *env, args []string) error {
 	// words holds every positional argument in order, so the message may be given unquoted.
 	message := strings.TrimSpace(strings.Join(words, " "))
 	if message == "" {
-		return usagef("usage: foundry chat [--conversation ID] [--project P] MESSAGE...")
+		return usagef("usage: onlet chat [--conversation ID] [--project P] MESSAGE...")
 	}
 	c, err := apiClient()
 	if err != nil {
@@ -1065,7 +1065,7 @@ func cmdChat(e *env, args []string) error {
 		select {
 		case <-deadlineCtx.Done():
 			if ctx.Err() != nil {
-				return fmt.Errorf("interrupted; the reply is still coming: foundry chat --conversation %s", conv)
+				return fmt.Errorf("interrupted; the reply is still coming: onlet chat --conversation %s", conv)
 			}
 			return fmt.Errorf("no reply after %s; check the conversation in the web UI (%s)", chatReplyDeadline, conv)
 		case <-time.After(chatPollInterval):

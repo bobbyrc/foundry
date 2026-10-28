@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -273,14 +273,14 @@ func TestAgentEnvWithholdsForeignCredentials(t *testing.T) {
 }
 
 func TestInheritEnvPassesNamedVariable(t *testing.T) {
-	t.Setenv("FOUNDRY_TEST_INHERIT", "passed")
-	p := startSh(t, "env", ProcSpec{InheritEnv: []string{"FOUNDRY_TEST_INHERIT"}})
+	t.Setenv("ONLET_TEST_INHERIT", "passed")
+	p := startSh(t, "env", ProcSpec{InheritEnv: []string{"ONLET_TEST_INHERIT"}})
 	events := drain(p)
 	_, err := p.Wait()
 	require.NoError(t, err)
 	var found bool
 	for _, ev := range events {
-		if ev.Text == "FOUNDRY_TEST_INHERIT=passed" {
+		if ev.Text == "ONLET_TEST_INHERIT=passed" {
 			found = true
 		}
 	}

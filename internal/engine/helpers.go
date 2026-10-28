@@ -7,12 +7,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bobbyrc/foundry/internal/api"
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
-	"github.com/bobbyrc/foundry/internal/notify"
-	"github.com/bobbyrc/foundry/internal/workspace"
+	"github.com/bobbyrc/onlet/internal/api"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onlet/internal/notify"
+	"github.com/bobbyrc/onlet/internal/workspace"
 )
 
 // Config returns the current configuration. Callers must not mutate it.
@@ -129,7 +129,7 @@ func (e *Engine) setTaskFrom(ctx context.Context, id string, from []domain.TaskS
 	return t, err == nil, err
 }
 
-// activeStatuses are the statuses foundry itself moves a task out of. blockTask and
+// activeStatuses are the statuses onlet itself moves a task out of. blockTask and
 // requeueOrBlock act only on these; done, failed, cancelled and blocked belong to the owner.
 var activeStatuses = []domain.TaskStatus{
 	domain.TaskQueued, domain.TaskRunning, domain.TaskReview, domain.TaskAwaitingApproval,
@@ -263,7 +263,7 @@ func (e *Engine) cancelAllRuns(reason string) {
 	}
 }
 
-// branchName is the branch for a task: foundry/<first 8 of id>-<slug of title>.
+// branchName is the branch for a task: onlet/<first 8 of id>-<slug of title>.
 func branchName(t domain.Task) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(t.Title) {
@@ -283,7 +283,7 @@ func branchName(t domain.Task) string {
 		id = id[len(id)-8:] // UUIDv7's leading bytes are a timestamp; the tail is the unique part
 	}
 	if slug == "" {
-		return "foundry/" + id
+		return "onlet/" + id
 	}
-	return "foundry/" + id + "-" + slug
+	return "onlet/" + id + "-" + slug
 }

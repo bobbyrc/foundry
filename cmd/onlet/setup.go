@@ -11,18 +11,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bobbyrc/foundry/internal/config"
+	"github.com/bobbyrc/onlet/internal/config"
 )
 
 // projectName matches names usable as YAML keys and in CLI flags.
 var projectName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
-// selfRepo is foundry's own repository; a project for it becomes self_project.
-const selfRepo = "bobbyrc/foundry"
+// selfRepo is onlet's own repository; a project for it becomes self_project.
+const selfRepo = "bobbyrc/onlet"
 
 func cmdInit(e *env, args []string) error {
 	fs := newFlagSet("init", e)
-	cfgFlag := fs.String("config", "", "config file to write (default $FOUNDRY_CONFIG or ~/.config/foundry/foundry.yaml)")
+	cfgFlag := fs.String("config", "", "config file to write (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
 	project := fs.String("project", "", "add this project to the config")
 	repo := fs.String("repo", "", "the project's GitHub repository, owner/name (with --project)")
 	dir := fs.String("path", "", "the project's local clone (with --project; default <data_dir>/repos/<name>)")
@@ -66,31 +66,31 @@ func cmdInit(e *env, args []string) error {
 		return fmt.Errorf("write %s: %w", path, werr)
 	}
 
-	serveHint := "foundry serve"
+	serveHint := "onlet serve"
 	if *cfgFlag != "" {
 		serveHint += " --config " + *cfgFlag
 	}
 	fmt.Fprintf(e.out, "Wrote %s\n\nNext steps:\n", path)
 	fmt.Fprintf(e.out, "  %s    start the daemon\n", serveHint)
-	fmt.Fprintln(e.out, "  foundry open     open the web UI in a browser")
-	fmt.Fprintln(e.out, "\nfoundry.example.yaml in the foundry repository lists every option.")
+	fmt.Fprintln(e.out, "  onlet open     open the web UI in a browser")
+	fmt.Fprintln(e.out, "\nonlet.example.yaml in the onlet repository lists every option.")
 	return nil
 }
 
-// initialConfig is the starter foundry.yaml. Every key it leaves out has a default.
+// initialConfig is the starter onlet.yaml. Every key it leaves out has a default.
 func initialConfig(project, repo, dir string) string {
 	var b strings.Builder
-	b.WriteString("# foundry.yaml: the daemon's settings. Every key is optional; unset keys take the\n")
-	b.WriteString("# defaults. foundry.example.yaml in the foundry repository lists every option.\n\n")
+	b.WriteString("# onlet.yaml: the daemon's settings. Every key is optional; unset keys take the\n")
+	b.WriteString("# defaults. onlet.example.yaml in the onlet repository lists every option.\n\n")
 	b.WriteString("server:\n")
 	b.WriteString("  addr: 127.0.0.1:7777      # where the API and web UI listen\n")
-	b.WriteString("  # data_dir defaults to ~/.local/share/foundry (database, token, clones, worktrees)\n\n")
+	b.WriteString("  # data_dir defaults to ~/.local/share/onlet (database, token, clones, worktrees)\n\n")
 	b.WriteString("notify:\n")
 	b.WriteString("  - type: log               # write notifications to the daemon log\n")
 	if project != "" {
 		b.WriteString("\n")
 		if repo == selfRepo {
-			fmt.Fprintf(&b, "self_project: %s           # foundry itself: friction is filed here\n\n", project)
+			fmt.Fprintf(&b, "self_project: %s           # onlet itself: friction is filed here\n\n", project)
 		}
 		b.WriteString("projects:\n")
 		fmt.Fprintf(&b, "  %s:\n", project)
@@ -104,7 +104,7 @@ func initialConfig(project, repo, dir string) string {
 
 func cmdToken(e *env, args []string) error {
 	fs := newFlagSet("token", e)
-	cfgFlag := fs.String("config", "", "config file (default $FOUNDRY_CONFIG or ~/.config/foundry/foundry.yaml)")
+	cfgFlag := fs.String("config", "", "config file (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func cmdToken(e *env, args []string) error {
 		return err
 	}
 	cfg, cfgErr := loadConfig(path)
-	if cfgErr != nil && os.Getenv("FOUNDRY_TOKEN") == "" {
+	if cfgErr != nil && os.Getenv("ONLET_TOKEN") == "" {
 		return cfgErr
 	}
 	token, err := apiToken(cfg)
@@ -130,7 +130,7 @@ func cmdToken(e *env, args []string) error {
 
 func cmdOpen(e *env, args []string) error {
 	fs := newFlagSet("open", e)
-	cfgFlag := fs.String("config", "", "config file (default $FOUNDRY_CONFIG or ~/.config/foundry/foundry.yaml)")
+	cfgFlag := fs.String("config", "", "config file (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -143,9 +143,9 @@ func cmdOpen(e *env, args []string) error {
 		return err
 	}
 	// The browser signs in with a password, so no token goes in the URL. The config is only
-	// needed for the address, which FOUNDRY_API can give instead.
+	// needed for the address, which ONLET_API can give instead.
 	cfg, cfgErr := loadConfig(path)
-	if cfgErr != nil && os.Getenv("FOUNDRY_API") == "" {
+	if cfgErr != nil && os.Getenv("ONLET_API") == "" {
 		return cfgErr
 	}
 	url := strings.TrimRight(publicBaseURL(cfg), "/") + "/"
@@ -160,10 +160,10 @@ func cmdOpen(e *env, args []string) error {
 	return nil
 }
 
-// publicBaseURL is the address the web UI is reached at: $FOUNDRY_API, then the config's
+// publicBaseURL is the address the web UI is reached at: $ONLET_API, then the config's
 // public_url, then the default address.
 func publicBaseURL(cfg *config.Config) string {
-	if v := os.Getenv("FOUNDRY_API"); v != "" {
+	if v := os.Getenv("ONLET_API"); v != "" {
 		return v
 	}
 	if cfg != nil && cfg.Server.PublicURL != "" {

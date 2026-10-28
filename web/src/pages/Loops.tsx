@@ -71,7 +71,7 @@ export function Loops() {
           columns={visibleColumns}
           rows={loops.data}
           rowKey={(l) => `${l.name}/${l.project}`}
-          empty="No loops are configured. Loops are set under loops in foundry.yaml."
+          empty="No loops are configured. Loops are set under loops in onlet.yaml."
         />
       ) : null}
     </>

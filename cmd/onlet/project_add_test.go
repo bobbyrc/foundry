@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/config"
+	"github.com/bobbyrc/onlet/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +29,7 @@ const demoBlock = "  demo:\n    repo: acme/demo\n    path: /tmp/x\n    default_b
 
 func writeAddTestConfig(t *testing.T, content string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "foundry.yaml")
+	path := filepath.Join(t.TempDir(), "onlet.yaml")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	return path
 }
@@ -41,7 +41,7 @@ func TestProjectAddKeepsCommentsAndLoads(t *testing.T) {
 		"--path", "/tmp/x", "--branch", "dev", "--config", path)
 	require.Equal(t, 0, code, errOut)
 	assert.Contains(t, out, "added project demo (acme/demo) to "+path)
-	assert.Contains(t, out, `run "foundry config --reload"`)
+	assert.Contains(t, out, `run "onlet config --reload"`)
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestProjectAddKeepsCommentsAndLoads(t *testing.T) {
 func TestProjectAddToExampleFileOnlyInsertsLines(t *testing.T) {
 	_, thisFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
-	original, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "..", "..", "foundry.example.yaml"))
+	original, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "..", "..", "onlet.example.yaml"))
 	require.NoError(t, err)
 	path := writeAddTestConfig(t, string(original))
 
@@ -81,7 +81,7 @@ func TestProjectAddToExampleFileOnlyInsertsLines(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, cfg.Projects, "demo")
 	assert.Equal(t, "acme/demo", cfg.Projects["demo"].Repo)
-	assert.Equal(t, "foundry", cfg.SelfProject, "an existing self_project is kept")
+	assert.Equal(t, "onlet", cfg.SelfProject, "an existing self_project is kept")
 }
 
 func TestProjectAddBeforeNextKeyKeepsBlankLineAndComment(t *testing.T) {
@@ -166,7 +166,7 @@ func TestProjectAddMissingConfigSuggestsInit(t *testing.T) {
 
 	code, _, errOut := runCLI("project", "add", "demo", "--repo", "acme/demo", "--config", path)
 	assert.Equal(t, 1, code)
-	assert.Contains(t, errOut, "no config at "+path+`; run "foundry init" first`)
+	assert.Contains(t, errOut, "no config at "+path+`; run "onlet init" first`)
 	_, err := os.Stat(path)
 	assert.True(t, os.IsNotExist(err), "add must not create the config")
 }
@@ -200,17 +200,17 @@ func TestProjectAddSetsSelfProjectOnlyWhenUnset(t *testing.T) {
 	original := "server:\n  addr: 127.0.0.1:7777\n"
 	path := writeAddTestConfig(t, original)
 
-	code, _, errOut := runCLI("project", "add", "foundry", "--repo", selfRepo, "--config", path)
+	code, _, errOut := runCLI("project", "add", "onlet", "--repo", selfRepo, "--config", path)
 	require.Equal(t, 0, code, errOut)
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, original+"\nprojects:\n  foundry:\n    repo: bobbyrc/foundry\nself_project: foundry\n", string(data))
+	assert.Equal(t, original+"\nprojects:\n  onlet:\n    repo: bobbyrc/onlet\nself_project: onlet\n", string(data))
 	cfg, err := config.Parse(data, path)
 	require.NoError(t, err)
-	assert.Equal(t, "foundry", cfg.SelfProject)
+	assert.Equal(t, "onlet", cfg.SelfProject)
 
 	path2 := writeAddTestConfig(t, "self_project: keep\nprojects:\n  keep:\n    repo: a/keep\n")
-	code, _, errOut = runCLI("project", "add", "foundry", "--repo", selfRepo, "--config", path2)
+	code, _, errOut = runCLI("project", "add", "onlet", "--repo", selfRepo, "--config", path2)
 	require.Equal(t, 0, code, errOut)
 	data, err = os.ReadFile(path2)
 	require.NoError(t, err)

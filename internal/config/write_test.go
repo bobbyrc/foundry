@@ -10,7 +10,7 @@ import (
 )
 
 func TestWriteFileAtomicKeepsFileMode(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "foundry.yaml")
+	path := filepath.Join(t.TempDir(), "onlet.yaml")
 	require.NoError(t, os.WriteFile(path, []byte("old"), 0o600))
 	require.NoError(t, os.Chmod(path, 0o600))
 
@@ -28,7 +28,7 @@ func TestWriteFileAtomicWritesThroughSymlink(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "managed.yaml")
 	require.NoError(t, os.WriteFile(target, []byte("old"), 0o640))
-	link := filepath.Join(dir, "foundry.yaml")
+	link := filepath.Join(dir, "onlet.yaml")
 	require.NoError(t, os.Symlink(target, link))
 
 	require.NoError(t, WriteFileAtomic(link, []byte("new")))

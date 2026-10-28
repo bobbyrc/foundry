@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // createUser inserts a user with the given role and password hash, failing the test on error.

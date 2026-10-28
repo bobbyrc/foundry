@@ -1,11 +1,11 @@
-// Package codex runs OpenAI Codex non-interactively (codex exec --json) as a foundry harness of
+// Package codex runs OpenAI Codex non-interactively (codex exec --json) as an onlet harness of
 // type "codex".
 package codex
 
 import (
 	"context"
 
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/harness"
 )
 
 const harnessType = "codex"

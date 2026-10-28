@@ -1,11 +1,11 @@
 #!/bin/sh
-# Test plugin for foundry's exec harness. It speaks the protocol documented in docs/plugins.md.
+# Test plugin for onlet's exec harness. It speaks the protocol documented in docs/plugins.md.
 # The first word of the prompt selects the behaviour:
 #   full  every line type, then a result line
 #   bare  text lines only, no result line
 #   fail  one text line, then exits 4
 #   env   reports the environment it was given
-read -r mode _rest < "$FOUNDRY_PROMPT_FILE"
+read -r mode _rest < "$ONLET_PROMPT_FILE"
 cat > /dev/null
 printf '{"type":"system","text":"args=%s"}\n' "$*"
 case "$mode" in
@@ -27,10 +27,10 @@ fail)
 	exit 4
 	;;
 env)
-	printf '{"type":"system","text":"model=%s resume=%s"}\n' "$FOUNDRY_MODEL" "$FOUNDRY_RESUME_SESSION"
-	printf '{"type":"system","text":"prompt_file=%s"}\n' "$FOUNDRY_PROMPT_FILE"
-	printf '{"type":"system","text":"instructions_file=%s"}\n' "$FOUNDRY_INSTRUCTIONS_FILE"
-	printf '{"type":"text","text":"instructions=%s"}\n' "$(cat "$FOUNDRY_INSTRUCTIONS_FILE")"
+	printf '{"type":"system","text":"model=%s resume=%s"}\n' "$ONLET_MODEL" "$ONLET_RESUME_SESSION"
+	printf '{"type":"system","text":"prompt_file=%s"}\n' "$ONLET_PROMPT_FILE"
+	printf '{"type":"system","text":"instructions_file=%s"}\n' "$ONLET_INSTRUCTIONS_FILE"
+	printf '{"type":"text","text":"instructions=%s"}\n' "$(cat "$ONLET_INSTRUCTIONS_FILE")"
 	printf '{"type":"result","text":"env ok"}\n'
 	;;
 esac

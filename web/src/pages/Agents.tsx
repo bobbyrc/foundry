@@ -10,7 +10,7 @@ export function Agents() {
       <PageHeader title="Agents" />
       <ErrorLine error={agents.error} />
       {agents.isSuccess && agents.data.length === 0 ? (
-        <Empty>No agents are configured. Roles are set under agents in foundry.yaml.</Empty>
+        <Empty>No agents are configured. Roles are set under agents in onlet.yaml.</Empty>
       ) : null}
       <div className="card-grid">
         {agents.data?.map((agent) => (

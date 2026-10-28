@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/deploy"
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/deploy"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // lpShippedCommit commits a file on the seed's main, pushes it to origin, and returns the commit.

@@ -11,22 +11,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/client"
-	"github.com/bobbyrc/foundry/internal/config"
+	"github.com/bobbyrc/onlet/internal/client"
+	"github.com/bobbyrc/onlet/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// fakeAPI serves mux as the foundry API and points the CLI at it through the environment. The
+// fakeAPI serves mux as the onlet API and points the CLI at it through the environment. The
 // config file and HOME are empty temp dirs, so the developer's own config is never read.
 func fakeAPI(t *testing.T, mux *http.ServeMux) {
 	t.Helper()
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("FOUNDRY_API", srv.URL)
-	t.Setenv("FOUNDRY_TOKEN", "test-token")
-	t.Setenv("FOUNDRY_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
+	t.Setenv("ONLET_API", srv.URL)
+	t.Setenv("ONLET_TOKEN", "test-token")
+	t.Setenv("ONLET_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -52,12 +52,12 @@ func TestTaskCreateSendsFlagsAsJSON(t *testing.T) {
 	})
 	fakeAPI(t, mux)
 
-	code, out, errOut := runCLI("task", "create", "--project", "foundry", "--kind", "feature",
+	code, out, errOut := runCLI("task", "create", "--project", "onlet", "--kind", "feature",
 		"--title", "Add x", "--body", "do it", "--role", "implementer", "--priority", "2", "--parent", "task-1")
 	require.Equal(t, 0, code, errOut)
 	assert.Equal(t, "task-42\n", out)
 	assert.Equal(t, map[string]any{
-		"project": "foundry", "kind": "feature", "title": "Add x", "body": "do it",
+		"project": "onlet", "kind": "feature", "title": "Add x", "body": "do it",
 		"role": "implementer", "priority": float64(2), "parent_id": "task-1", "source": "api",
 	}, got)
 }
@@ -79,7 +79,7 @@ func TestTaskCreateReadsBodyFromFile(t *testing.T) {
 }
 
 func TestTaskCreateNeedsRequiredFlags(t *testing.T) {
-	code, _, errOut := runCLI("task", "create", "--project", "foundry")
+	code, _, errOut := runCLI("task", "create", "--project", "onlet")
 	assert.Equal(t, 2, code)
 	assert.Contains(t, errOut, "--kind and --title")
 }
@@ -89,21 +89,21 @@ func TestTaskListRendersTable(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "queued,running", r.URL.Query().Get("status"))
-		assert.Equal(t, "foundry", r.URL.Query().Get("project"))
+		assert.Equal(t, "onlet", r.URL.Query().Get("project"))
 		writeJSON(w, http.StatusOK, []map[string]any{
-			{"id": "task-1", "status": "queued", "kind": "feature", "project": "foundry", "title": "Short", "pr_number": 123, "risk": "low"},
-			{"id": "task-2", "status": "running", "kind": "bugfix", "project": "foundry", "title": long},
+			{"id": "task-1", "status": "queued", "kind": "feature", "project": "onlet", "title": "Short", "pr_number": 123, "risk": "low"},
+			{"id": "task-2", "status": "running", "kind": "bugfix", "project": "onlet", "title": long},
 		})
 	})
 	fakeAPI(t, mux)
 
-	code, out, errOut := runCLI("task", "list", "--project", "foundry", "--status", "queued,running")
+	code, out, errOut := runCLI("task", "list", "--project", "onlet", "--status", "queued,running")
 	require.Equal(t, 0, code, errOut)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.Len(t, lines, 3)
 	assert.Regexp(t, `^ID\s+STATUS\s+KIND\s+PROJECT\s+PR\s+RISK\s+TITLE$`, lines[0])
-	assert.Regexp(t, `task-1\s+queued\s+feature\s+foundry\s+#123\s+low\s+Short$`, lines[1])
-	assert.Regexp(t, `task-2\s+running\s+bugfix\s+foundry\s+-\s+-\s+x`, lines[2])
+	assert.Regexp(t, `task-1\s+queued\s+feature\s+onlet\s+#123\s+low\s+Short$`, lines[1])
+	assert.Regexp(t, `task-2\s+running\s+bugfix\s+onlet\s+-\s+-\s+x`, lines[2])
 	assert.Contains(t, lines[2], strings.Repeat("x", 57)+"...")
 	assert.NotContains(t, out, long)
 }
@@ -152,7 +152,7 @@ func TestStatusNeedsYou(t *testing.T) {
 	mux.HandleFunc("GET /api/v1/runs", func(w http.ResponseWriter, r *http.Request) {
 		runQuery = r.URL.Query().Get("status")
 		writeJSON(w, http.StatusOK, []map[string]any{
-			{"id": "run-1", "role": "implementer", "project": "foundry", "task_id": "task-2", "status": "running"},
+			{"id": "run-1", "role": "implementer", "project": "onlet", "task_id": "task-2", "status": "running"},
 		})
 	})
 	fakeAPI(t, mux)
@@ -198,7 +198,7 @@ func TestStatusPausedWording(t *testing.T) {
 	code, out, errOut := runCLI("status")
 	require.Equal(t, 0, code, errOut)
 	assert.Contains(t, out, "Factory: PAUSED. No new runs start and no new work is picked up; "+
-		"release verification/rollback and production watching continue. `foundry resume` to continue.")
+		"release verification/rollback and production watching continue. `onlet resume` to continue.")
 	assert.NotContains(t, out, "no loops act")
 }
 
@@ -249,28 +249,28 @@ func TestHelpExitsZero(t *testing.T) {
 
 func TestMissingTokenIsAnError(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("FOUNDRY_API", "http://127.0.0.1:1")
-	t.Setenv("FOUNDRY_TOKEN", "")
-	t.Setenv("FOUNDRY_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
+	t.Setenv("ONLET_API", "http://127.0.0.1:1")
+	t.Setenv("ONLET_TOKEN", "")
+	t.Setenv("ONLET_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
 
 	code, _, errOut := runCLI("status")
 	assert.Equal(t, 1, code)
-	assert.Contains(t, errOut, "no token: set FOUNDRY_TOKEN")
+	assert.Contains(t, errOut, "no token: set ONLET_TOKEN")
 }
 
 func TestInitWritesLoadableConfigAndRefusesOverwrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sub", "foundry.yaml")
+	path := filepath.Join(t.TempDir(), "sub", "onlet.yaml")
 
-	code, out, errOut := runCLI("init", "--config", path, "--project", "foundry",
-		"--repo", "bobbyrc/foundry", "--path", "/src/foundry")
+	code, out, errOut := runCLI("init", "--config", path, "--project", "onlet",
+		"--repo", "bobbyrc/onlet", "--path", "/src/onlet")
 	require.Equal(t, 0, code, errOut)
 	assert.Contains(t, out, "Wrote "+path)
 
 	cfg, err := config.Load(path)
 	require.NoError(t, err)
-	assert.Equal(t, "foundry", cfg.SelfProject)
-	assert.Equal(t, "bobbyrc/foundry", cfg.Projects["foundry"].Repo)
-	assert.Equal(t, "/src/foundry", cfg.Projects["foundry"].Path)
+	assert.Equal(t, "onlet", cfg.SelfProject)
+	assert.Equal(t, "bobbyrc/onlet", cfg.Projects["onlet"].Repo)
+	assert.Equal(t, "/src/onlet", cfg.Projects["onlet"].Path)
 	assert.Equal(t, []config.Notifier{{Type: "log"}}, cfg.Notify)
 
 	before, err := os.ReadFile(path)
@@ -284,7 +284,7 @@ func TestInitWritesLoadableConfigAndRefusesOverwrite(t *testing.T) {
 }
 
 func TestInitWithoutProjectLoads(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "foundry.yaml")
+	path := filepath.Join(t.TempDir(), "onlet.yaml")
 	code, _, errOut := runCLI("init", "--config", path)
 	require.Equal(t, 0, code, errOut)
 	cfg, err := config.Load(path)
@@ -294,7 +294,7 @@ func TestInitWithoutProjectLoads(t *testing.T) {
 }
 
 func TestInitProjectNeedsRepo(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "foundry.yaml")
+	path := filepath.Join(t.TempDir(), "onlet.yaml")
 	code, _, errOut := runCLI("init", "--config", path, "--project", "app")
 	assert.Equal(t, 2, code)
 	assert.Contains(t, errOut, "go together")
@@ -325,13 +325,13 @@ NOEQUALS
 func TestLoadSecretsFileKeepsExistingEnvironment(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "secrets.env")
-	require.NoError(t, os.WriteFile(path, []byte("FOUNDRY_TEST_FROM_FILE=file-value\nFOUNDRY_TEST_ALREADY_SET=file-value\n"), 0o600))
-	t.Setenv("FOUNDRY_TEST_ALREADY_SET", "env-value")
-	t.Cleanup(func() { _ = os.Unsetenv("FOUNDRY_TEST_FROM_FILE") })
+	require.NoError(t, os.WriteFile(path, []byte("ONLET_TEST_FROM_FILE=file-value\nONLET_TEST_ALREADY_SET=file-value\n"), 0o600))
+	t.Setenv("ONLET_TEST_ALREADY_SET", "env-value")
+	t.Cleanup(func() { _ = os.Unsetenv("ONLET_TEST_FROM_FILE") })
 
 	require.NoError(t, loadSecretsFile(path))
-	assert.Equal(t, "file-value", os.Getenv("FOUNDRY_TEST_FROM_FILE"))
-	assert.Equal(t, "env-value", os.Getenv("FOUNDRY_TEST_ALREADY_SET"))
+	assert.Equal(t, "file-value", os.Getenv("ONLET_TEST_FROM_FILE"))
+	assert.Equal(t, "env-value", os.Getenv("ONLET_TEST_ALREADY_SET"))
 }
 
 func TestLoadSecretsFileMissingIsNotAnError(t *testing.T) {
@@ -348,7 +348,7 @@ func TestChatPrintsNewestAssistantReply(t *testing.T) {
 	mux.HandleFunc("POST /api/v1/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in map[string]any
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&in))
-		assert.Equal(t, "foundry", in["project"])
+		assert.Equal(t, "onlet", in["project"])
 		writeJSON(w, http.StatusCreated, map[string]any{"id": "conv-1", "busy": false})
 	})
 	mux.HandleFunc("POST /api/v1/conversations/conv-1/messages", func(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +369,7 @@ func TestChatPrintsNewestAssistantReply(t *testing.T) {
 	})
 	fakeAPI(t, mux)
 
-	code, out, errOut := runCLI("chat", "--project", "foundry", "what", "is", "up")
+	code, out, errOut := runCLI("chat", "--project", "onlet", "what", "is", "up")
 	require.Equal(t, 0, code, errOut)
 	assert.Equal(t, "the reply\n", out)
 	assert.Contains(t, errOut, "conversation: conv-1")
@@ -377,17 +377,17 @@ func TestChatPrintsNewestAssistantReply(t *testing.T) {
 }
 
 func TestAPICommandsWorkWithoutConfigFile(t *testing.T) {
-	// The API commands must work with no config file at all: FOUNDRY_API and FOUNDRY_TOKEN are
+	// The API commands must work with no config file at all: ONLET_API and ONLET_TOKEN are
 	// enough. This guards the fallback path of apiClient.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/projects", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, []map[string]any{{"name": "foundry", "repo": "bobbyrc/foundry", "counts": map[string]int{"queued": 1}}})
+		writeJSON(w, http.StatusOK, []map[string]any{{"name": "onlet", "repo": "bobbyrc/onlet", "counts": map[string]int{"queued": 1}}})
 	})
 	fakeAPI(t, mux)
 
 	code, out, errOut := runCLI("projects")
 	require.Equal(t, 0, code, errOut)
-	assert.Contains(t, out, "foundry")
+	assert.Contains(t, out, "onlet")
 	assert.Contains(t, out, "queued=1")
 }
 
@@ -430,17 +430,17 @@ func TestEventsFollowWithAfterReplaysFromCursor(t *testing.T) {
 
 func TestServeEnvsKeepTokenOutOfAgents(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
-	agent, orchestrator := serveEnvs("/opt/foundry/bin/foundry", "127.0.0.1:7777", "secret-token")
+	agent, orchestrator := serveEnvs("/opt/onlet/bin/onlet", "127.0.0.1:7777", "secret-token")
 
-	assert.Equal(t, map[string]string{"PATH": "/opt/foundry/bin" + string(os.PathListSeparator) + "/usr/bin:/bin"}, agent)
+	assert.Equal(t, map[string]string{"PATH": "/opt/onlet/bin" + string(os.PathListSeparator) + "/usr/bin:/bin"}, agent)
 	assert.Equal(t, map[string]string{
-		"FOUNDRY_API":   "http://127.0.0.1:7777",
-		"FOUNDRY_TOKEN": "secret-token",
+		"ONLET_API":   "http://127.0.0.1:7777",
+		"ONLET_TOKEN": "secret-token",
 	}, orchestrator)
 }
 
 func TestServeEnvsUseLoopbackForWildcardAddr(t *testing.T) {
-	_, orchestrator := serveEnvs("/opt/foundry/bin/foundry", "0.0.0.0:7777", "secret-token")
+	_, orchestrator := serveEnvs("/opt/onlet/bin/onlet", "0.0.0.0:7777", "secret-token")
 
-	assert.Equal(t, "http://127.0.0.1:7777", orchestrator["FOUNDRY_API"])
+	assert.Equal(t, "http://127.0.0.1:7777", orchestrator["ONLET_API"])
 }

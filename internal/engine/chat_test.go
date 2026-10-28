@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/api"
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/api"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onlet/internal/store"
 	// Registers the "fake" harness type that the test config uses.
-	hfake "github.com/bobbyrc/foundry/internal/harness/fake"
+	hfake "github.com/bobbyrc/onlet/internal/harness/fake"
 )
 
 // ctWaitIdle waits until the conversation is no longer busy and returns it.
@@ -187,7 +187,7 @@ func TestChatReplyGetsOrchestratorEnv(t *testing.T) {
 	r := ctNewRig(t)
 	e := r.engine(nil)
 	// Set before any reply goroutine exists, so nothing reads these concurrently.
-	e.d.OrchestratorEnv = map[string]string{"FOUNDRY_TOKEN": "orchestrator-token"}
+	e.d.OrchestratorEnv = map[string]string{"ONLET_TOKEN": "orchestrator-token"}
 	envs := make(chan map[string]string, 1)
 	e.d.HarnessFor = func(string, config.Harness) (harness.Harness, error) {
 		return hfake.New(func(_ context.Context, spec harness.Spec, _ func(harness.Event)) (harness.Result, error) {
@@ -203,7 +203,7 @@ func TestChatReplyGetsOrchestratorEnv(t *testing.T) {
 	ctWaitIdle(t, r, conv.ID)
 
 	env := <-envs
-	assert.Equal(t, "orchestrator-token", env["FOUNDRY_TOKEN"], "the orchestrator gets the API token")
+	assert.Equal(t, "orchestrator-token", env["ONLET_TOKEN"], "the orchestrator gets the API token")
 }
 
 // ctGateStore holds the first orchestrator run's creation until release is closed, which lets a

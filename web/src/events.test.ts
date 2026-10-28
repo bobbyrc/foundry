@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueryClient } from '@tanstack/react-query';
 import { EventStream, invalidateFor, keysFor } from './events';
 import { keys } from './keys';
-import type { FoundryEvent } from './types';
+import type { OnletEvent } from './types';
 
-const ev = (type: string, extra: Partial<FoundryEvent> = {}): FoundryEvent => ({
+const ev = (type: string, extra: Partial<OnletEvent> = {}): OnletEvent => ({
   id: 1,
   time: '2026-10-27T12:00:00Z',
   type,

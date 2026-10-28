@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // AppendEvent stores e, assigning Time when zero, and returns it with ID set.

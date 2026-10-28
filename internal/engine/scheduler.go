@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/notify"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/notify"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // runScheduler claims queued tasks and starts runs until ctx is done. It looks for work on every

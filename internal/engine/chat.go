@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
 )
 
 // chatReply runs one orchestrator turn and stores its reply. The caller has already marked the
@@ -80,7 +80,7 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 		ar.reason.CompareAndSwap(nil, errStopped.Error())
 	}
 
-	// The orchestrator alone gets the foundry API token: it runs the foundry CLI.
+	// The orchestrator alone gets the onlet API token: it runs the onlet CLI.
 	env := make(map[string]string, len(e.d.AgentEnv)+len(e.d.OrchestratorEnv)+3)
 	for k, v := range e.d.AgentEnv {
 		env[k] = v
@@ -88,9 +88,9 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 	for k, v := range e.d.OrchestratorEnv {
 		env[k] = v
 	}
-	env["FOUNDRY_CONVERSATION_ID"] = conv.ID
-	env["FOUNDRY_ROLE"] = "orchestrator"
-	env["FOUNDRY_RUN_ID"] = run.ID
+	env["ONLET_CONVERSATION_ID"] = conv.ID
+	env["ONLET_ROLE"] = "orchestrator"
+	env["ONLET_RUN_ID"] = run.ID
 
 	sess, err := h.Start(runCtx, harness.Spec{
 		RunID:           run.ID,

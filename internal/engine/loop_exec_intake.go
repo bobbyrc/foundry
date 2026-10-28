@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store"
-	"github.com/bobbyrc/foundry/internal/sysproc"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onlet/internal/sysproc"
 )
 
 // lpIntakeStdoutMax caps the stdout kept from one run of an intake command. Bytes past the cap
@@ -202,14 +202,14 @@ func (e *Engine) lpIntakeDir(p *config.Project) string {
 	return e.Config().Server.DataDir
 }
 
-// lpIntakeEnv is foundry's full environment plus the project's env and FOUNDRY_PROJECT. Unlike an
+// lpIntakeEnv is onlet's full environment plus the project's env and ONLET_PROJECT. Unlike an
 // agent, an intake command is the operator's own script, so it gets the whole environment.
 func lpIntakeEnv(p *config.Project) []string {
 	env := os.Environ()
 	for k, v := range p.Env {
 		env = append(env, k+"="+v)
 	}
-	return append(env, "FOUNDRY_PROJECT="+p.Name)
+	return append(env, "ONLET_PROJECT="+p.Name)
 }
 
 // lpFirstErr returns the first non-nil error of the two.

@@ -13,8 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/sysproc"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/sysproc"
 )
 
 // outputTail is how many trailing bytes of a failed command's output go into its error.
@@ -51,7 +51,7 @@ func newExecObserver(cfg Config) (Observer, error) {
 	}, nil
 }
 
-// Poll runs the command with FOUNDRY_SINCE set to since (RFC 3339, UTC). Stdout is a JSON array of
+// Poll runs the command with ONLET_SINCE set to since (RFC 3339, UTC). Stdout is a JSON array of
 // SignalObservation or JSON Lines, one per line. Observations without a fingerprint are dropped.
 func (o *execObserver) Poll(ctx context.Context, since time.Time) ([]domain.SignalObservation, error) {
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
@@ -59,7 +59,7 @@ func (o *execObserver) Poll(ctx context.Context, since time.Time) ([]domain.Sign
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, "sh", "-c", o.command)
-	cmd.Env = append(append(os.Environ(), o.env...), "FOUNDRY_SINCE="+since.UTC().Format(time.RFC3339))
+	cmd.Env = append(append(os.Environ(), o.env...), "ONLET_SINCE="+since.UTC().Format(time.RFC3339))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	// On timeout the whole process group is killed, not just sh, and Wait does not block on pipes a

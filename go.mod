@@ -1,4 +1,4 @@
-module github.com/bobbyrc/foundry
+module github.com/bobbyrc/onlet
 
 go 1.27.1
 

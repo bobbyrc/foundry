@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 func lpFriction(t *testing.T, env *lpEnv, title string) domain.Friction {

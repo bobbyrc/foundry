@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -120,7 +120,7 @@ func TestBlockWritesBlockedResult(t *testing.T) {
 func TestReviewerApproves(t *testing.T) {
 	spec := harness.Spec{
 		Prompt:  "review this",
-		Env:     map[string]string{"FOUNDRY_ROLE": "reviewer"},
+		Env:     map[string]string{"ONLET_ROLE": "reviewer"},
 		Workdir: t.TempDir(),
 	}
 	_, res := runDefault(t, spec)
@@ -136,7 +136,7 @@ func TestReviewerApproves(t *testing.T) {
 func TestReviewerRejects(t *testing.T) {
 	spec := harness.Spec{
 		Prompt:  "review this [fake:reject]",
-		Env:     map[string]string{"FOUNDRY_ROLE": "reviewer"},
+		Env:     map[string]string{"ONLET_ROLE": "reviewer"},
 		Workdir: t.TempDir(),
 	}
 	runDefault(t, spec)
@@ -185,7 +185,7 @@ func TestCommitCreatesCommitAndResult(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "add a greeting [fake:commit]\n", string(content))
 	assert.Equal(t, "fake change", strings.TrimSpace(git(t, dir, "log", "-1", "--format=%s")))
-	assert.Equal(t, "Foundry <foundry@localhost>", strings.TrimSpace(git(t, dir, "log", "-1", "--format=%an <%ae>")))
+	assert.Equal(t, "Onlet <onlet@localhost>", strings.TrimSpace(git(t, dir, "log", "-1", "--format=%an <%ae>")))
 	assert.Contains(t, git(t, dir, "show", "--name-only", "--format=", "HEAD"), "fake-run-9.txt")
 
 	rr := readResult(t, dir)

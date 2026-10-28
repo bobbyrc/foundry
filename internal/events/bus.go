@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // subscriberBuffer is how many events a subscriber may fall behind before it is dropped.

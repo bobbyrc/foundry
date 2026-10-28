@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/scm"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/scm"
 	"github.com/stretchr/testify/require"
 )
 

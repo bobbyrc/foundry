@@ -1,4 +1,4 @@
-// Package store persists foundry's runtime state. store/sqlite implements Store.
+// Package store persists onlet's runtime state. store/sqlite implements Store.
 package store
 
 import (
@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // ErrNotFound is returned (wrapped is fine) when a lookup by ID or key finds nothing.

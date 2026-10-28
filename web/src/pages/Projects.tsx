@@ -27,7 +27,7 @@ export function Projects() {
       <PageHeader title="Projects" />
       <ErrorLine error={projects.error ?? loops.error} />
       {projects.isSuccess && projects.data.length === 0 ? (
-        <Empty>No projects are configured. Projects are set under projects in foundry.yaml.</Empty>
+        <Empty>No projects are configured. Projects are set under projects in onlet.yaml.</Empty>
       ) : null}
       <div className="card-grid projects-grid">
         {projects.data?.map((project) => (
@@ -102,7 +102,7 @@ function ProjectCard({ project, loops }: { project: ProjectView; loops: LoopView
   );
 }
 
-/** The pause toggle. A project paused in foundry.yaml can only be resumed by editing that file. */
+/** The pause toggle. A project paused in onlet.yaml can only be resumed by editing that file. */
 function PauseControl({ project }: { project: ProjectView }) {
   const toggle = useSetProjectPaused();
   const mine = toggle.variables?.name === project.name;
@@ -111,7 +111,7 @@ function PauseControl({ project }: { project: ProjectView }) {
 
   let control;
   if (project.paused_by === 'config') {
-    control = <span className="muted small project-config-pause">Paused in foundry.yaml</span>;
+    control = <span className="muted small project-config-pause">Paused in onlet.yaml</span>;
   } else if (!canOperate) {
     control = <span className="muted small">{project.paused ? 'Paused' : 'Running'}</span>;
   } else if (project.paused) {

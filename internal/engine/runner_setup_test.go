@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
 )
 
 // A failing setup command fails the attempt before the agent starts: the task is re-queued, and
@@ -55,16 +55,16 @@ func TestRunnerPassingSetupPublishes(t *testing.T) {
 	assert.NotZero(t, got.PRNumber, "a passing setup lets the agent run and the change publish")
 }
 
-// Setup and checks run with the agent's environment: a foundry-only variable is not visible to
-// them, and the variables the agent gets (FOUNDRY_TASK_ID) are.
+// Setup and checks run with the agent's environment: an onlet-only variable is not visible to
+// them, and the variables the agent gets (ONLET_TASK_ID) are.
 func TestRunnerSetupAndChecksUseAgentEnvironment(t *testing.T) {
-	t.Setenv("FOUNDRY_CHECK_TEST_SECRET", "s3cr3t-value")
+	t.Setenv("ONLET_CHECK_TEST_SECRET", "s3cr3t-value")
 	env := rtNewEngine(t, rtOpts{projectExtra: map[string]string{
-		"demo": `    setup: [{name: env, run: "test -z \"$FOUNDRY_CHECK_TEST_SECRET\" && test \"$FOUNDRY_TASK_ID\" != \"\""}]` + "\n" +
-			`    checks: [{name: env, run: "test -z \"$FOUNDRY_CHECK_TEST_SECRET\" && test \"$FOUNDRY_TASK_ID\" != \"\""}]` + "\n",
+		"demo": `    setup: [{name: env, run: "test -z \"$ONLET_CHECK_TEST_SECRET\" && test \"$ONLET_TASK_ID\" != \"\""}]` + "\n" +
+			`    checks: [{name: env, run: "test -z \"$ONLET_CHECK_TEST_SECRET\" && test \"$ONLET_TASK_ID\" != \"\""}]` + "\n",
 	}})
 	task := env.create(domain.Task{Body: "[fake:commit]"})
 
 	got := env.waitStatus(task.ID, domain.TaskReview)
-	assert.NotZero(t, got.PRNumber, "setup and checks see the agent's environment, not foundry's secret")
+	assert.NotZero(t, got.PRNumber, "setup and checks see the agent's environment, not onlet's secret")
 }

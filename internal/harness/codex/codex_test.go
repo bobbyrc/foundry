@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -153,7 +153,7 @@ func TestParseResumeStream(t *testing.T) {
 
 func TestReadOnlyRefusalIsNotStructuredDenial(t *testing.T) {
 	// codex exec emits no event for a sandbox refusal: the command never appears as an item and
-	// the model just reports the failure in prose. So foundry cannot report a structured denial.
+	// the model just reports the failure in prose. So onlet cannot report a structured denial.
 	events, res := replay(t, "testdata/readonly_no_command.jsonl", 0)
 	for _, ev := range events {
 		assert.NotEqual(t, domain.LogDenial, ev.Kind)

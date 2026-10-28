@@ -26,7 +26,7 @@ function Wordmark() {
   return (
     <span className="wordmark">
       <span className="wordmark-square" aria-hidden="true" />
-      foundry
+      onlet
     </span>
   );
 }

@@ -220,12 +220,12 @@ describe('singularize', () => {
 
 describe('isEnvRef', () => {
   it('accepts ${NAME} with a letter or underscore first', () => {
-    expect(isEnvRef('${FOUNDRY_TOKEN}')).toBe(true);
+    expect(isEnvRef('${ONLET_TOKEN}')).toBe(true);
     expect(isEnvRef('${_x1}')).toBe(true);
   });
 
   it('rejects anything else', () => {
-    expect(isEnvRef('$FOUNDRY_TOKEN')).toBe(false);
+    expect(isEnvRef('$ONLET_TOKEN')).toBe(false);
     expect(isEnvRef('${1X}')).toBe(false);
     expect(isEnvRef('x${NAME}')).toBe(false);
     expect(isEnvRef('${NAME}x')).toBe(false);

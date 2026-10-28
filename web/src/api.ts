@@ -18,7 +18,7 @@ import type {
   Conversation,
   ConversationDetail,
   Deployment,
-  FoundryEvent,
+  OnletEvent,
   Friction,
   LogLine,
   LoopView,
@@ -126,7 +126,7 @@ export const deleteUser = (name: string) => request<void>('DELETE', `/users/${en
 export const getHealth = () => request<{ ok: boolean; version: string }>('GET', '/health', { auth: false });
 
 export const getEventsHistory = (q: { after?: number; project?: string; task_id?: string; limit?: number } = {}) =>
-  request<FoundryEvent[]>('GET', withQuery('/events/history', q));
+  request<OnletEvent[]>('GET', withQuery('/events/history', q));
 
 // ---- stats and control ----
 
@@ -147,7 +147,7 @@ export interface ProjectPauseState {
   paused_by: PausedBy;
 }
 
-/** Pauses a project. The server answers 409 when it is paused in foundry.yaml and cannot be resumed here. */
+/** Pauses a project. The server answers 409 when it is paused in onlet.yaml and cannot be resumed here. */
 export const pauseProject = (name: string) =>
   request<ProjectPauseState>('POST', `/projects/${encodeURIComponent(name)}/pause`);
 

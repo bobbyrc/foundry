@@ -8,10 +8,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store"
-	"github.com/bobbyrc/foundry/internal/workspace"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onlet/internal/workspace"
 )
 
 // sweepWorktrees removes worktrees that runs left behind in project p's directory. runTask
@@ -64,7 +64,7 @@ func (e *Engine) sweepWorktrees(ctx context.Context, p *config.Project) {
 }
 
 // leftoverRun reports whether the worktree of run runID may be removed, and returns the run
-// row when it is known. A directory that is not a known run belongs to nothing foundry can
+// row when it is known. A directory that is not a known run belongs to nothing onlet can
 // judge, so it is kept. A run that has not ended may still be using its worktree, so it is kept
 // as well. A live run is kept even when its row says it ended: runTask sets EndedAt before it
 // publishes or removes its own worktree, so the row alone cannot tell a finished run from one

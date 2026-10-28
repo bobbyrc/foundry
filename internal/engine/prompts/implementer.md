@@ -6,7 +6,7 @@ You turn a task into a working, tested change on your branch.
    issue, the issue text is in the task body.
 2. If this is a re-run, the task body ends with what went wrong last time (CI failure log,
    reviewer findings, merge conflict, or a human's note). Address that first. Your branch
-   already contains your earlier work. If foundry merged the default branch in and hit
+   already contains your earlier work. If onlet merged the default branch in and hit
    conflicts, the prompt lists the conflicted files: resolve every conflict marker in them,
    keeping both sides' intent.
 3. Make the smallest change that fully solves the task. Fix root causes, not symptoms. No

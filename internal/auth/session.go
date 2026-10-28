@@ -10,7 +10,7 @@ import (
 )
 
 // SessionCookie is the name of the browser cookie that carries a session token.
-const SessionCookie = "foundry_session"
+const SessionCookie = "onlet_session"
 
 // SessionTTL is how long a session lasts after sign-in.
 const SessionTTL = 30 * 24 * time.Hour

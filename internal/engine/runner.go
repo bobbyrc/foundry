@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
-	"github.com/bobbyrc/foundry/internal/scm"
-	"github.com/bobbyrc/foundry/internal/sysproc"
-	"github.com/bobbyrc/foundry/internal/workspace"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onlet/internal/sysproc"
+	"github.com/bobbyrc/onlet/internal/workspace"
 )
 
 // startTask turns a claimed task into a live run. Everything that can fail before the agent
@@ -211,14 +211,14 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	for k, v := range p.Env {
 		env[k] = v
 	}
-	env["FOUNDRY_RUN_ID"] = run.ID
-	env["FOUNDRY_TASK_ID"] = t.ID
-	env["FOUNDRY_PROJECT"] = t.Project
-	env["FOUNDRY_ROLE"] = t.Role
-	env["FOUNDRY_OUTBOX"] = filepath.Join(ws.Dir, domain.OutboxDir)
-	env["FOUNDRY_BASE_REF"] = ws.BaseRef
-	// Setup and checks run with the agent's environment, not foundry's: they execute code the
-	// agent may have written, so foundry's tokens (GH_TOKEN and the like) must not reach them.
+	env["ONLET_RUN_ID"] = run.ID
+	env["ONLET_TASK_ID"] = t.ID
+	env["ONLET_PROJECT"] = t.Project
+	env["ONLET_ROLE"] = t.Role
+	env["ONLET_OUTBOX"] = filepath.Join(ws.Dir, domain.OutboxDir)
+	env["ONLET_BASE_REF"] = ws.BaseRef
+	// Setup and checks run with the agent's environment, not onlet's: they execute code the
+	// agent may have written, so onlet's tokens (GH_TOKEN and the like) must not reach them.
 	cmdEnv := sysproc.AgentEnv(e.Config().Harness[agent.Harness].InheritEnv, env)
 
 	if len(p.Setup) > 0 {
@@ -264,7 +264,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	switch status {
 	case domain.RunDenied:
 		e.blockTask(bg, t.ID, "agent was denied: "+strings.TrimPrefix(reason, "denied: ")+
-			". Foundry never retries a denial: adjust the agent's permissions or the task, then Retry.")
+			". Onlet never retries a denial: adjust the agent's permissions or the task, then Retry.")
 		return
 	case domain.RunStalled, domain.RunTimedOut:
 		e.blockTask(bg, t.ID, reason)
@@ -417,7 +417,7 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 				Base:   p.DefaultBranch,
 				Title:  title,
 				Body:   prBody(t, result),
-				Labels: []string{"foundry"},
+				Labels: []string{"onlet"},
 			})
 			if err != nil {
 				e.requeueOrBlock(ctx, t.ID, "could not open the pull request", err.Error())
@@ -484,7 +484,7 @@ func (f *checkFailure) context() string {
 
 // runCommands runs cmds in order in dir and stops at the first that fails. Each command is
 // `sh -c` with its own timeout and runs with exactly env. Callers pass the agent's environment,
-// because these commands execute code the agent may have written, and foundry's own tokens must
+// because these commands execute code the agent may have written, and onlet's own tokens must
 // not be reachable from them. It returns nil when every command passes.
 func runCommands(ctx context.Context, cmds []config.Check, dir string, env []string) *checkFailure {
 	for _, c := range cmds {
@@ -548,7 +548,7 @@ func prBody(t domain.Task, result domain.RunResult) string {
 	if n, ok := strings.CutPrefix(t.SourceRef, "github_issue:"); ok {
 		body += "\n\nFixes #" + n
 	}
-	return body + fmt.Sprintf("\n\n---\nOpened by foundry for task `%s` (%s).", t.ID, t.Role)
+	return body + fmt.Sprintf("\n\n---\nOpened by onlet for task `%s` (%s).", t.ID, t.Role)
 }
 
 // applyReview acts on a reviewer's verdict. Approval records the reviewed head on the parent
@@ -705,7 +705,7 @@ func (e *Engine) recordFriction(ctx context.Context, t domain.Task, run domain.R
 			continue
 		}
 		target := t.Project
-		if fr.Target == "foundry" && cfg.SelfProject != "" {
+		if fr.Target == "onlet" && cfg.SelfProject != "" {
 			target = cfg.SelfProject
 		}
 		f, _, err := e.d.Store.UpsertFriction(ctx, domain.Friction{

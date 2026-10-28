@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { ApiError, getStats } from './api';
 import { keys } from './keys';
-import type { FoundryEvent } from './types';
+import type { OnletEvent } from './types';
 
 // Mirrors the Ev* constants in internal/domain/domain.go. Browsers only deliver named SSE events
 // to listeners registered by name, so each known type is registered below; onmessage covers
@@ -32,7 +32,7 @@ export const EVENT_TYPES = [
 
 export type LiveStatus = 'live' | 'reconnecting';
 
-type Listener = (ev: FoundryEvent) => void;
+type Listener = (ev: OnletEvent) => void;
 
 const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
@@ -144,9 +144,9 @@ export class EventStream {
   }
 
   private handle(message: MessageEvent<string>): void {
-    let ev: FoundryEvent;
+    let ev: OnletEvent;
     try {
-      ev = JSON.parse(message.data) as FoundryEvent;
+      ev = JSON.parse(message.data) as OnletEvent;
     } catch {
       return;
     }
@@ -155,7 +155,7 @@ export class EventStream {
       try {
         listener(ev);
       } catch (err) {
-        console.error('foundry event listener failed', err);
+        console.error('onlet event listener failed', err);
       }
     }
   }
@@ -176,7 +176,7 @@ export function useLiveStatus(): LiveStatus {
 }
 
 /** The query keys an event makes stale. Live-only events (run.log, chat.delta) refetch nothing. */
-export function keysFor(ev: FoundryEvent): QueryKey[] {
+export function keysFor(ev: OnletEvent): QueryKey[] {
   const out: QueryKey[] = [];
   const add = (...queryKeys: QueryKey[]) => out.push(...queryKeys);
   const taskId = ev.task_id || undefined;
@@ -213,7 +213,7 @@ export function keysFor(ev: FoundryEvent): QueryKey[] {
   return out;
 }
 
-export function invalidateFor(ev: FoundryEvent, queryClient: QueryClient): void {
+export function invalidateFor(ev: OnletEvent, queryClient: QueryClient): void {
   for (const queryKey of keysFor(ev)) {
     void queryClient.invalidateQueries({ queryKey });
   }

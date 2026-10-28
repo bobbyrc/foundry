@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // issueReportMax caps the free text (summary or reason) copied into an issue comment.
@@ -84,17 +84,17 @@ func issueNumberOf(t domain.Task) (int, bool) {
 func issueReportBody(t domain.Task) string {
 	switch t.Status {
 	case domain.TaskDone:
-		return fmt.Sprintf("Foundry finished task `%s` without code changes:\n\n%s", t.ID, trimReport(t.Summary))
+		return fmt.Sprintf("Onlet finished task `%s` without code changes:\n\n%s", t.ID, trimReport(t.Summary))
 	case domain.TaskBlocked:
-		return fmt.Sprintf("Foundry's task `%s` is blocked and needs the owner:\n\n%s", t.ID, trimReport(t.BlockedReason))
+		return fmt.Sprintf("Onlet's task `%s` is blocked and needs the owner:\n\n%s", t.ID, trimReport(t.BlockedReason))
 	case domain.TaskFailed:
 		text := t.Summary
 		if strings.TrimSpace(text) == "" {
 			text = t.BlockedReason
 		}
-		return fmt.Sprintf("Foundry could not complete task `%s`:\n\n%s", t.ID, trimReport(text))
+		return fmt.Sprintf("Onlet could not complete task `%s`:\n\n%s", t.ID, trimReport(text))
 	default: // cancelled
-		return fmt.Sprintf("The owner cancelled foundry's task `%s`.", t.ID)
+		return fmt.Sprintf("The owner cancelled onlet's task `%s`.", t.ID)
 	}
 }
 

@@ -56,8 +56,8 @@ func TestExecEmptyOutput(t *testing.T) {
 func TestExecReceivesSinceAndEnv(t *testing.T) {
 	since := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	o := newTestExec(t, map[string]any{
-		"command": `printf '[{"fingerprint":"%s","title":"%s"}]' "$FOUNDRY_SINCE" "$FOUNDRY_TEST_CFG"`,
-	}, map[string]string{"FOUNDRY_TEST_CFG": "from-cfg"})
+		"command": `printf '[{"fingerprint":"%s","title":"%s"}]' "$ONLET_SINCE" "$ONLET_TEST_CFG"`,
+	}, map[string]string{"ONLET_TEST_CFG": "from-cfg"})
 	obs, err := o.Poll(context.Background(), since)
 	require.NoError(t, err)
 	require.Len(t, obs, 1)

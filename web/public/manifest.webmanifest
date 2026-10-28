@@ -1,6 +1,6 @@
 {
-  "name": "foundry",
-  "short_name": "foundry",
+  "name": "onlet",
+  "short_name": "onlet",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -1,7 +1,7 @@
-# Dogfood: foundry on its own repo
+# Dogfood: onlet on its own repo
 
-foundry runs against its own repository (`bobbyrc/foundry`). Agent PRs target the `dogfood`
-branch, never `main`. Each merged change is released to a local staging copy of foundry, which
+onlet runs against its own repository (`bobbyrc/onlet`). Agent PRs target the `dogfood`
+branch, never `main`. Each merged change is released to a local staging copy of onlet, which
 runs on port 7798 while the daemon serves its UI on port 7797.
 
 ## Prerequisites
@@ -15,27 +15,27 @@ runs on port 7798 while the daemon serves its UI on port 7797.
 ## Setup
 
 ```
-export DOGFOOD=~/.local/share/foundry-dogfood
+export DOGFOOD=~/.local/share/onlet-dogfood
 mkdir -p "$DOGFOOD"
-git clone https://github.com/bobbyrc/foundry "$DOGFOOD/clone" && git -C "$DOGFOOD/clone" checkout dogfood
-foundry serve --config examples/dogfood/foundry.yaml
+git clone https://github.com/bobbyrc/onlet "$DOGFOOD/clone" && git -C "$DOGFOOD/clone" checkout dogfood
+onlet serve --config examples/dogfood/onlet.yaml
 ```
 
-`DOGFOOD` must be exported in the shell that runs `foundry serve`. The deploy, logs and observer
+`DOGFOOD` must be exported in the shell that runs `onlet serve`. The deploy, logs and observer
 commands inherit it from there.
 
 To keep the instance running across logins and crashes on macOS, use the launchd service instead
 of a terminal. Install it from a shell where `DOGFOOD` is exported and `go` is on PATH:
 
 ```
-"$DOGFOOD/foundry" service install --config "$DOGFOOD/clone/examples/dogfood/foundry.yaml"
+"$DOGFOOD/onlet" service install --config "$DOGFOOD/clone/examples/dogfood/onlet.yaml"
 ```
 
-Install it with the binary at `$DOGFOOD/foundry` and the config `update.sh` uses, so that updates
-restart the right daemon. The config is `FOUNDRY_CONFIG`, else `$DOGFOOD/foundry.yaml` when it
+Install it with the binary at `$DOGFOOD/onlet` and the config `update.sh` uses, so that updates
+restart the right daemon. The config is `ONLET_CONFIG`, else `$DOGFOOD/onlet.yaml` when it
 exists, else the example. The service records `DOGFOOD` and `PATH` from that shell. Installing
 again only restarts it; to change a recorded value, `service uninstall` and install again. Its log
-is `$DOGFOOD/data/foundry.log`.
+is `$DOGFOOD/data/onlet.log`.
 
 ## Watching
 
@@ -45,9 +45,9 @@ is `$DOGFOOD/data/foundry.log`.
 
 ## How work arrives
 
-- Issues labelled `foundry` in `bobbyrc/foundry` become tasks.
+- Issues labelled `onlet` in `bobbyrc/onlet` become tasks.
 - Or create one by hand:
-  `foundry task create --project foundry --kind feature --title "..." --body "..."`.
+  `onlet task create --project onlet --kind feature --title "..." --body "..."`.
 
 ## What needs a human
 
@@ -67,17 +67,17 @@ It does these steps in order:
 
 1. Builds `main` in a temporary worktree.
 2. Pauses the factory and waits until no run is active and no release is in flight.
-3. Swaps `$DOGFOOD/foundry`, keeping the old binary as `foundry.prev`.
+3. Swaps `$DOGFOOD/onlet`, keeping the old binary as `onlet.prev`.
 4. Restarts the daemon and checks that it answers with the new version.
 5. Resumes the factory, unless it was already paused before the update.
 
 If the new version doesn't come up healthy, the script restarts the previous binary. It does nothing if
 the instance already runs `main`. A launcher at `$DOGFOOD/run-daemon.sh`, if present, is used to
-start the daemon. Run the script from your own shell, never from an agent that foundry runs.
+start the daemon. Run the script from your own shell, never from an agent that onlet runs.
 
 ## Stopping
 
-- Stop new work: `foundry pause`.
-- Stop the daemon: interrupt `foundry serve`, or `foundry service uninstall` for the service.
+- Stop new work: `onlet pause`.
+- Stop the daemon: interrupt `onlet serve`, or `onlet service uninstall` for the service.
 - Stop the staging copy: its pid is in `$DOGFOOD/staging/pid`. Check that the process is still
-  foundry (`ps -p <pid> -o command=`) before you kill it.
+  onlet (`ps -p <pid> -o command=`) before you kill it.

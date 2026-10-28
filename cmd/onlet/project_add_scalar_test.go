@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/config"
+	"github.com/bobbyrc/onlet/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +44,7 @@ func TestProjectAddKeepsBlockScalarEndingInCommentLikeLine(t *testing.T) {
 
 // The guard refuses a text that loads but changes existing settings, and writes nothing.
 func TestCheckInsertionRefusesChangedSettings(t *testing.T) {
-	const path = "foundry.yaml"
+	const path = "onlet.yaml"
 	before := []byte(scalarTailConfig)
 
 	// Dropping the comment-looking line changes the run script, though the text still parses.
@@ -64,7 +64,7 @@ func TestCheckInsertionRefusesChangedSettings(t *testing.T) {
 // The self_project line that a run may add is allowed only when that run set it, and is compared
 // as the only other change.
 func TestCheckInsertionSelfProject(t *testing.T) {
-	const path = "foundry.yaml"
+	const path = "onlet.yaml"
 	before := []byte(scalarTailConfig)
 	after := []byte(scalarTailConfig + demoBlock + "self_project: demo\n")
 

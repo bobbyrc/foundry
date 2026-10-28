@@ -26,38 +26,38 @@ func fakePauseAPI(t *testing.T, factoryPaused bool, projects string) {
 }
 
 func createArgs(extra ...string) []string {
-	return append([]string{"task", "create", "--project", "foundry", "--kind", "chore", "--title", "t"}, extra...)
+	return append([]string{"task", "create", "--project", "onlet", "--kind", "chore", "--title", "t"}, extra...)
 }
 
 func TestTaskCreateNoticesPausedFactory(t *testing.T) {
-	fakePauseAPI(t, true, `[{"name":"foundry","paused":false}]`)
+	fakePauseAPI(t, true, `[{"name":"onlet","paused":false}]`)
 
 	code, out, errOut := runCLI(createArgs()...)
 	require.Equal(t, 0, code, errOut)
 	assert.Equal(t, "task-7\n", out)
-	assert.Equal(t, "note: the factory is paused; this task waits until \"foundry resume\"\n", errOut)
+	assert.Equal(t, "note: the factory is paused; this task waits until \"onlet resume\"\n", errOut)
 }
 
 func TestTaskCreateNoticesOwnerPausedProject(t *testing.T) {
-	fakePauseAPI(t, false, `[{"name":"foundry","paused":true,"paused_by":"owner"}]`)
+	fakePauseAPI(t, false, `[{"name":"onlet","paused":true,"paused_by":"owner"}]`)
 
 	code, out, errOut := runCLI(createArgs()...)
 	require.Equal(t, 0, code, errOut)
 	assert.Equal(t, "task-7\n", out)
-	assert.Equal(t, "note: project foundry is paused (by owner); this task waits until \"foundry project resume foundry\"\n", errOut)
+	assert.Equal(t, "note: project onlet is paused (by owner); this task waits until \"onlet project resume onlet\"\n", errOut)
 }
 
 func TestTaskCreateNoticesConfigPausedProject(t *testing.T) {
-	fakePauseAPI(t, false, `[{"name":"foundry","paused":true,"paused_by":"config"}]`)
+	fakePauseAPI(t, false, `[{"name":"onlet","paused":true,"paused_by":"config"}]`)
 
 	code, out, errOut := runCLI(createArgs()...)
 	require.Equal(t, 0, code, errOut)
 	assert.Equal(t, "task-7\n", out)
-	assert.Equal(t, "note: project foundry is paused in foundry.yaml (paused: true); this task waits until that is removed\n", errOut)
+	assert.Equal(t, "note: project onlet is paused in onlet.yaml (paused: true); this task waits until that is removed\n", errOut)
 }
 
 func TestTaskCreateNoNoticeWhenNotPaused(t *testing.T) {
-	fakePauseAPI(t, false, `[{"name":"foundry","paused":false}]`)
+	fakePauseAPI(t, false, `[{"name":"onlet","paused":false}]`)
 
 	code, out, errOut := runCLI(createArgs()...)
 	require.Equal(t, 0, code, errOut)
@@ -66,7 +66,7 @@ func TestTaskCreateNoNoticeWhenNotPaused(t *testing.T) {
 }
 
 func TestTaskCreateJSONHasNoPauseNotice(t *testing.T) {
-	fakePauseAPI(t, true, `[{"name":"foundry","paused":true,"paused_by":"owner"}]`)
+	fakePauseAPI(t, true, `[{"name":"onlet","paused":true,"paused_by":"owner"}]`)
 
 	code, out, errOut := runCLI(createArgs("--json")...)
 	require.Equal(t, 0, code, errOut)

@@ -3,8 +3,8 @@ package exec
 import (
 	"encoding/json"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/harness"
 )
 
 // protoLine is one stdout line of the plugin protocol. Type selects the other fields that are

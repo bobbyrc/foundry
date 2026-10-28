@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/scm"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
-const lpBranch = "foundry/aaaa1111-add-notes"
+const lpBranch = "onlet/aaaa1111-add-notes"
 
 // lpShepherdEnv returns an engine over a real git remote. The PR head is the real commit of
 // lpBranch, so the shepherd's diff of that head works, and it stays put until the test pushes.
@@ -486,7 +486,7 @@ func TestLoopShepherdNoCIPassesAfterGrace(t *testing.T) {
 	}
 }
 
-// A push by a human is a new head, and it gets the same CI grace as foundry's own push. The old
+// A push by a human is a new head, and it gets the same CI grace as onlet's own push. The old
 // head's grace does not carry over, so the new head waits again.
 func TestLoopShepherdHumanPushRestartsCIGrace(t *testing.T) {
 	env, task := lpShepherdEnv(t, lpNotesFile)

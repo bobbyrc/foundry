@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 // ApplyDefaults fills every zero value in c with its default. It never overwrites a value the
@@ -53,12 +53,12 @@ func DefaultGates() map[string]Gate {
 // slices.
 func DefaultRules() []Rule {
 	return []Rule{
-		// Foundry manages its own repository, so an agent's change to foundry's gates, agent
+		// Onlet manages its own repository, so an agent's change to onlet's gates, agent
 		// prompts, environment allowlist or who may do what in the API must never auto-merge.
-		// These paths exist only in foundry's repo, so this rule is inert in every other project.
+		// These paths exist only in onlet's repo, so this rule is inert in every other project.
 		{
 			Risk:   domain.RiskHigh,
-			Reason: "foundry's own gates or agent instructions",
+			Reason: "onlet's own gates or agent instructions",
 			Paths: []string{
 				"internal/engine/prompts/**", "internal/policy/**", "internal/engine/loop_shepherd.go",
 				"internal/engine/helpers.go", "internal/config/defaults.go", "internal/sysproc/**",
@@ -89,8 +89,8 @@ func DefaultRules() []Rule {
 		},
 		{
 			Risk:   domain.RiskMedium,
-			Reason: "agent instructions or foundry config",
-			Paths:  []string{".foundry/**", "**/foundry.yaml", "**/AGENTS.md", "**/CLAUDE.md"},
+			Reason: "agent instructions or onlet config",
+			Paths:  []string{".onlet/**", "**/onlet.yaml", "**/AGENTS.md", "**/CLAUDE.md"},
 		},
 		{
 			Risk:   domain.RiskMedium,
@@ -100,11 +100,11 @@ func DefaultRules() []Rule {
 				"**/requirements*.txt", "**/pyproject.toml", "**/Gemfile",
 			},
 		},
-		// Follow-ups and retrospectives are work foundry assigned itself. Both had design
+		// Follow-ups and retrospectives are work onlet assigned itself. Both had design
 		// problems tonight, so their changes get a human look until the owner relaxes this.
 		{
 			Risk:    domain.RiskMedium,
-			Reason:  "work foundry assigned itself (follow-up or retrospective)",
+			Reason:  "work onlet assigned itself (follow-up or retrospective)",
 			Sources: []string{"followup", "retro"},
 		},
 	}
@@ -115,7 +115,7 @@ func applyServerDefaults(c *Config) {
 		c.Server.Addr = "127.0.0.1:7777"
 	}
 	if c.Server.DataDir == "" {
-		c.Server.DataDir = "~/.local/share/foundry"
+		c.Server.DataDir = "~/.local/share/onlet"
 	}
 	c.Server.DataDir = expandHome(c.Server.DataDir)
 	if c.Server.PublicURL == "" {
@@ -351,7 +351,7 @@ func applyLoopDefaults(c *Config) {
 		l.IssueIntake.Every.Duration = 5 * time.Minute
 	}
 	if l.IssueIntake.Label == "" {
-		l.IssueIntake.Label = "foundry"
+		l.IssueIntake.Label = "onlet"
 	}
 	if l.PRShepherd.Every.Duration == 0 {
 		l.PRShepherd.Every.Duration = time.Minute

@@ -2,7 +2,7 @@ package domain
 
 // OutboxDir is the directory, relative to a run's worktree, where the agent writes its report.
 // It is excluded from git through .git/info/exclude.
-const OutboxDir = ".foundry-run"
+const OutboxDir = ".onlet-run"
 
 // ResultFile is the agent's report, written to OutboxDir/ResultFile before it finishes.
 const ResultFile = "result.json"
@@ -50,7 +50,7 @@ type ReviewFinding struct {
 	Message  string `json:"message"`
 }
 
-// FollowupTask is new work the agent found but did not do. Foundry queues it as a new task.
+// FollowupTask is new work the agent found but did not do. Onlet queues it as a new task.
 type FollowupTask struct {
 	Title string   `json:"title"`
 	Body  string   `json:"body"`
@@ -61,6 +61,6 @@ type FollowupTask struct {
 type FrictionReport struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
-	// Target is "project" (the repo being worked on) or "foundry" (the factory itself).
+	// Target is "project" (the repo being worked on) or "onlet" (the factory itself).
 	Target string `json:"target"`
 }

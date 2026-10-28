@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/config"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/notify"
-	"github.com/bobbyrc/foundry/internal/policy"
-	"github.com/bobbyrc/foundry/internal/scm"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/notify"
+	"github.com/bobbyrc/onlet/internal/policy"
+	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // shepherdStatuses are the statuses the shepherd works on. Every transition it makes is guarded
@@ -83,21 +83,21 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 
 	switch pr.State {
 	case "merged":
-		applied, err := e.markMerged(ctx, p, t, pr.MergeSHA, "merged outside foundry")
+		applied, err := e.markMerged(ctx, p, t, pr.MergeSHA, "merged outside onlet")
 		if err != nil || !applied {
 			return err
 		}
-		e.decidePendingApprovals(ctx, t.ID, domain.ApprovalApproved, "merged outside foundry")
+		e.decidePendingApprovals(ctx, t.ID, domain.ApprovalApproved, "merged outside onlet")
 		return nil
 	case "closed":
-		_, applied, err := e.setTaskFrom(ctx, t.ID, shepherdStatuses, "PR closed outside foundry", func(x *domain.Task) error {
+		_, applied, err := e.setTaskFrom(ctx, t.ID, shepherdStatuses, "PR closed outside onlet", func(x *domain.Task) error {
 			x.Status = domain.TaskCancelled
 			return nil
 		})
 		if err != nil || !applied {
 			return err
 		}
-		e.decidePendingApprovals(ctx, t.ID, domain.ApprovalRejected, "PR closed outside foundry")
+		e.decidePendingApprovals(ctx, t.ID, domain.ApprovalRejected, "PR closed outside onlet")
 		return nil
 	}
 

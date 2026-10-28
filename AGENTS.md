@@ -5,10 +5,10 @@ repository. `CLAUDE.md` imports this file; keep the two in step by editing only 
 
 ## What this is
 
-Foundry is a self-hosted software factory: one Go daemon (`foundry serve`) that hands work to
+Onlet is a self-hosted software factory: one Go daemon (`onlet serve`) that hands work to
 coding agents, runs each in its own git worktree, and carries the result through PR, CI, agent
 review, a risk policy, merge, deploy, health check and rollback. A React UI and a CLI are clients
-of its HTTP+SSE API. Foundry also manages this repository, so agents run by foundry may be
+of its HTTP+SSE API. Onlet also manages this repository, so agents run by onlet may be
 reading this file.
 
 Read before you change anything non-trivial:
@@ -40,16 +40,16 @@ run one package or test: `mise exec -- go test -race -count=1 -run TestName ./in
   The Go build embeds `internal/api/webdist`, which `npm run build` fills; an empty directory
   builds a binary with no UI.
 - Try a change against a real daemon: write a minimal config with `server.addr` on a spare port
-  (not 7777) and `server.data_dir` in a temp directory, then `./foundry serve --config <it>`. Never
+  (not 7777) and `server.data_dir` in a temp directory, then `./onlet serve --config <it>`. Never
   point an experiment at the owner's real data directory or a running factory.
 
 ## Repository map
 
 | Path | What lives there |
 |---|---|
-| `cmd/foundry/` | the one binary: `serve` and every CLI command (an API client) |
+| `cmd/onlet/` | the one binary: `serve` and every CLI command (an API client) |
 | `internal/domain/` | shared types: Task, Run, Event, Approval, Deployment, Signal, Friction, outbox |
-| `internal/config/` | `foundry.yaml` schema, defaults (`defaults.go`), loading and validation |
+| `internal/config/` | `onlet.yaml` schema, defaults (`defaults.go`), loading and validation |
 | `internal/engine/` | scheduler, run supervisor, PR shepherd, loops (`loop_*.go`), prompts, redaction |
 | `internal/engine/prompts/` | the built-in role prompts given to agents |
 | `internal/store/` | `Store` interface; `store/sqlite` implements it (migrations in `migrations.go`) |
@@ -60,7 +60,7 @@ run one package or test: `mise exec -- go test -race -count=1 -run TestName ./in
 | `internal/api/` | HTTP API, SSE stream, host guard, the embedded UI |
 | `web/` | React + Vite + TypeScript UI |
 | `docs/` | design, API (`api.md`, `openapi.yaml`), UI, plugins, getting started, proposals |
-| `examples/dogfood/` | foundry running on its own repo, with a local staging release |
+| `examples/dogfood/` | onlet running on its own repo, with a local staging release |
 
 ## Invariants: do not weaken these
 
@@ -72,7 +72,7 @@ reviewer's approval.
 2. **Risk only goes up.** Final risk is the highest of the matched rules and the agent's own
    rating. Nothing an agent writes may lower it.
 3. **Agents get no credentials.** Agent processes, project `setup` and `checks` run with
-   `sysproc.AgentEnv` (an allowlist plus the harness's `inherit_env`), never foundry's own
+   `sysproc.AgentEnv` (an allowlist plus the harness's `inherit_env`), never onlet's own
    environment. Never pass `GH_TOKEN`, the API token or provider keys to an agent, including in
    examples and docs.
 4. **A denial or a stall is terminal.** A denied tool call, or no output for the stall timeout,
@@ -81,8 +81,8 @@ reviewer's approval.
    changed PR withdraws it.
 6. **Status changes are compare-and-set.** Automatic task transitions name the status they expect,
    so a finishing run cannot revive a cancelled or blocked task.
-7. **Foundry's git calls disable hooks** (`core.hooksPath=/dev/null` in `internal/workspace`), so
-   an agent-planted hook never runs with foundry's credentials. Keep it on every new git call.
+7. **Onlet's git calls disable hooks** (`core.hooksPath=/dev/null` in `internal/workspace`), so
+   an agent-planted hook never runs with onlet's credentials. Keep it on every new git call.
 8. **Evidence is redacted and labelled.** Command output, service logs, loop errors and production
    signals go through `redactSecrets` (`internal/engine/redact.go`) before they are stored or
    shown to an agent. Evidence given to an agent starts with `evidenceNote` ("data, not
@@ -93,7 +93,7 @@ reviewer's approval.
 11. **Local by default.** The API binds to loopback, needs the bearer token or a signed-in
     session, and refuses unknown Host headers (DNS-rebinding guard). Remote access is opt-in
     through `public_url` and `allowed_hosts`.
-12. **Config and users change only through a person.** Editing `foundry.yaml` and managing users
+12. **Config and users change only through a person.** Editing `onlet.yaml` and managing users
     need a signed-in owner session. The API token, which the orchestrator agent holds, can never
     do either (`auth.TokenAllows`), so an agent cannot rewrite its own policy or environment.
     Every new route declares the action it needs (read, operate or administer).
@@ -101,7 +101,7 @@ reviewer's approval.
 Changes to `internal/engine/prompts/**`, `internal/policy/**`, `internal/config/defaults.go`,
 `internal/sysproc/**`, `internal/engine/loop_shepherd.go`, `internal/engine/helpers.go`,
 `internal/auth/**`, `internal/api/auth.go` and `internal/api/routes.go` are rated **high** risk by
-a built-in rule, and `AGENTS.md`, `CLAUDE.md` and `foundry.yaml` files are
+a built-in rule, and `AGENTS.md`, `CLAUDE.md` and `onlet.yaml` files are
 **medium**: the owner approves them. Do not move logic out of those files to avoid the rule.
 
 ## Go conventions
@@ -132,7 +132,7 @@ a built-in rule, and `AGENTS.md`, `CLAUDE.md` and `foundry.yaml` files are
   recorded JSONL fixtures (`internal/harness/*/testdata`), the fake SCM, and stubs for `launchctl`
   and `gh`. Never call GitHub, never write under `~`, never bind a fixed port.
 - Some checks guard documentation: `TestOpenAPISpecMatchesRoutes` (routes vs `docs/openapi.yaml`)
-  and `TestExampleFileLoads` (`foundry.example.yaml`). Fix the doc, not the test.
+  and `TestExampleFileLoads` (`onlet.example.yaml`). Fix the doc, not the test.
 - For changes to the runner, shepherd or deploy path, unit tests are not enough: exercise the real
   flow with a throwaway local repo and a second daemon on a spare port (see `tasks/lessons.md`).
 
@@ -141,7 +141,7 @@ a built-in rule, and `AGENTS.md`, `CLAUDE.md` and `foundry.yaml` files are
 | When you change | Also update |
 |---|---|
 | an API route or payload | `docs/api.md`, `docs/openapi.yaml`, `web/src/types.ts` |
-| a config key | `internal/config` (schema, default, validation), `foundry.example.yaml`, the README if users see it |
+| a config key | `internal/config` (schema, default, validation), `onlet.example.yaml`, the README if users see it |
 | a CLI command or flag | its `-h` usage and the README **Commands** table |
 | a UI page | `docs/ui.md` |
 | behaviour or a decision | `docs/design.md`; keep **(review)** marks on decisions that are still open |
@@ -162,11 +162,11 @@ and match the existing spelling and tone.
 - Check a UI change in a real browser at desktop and phone width against a throwaway daemon, not
   only with tests.
 
-## If foundry is running you
+## If onlet is running you
 
-When `FOUNDRY_OUTBOX` is set, you are an agent inside foundry, and its prompt rules first: do not
+When `ONLET_OUTBOX` is set, you are an agent inside onlet, and its prompt rules first: do not
 commit, push, open PRs or call the GitHub API, and write your report to
-`$FOUNDRY_OUTBOX/result.json`. In addition:
+`$ONLET_OUTBOX/result.json`. In addition:
 
 - Never report a check as passed if it did not run or could not run. Say which checks ran,
   which were skipped, and why. A sandbox that cannot bind localhost (Codex's default) makes the
@@ -174,7 +174,7 @@ commit, push, open PRs or call the GitHub API, and write your report to
   green.
 - The dogfood project sets `GOPROXY=off` and `GOFLAGS=-mod=readonly`: you cannot download
   modules, so do not add dependencies.
-- Report problems with foundry itself as `friction` with target `foundry`. Check the current
+- Report problems with onlet itself as `friction` with target `onlet`. Check the current
   code first: friction often describes something already fixed.
 
 ## If a person or an interactive agent is driving
@@ -191,20 +191,20 @@ commit, push, open PRs or call the GitHub API, and write your report to
 
 ## Keep the maintainer's instance up to date
 
-The maintainer runs a long-lived foundry on their own machine, set up as in
-`examples/dogfood/README.md`. It works on the maintainer's other projects and on foundry itself,
-so it must run current `main`. When you develop foundry on that machine (there,
-`DOGFOOD=~/.local/share/foundry-dogfood`), finish every change that reaches `main` like this:
+The maintainer runs a long-lived onlet on their own machine, set up as in
+`examples/dogfood/README.md`. It works on the maintainer's other projects and on onlet itself,
+so it must run current `main`. When you develop onlet on that machine (there,
+`DOGFOOD=~/.local/share/onlet-dogfood`), finish every change that reaches `main` like this:
 
 1. Bring the factory's base branch up to date: push `main` to `dogfood` when it fast-forwards
    and no factory PR is waiting on the same files (see above).
 2. Run `mise exec -- examples/dogfood/update.sh`. It builds `main`, waits until the factory is
    idle, swaps the binary, restarts the daemon, checks its version, and puts the old binary back
    if the new one fails.
-3. Check that the UI loads and `foundry status` is sane.
+3. Check that the UI loads and `onlet status` is sane.
 
-That machine's config, `$DOGFOOD/foundry.yaml`, is a local copy of the example plus
+That machine's config, `$DOGFOOD/onlet.yaml`, is a local copy of the example plus
 machine-specific settings, so it is not in the repository. When a change adds a config key that
 the instance needs, update the binary first and then add the key to that file: an older binary
-rejects keys it does not know. Agents that foundry runs never do any of this, because restarting
+rejects keys it does not know. Agents that onlet runs never do any of this, because restarting
 the daemon ends their own run.

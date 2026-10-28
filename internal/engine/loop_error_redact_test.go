@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobbyrc/foundry/internal/api"
-	"github.com/bobbyrc/foundry/internal/domain"
-	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/onlet/internal/api"
+	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onlet/internal/store"
 )
 
 // A loop error that echoes a project secret is stored and emitted redacted.

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/foundry/internal/domain"
+	"github.com/bobbyrc/onlet/internal/domain"
 )
 
 const (
