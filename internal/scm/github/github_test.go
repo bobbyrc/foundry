@@ -448,3 +448,25 @@ func TestLabelFailureIsNotCached(t *testing.T) {
 	require.NoError(t, g.EditLabels(context.Background(), 1, []string{"x"}, nil))
 	assert.Equal(t, 2, f.countCalls("label", "create"))
 }
+
+func TestUpdatePRBodySendsBodyOnStdin(t *testing.T) {
+	f := newFake()
+	g := NewWithRunner(repo, f.runner())
+	body := "line one\n`$(rm -rf /)` \"quoted\"\n"
+
+	require.NoError(t, g.UpdatePRBody(context.Background(), 12, body))
+	require.Len(t, f.calls, 1)
+	assert.Equal(t, []string{"pr", "edit", "12", "--repo", repo, "--body-file", "-"}, f.calls[0].args)
+	assert.Equal(t, body, f.calls[0].stdin)
+}
+
+func TestUpdatePRBodyWrapsError(t *testing.T) {
+	f := newFake()
+	f.errOn["pr edit"] = errors.New("boom")
+	g := NewWithRunner(repo, f.runner())
+
+	err := g.UpdatePRBody(context.Background(), 12, "b")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "update body of PR #12")
+	assert.ErrorContains(t, err, "boom")
+}

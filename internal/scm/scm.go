@@ -62,6 +62,8 @@ type SCM interface {
 	GetPR(ctx context.Context, number int) (PR, error)
 	// FindPR returns the open PR for head branch, or ok=false.
 	FindPR(ctx context.Context, head string) (pr PR, ok bool, err error)
+	// UpdatePRBody replaces the description of PR number.
+	UpdatePRBody(ctx context.Context, number int, body string) error
 	// MergePR squash-merges and deletes the branch. When headSHA is non-empty the merge only
 	// happens if the PR head is still that commit (the one CI, review and policy approved).
 	MergePR(ctx context.Context, number int, headSHA string) error
