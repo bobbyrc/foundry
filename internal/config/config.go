@@ -35,6 +35,9 @@ type Server struct {
 	Addr      string `yaml:"addr" json:"addr"`             // default 127.0.0.1:7777
 	DataDir   string `yaml:"data_dir" json:"data_dir"`     // default ~/.local/share/foundry
 	PublicURL string `yaml:"public_url" json:"public_url"` // for links in notifications; default http://<addr>
+	// AllowedHosts are extra Host header values the server accepts (DNS-rebinding guard).
+	// localhost, 127.0.0.1, [::1], the addr host and the public_url host are always allowed.
+	AllowedHosts []string `yaml:"allowed_hosts" json:"allowed_hosts,omitempty"`
 }
 
 type Limits struct {
