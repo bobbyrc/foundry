@@ -124,6 +124,10 @@ projects:
       Run `mise exec -- go test -race ./...` before you report done.
     env:                               # added to each agent session for this project
       FOUNDRY_PROJECT: foundry
+    # setup:                           # run in each fresh worktree before the agent starts
+    #   - name: web deps
+    #     run: cd web && npm ci --prefer-offline --no-audit
+    #     timeout: 5m
     # intake:                          # external queues that become tasks; see docs/plugins.md, "Intake sources"
     #   - name: inbox                  # lowercase letters, digits, - and _; unique per project
     #     command: cat ~/foundry-inbox.jsonl   # prints one JSON item per line: {"id","title","body","kind","priority","role"}
