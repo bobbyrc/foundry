@@ -20,6 +20,7 @@ type Input struct {
 	// AgentRiskReasons are copied into the decision's reasons when AgentRisk wins.
 	AgentRiskReasons []string
 	Labels           []string // PR/issue labels
+	Source           string   // the task's source ("followup", "retro", ...)
 }
 
 type Decision struct {

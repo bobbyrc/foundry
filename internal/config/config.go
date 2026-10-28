@@ -102,6 +102,9 @@ type Policy struct {
 	// CIGrace: after foundry pushes, a PR with no checks yet counts as CI pending (not "no CI")
 	// for this long, so a fast review cannot merge before CI registers. Default 3m.
 	CIGrace Duration `yaml:"ci_grace" json:"ci_grace"`
+	// RequireChecks: for repositories that always run CI, a PR with no checks never passes the
+	// CI gate (it waits, then blocks after 30m) instead of counting as "no CI configured".
+	RequireChecks bool `yaml:"require_checks" json:"require_checks"`
 	// Gates by risk level: "low", "medium", "high".
 	Gates map[string]Gate `yaml:"gates" json:"gates"`
 }
@@ -121,8 +124,12 @@ type Project struct {
 	Agents map[string]Agent `yaml:"agents" json:"agents,omitempty"`
 	// Routing overrides the global task kind → agent routing for this project.
 	Routing map[string]string `yaml:"routing" json:"routing,omitempty"`
-	Deploy  *Deploy           `yaml:"deploy" json:"deploy,omitempty"`
-	Observe []Observer        `yaml:"observe" json:"observe,omitempty"`
+	// Checks run in the worktree after the agent finishes and before foundry commits and
+	// pushes (formatters, linters, fast tests). A failing check fails the attempt: the task is
+	// re-queued with the check's output, like a CI failure, without spending a CI run.
+	Checks  []Check    `yaml:"checks" json:"checks,omitempty"`
+	Deploy  *Deploy    `yaml:"deploy" json:"deploy,omitempty"`
+	Observe []Observer `yaml:"observe" json:"observe,omitempty"`
 	// Loops overrides the global loop settings for this project.
 	Loops *Loops `yaml:"loops" json:"loops,omitempty"`
 	// Paused stops the scheduler from starting runs and the loops from creating tasks.
@@ -194,4 +201,13 @@ type Loops struct {
 		Label     string `yaml:"label" json:"label"`                   // default "friction"
 		MinCount  int    `yaml:"min_count" json:"min_count"`           // reports before filing; default 1
 	} `yaml:"friction" json:"friction"`
+}
+
+// Check is one command foundry runs before pushing an agent's work.
+type Check struct {
+	Name string `yaml:"name" json:"name"`
+	// Run is a shell command (sh -c) run in the worktree with the project's env.
+	Run string `yaml:"run" json:"run"`
+	// Timeout defaults to 10m.
+	Timeout Duration `yaml:"timeout" json:"timeout"`
 }

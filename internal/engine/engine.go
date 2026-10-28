@@ -84,6 +84,10 @@ type Engine struct {
 	budgetMu  sync.Mutex
 	budgetDay string
 
+	// baseCtx is Run's context: work not tied to a request (chat replies) derives from it so
+	// shutdown cancels it. Set at the start of Run; nil before.
+	baseCtx context.Context
+
 	// lifeMu guards stopped; goTracked refuses new goroutines once Run is shutting down.
 	lifeMu  sync.Mutex
 	stopped bool
