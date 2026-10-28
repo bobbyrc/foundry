@@ -55,7 +55,8 @@ type Limits struct {
 	RunTimeout        Duration `yaml:"run_timeout" json:"run_timeout"`                   // default 2h
 	MaxAttempts       int      `yaml:"max_attempts" json:"max_attempts"`                 // default 3
 	// DailyBudgetUSD stops new task runs once today's reported agent cost reaches it (0 = no
-	// limit). Chat with the orchestrator is exempt. Codex reports no cost, so it is not counted.
+	// limit). Chat with the orchestrator is exempt. Codex reports no cost, so it is counted only
+	// when its harness has a price.
 	DailyBudgetUSD float64 `yaml:"daily_budget_usd" json:"daily_budget_usd"`
 }
 
@@ -70,6 +71,27 @@ type Harness struct {
 	// otherwise get only a small allowlist (PATH, HOME, USER, LANG, TERM, TMPDIR, ...), so
 	// secrets loaded into foundry (GH_TOKEN, provider tokens) do not reach them.
 	InheritEnv []string `yaml:"inherit_env" json:"inherit_env,omitempty"`
+	// Price lets foundry estimate the cost of runs whose harness reports tokens but no dollar
+	// cost (codex), so limits.daily_budget_usd counts them.
+	Price *Price `yaml:"price" json:"price,omitempty"`
+}
+
+// Price is USD per million tokens. Every field is optional; 0 means unknown. Cached input
+// tokens are billed at CachedInputPerMTok, falling back to InputPerMTok when that is 0.
+type Price struct {
+	InputPerMTok       float64 `yaml:"input_per_mtok" json:"input_per_mtok"`
+	OutputPerMTok      float64 `yaml:"output_per_mtok" json:"output_per_mtok"`
+	CachedInputPerMTok float64 `yaml:"cached_input_per_mtok" json:"cached_input_per_mtok"`
+}
+
+// Estimate returns the cost of a run from its token counts. input includes cached.
+func (p Price) Estimate(input, cached, output int64) float64 {
+	cached = min(max(cached, 0), input)
+	cachedPrice := p.CachedInputPerMTok
+	if cachedPrice == 0 {
+		cachedPrice = p.InputPerMTok
+	}
+	return (float64(input-cached)*p.InputPerMTok + float64(cached)*cachedPrice + float64(output)*p.OutputPerMTok) / 1e6
 }
 
 // Agent is a role: which harness and model run it and with what instructions.

@@ -10,6 +10,10 @@ describe('ids and shas', () => {
 });
 
 describe('formatCost', () => {
+  it('marks estimates with ~', () => {
+    expect(formatCost(0.42, true)).toBe('~$0.42');
+    expect(formatCost(0.001, true)).toBe('~<$0.01');
+  });
   it('formats dollars and shows tiny amounts as a bound', () => {
     expect(formatCost(0.42)).toBe('$0.42');
     expect(formatCost(1)).toBe('$1.00');

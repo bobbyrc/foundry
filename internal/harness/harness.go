@@ -43,12 +43,14 @@ type Result struct {
 	SessionID string
 	ExitCode  int
 	// FinalText is the agent's last assistant message.
-	FinalText    string
-	Denials      []string // human-readable description of each refused tool call
-	CostUSD      float64
-	InputTokens  int64
-	OutputTokens int64
-	IsError      bool
+	FinalText   string
+	Denials     []string // human-readable description of each refused tool call
+	CostUSD     float64
+	InputTokens int64
+	// CachedInputTokens is the part of InputTokens served from cache (0 if not reported).
+	CachedInputTokens int64
+	OutputTokens      int64
+	IsError           bool
 }
 
 // Session is a running agent process.

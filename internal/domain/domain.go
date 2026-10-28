@@ -140,10 +140,12 @@ type Run struct {
 	LastOutputAt time.Time  `json:"last_output_at"`
 	ExitCode     int        `json:"exit_code"`
 	CostUSD      float64    `json:"cost_usd"`
-	InputTokens  int64      `json:"input_tokens"`
-	OutputTokens int64      `json:"output_tokens"`
-	Summary      string     `json:"summary,omitempty"`
-	Error        string     `json:"error,omitempty"`
+	// CostEstimated: CostUSD was computed from tokens and the configured price, not reported.
+	CostEstimated bool   `json:"cost_estimated,omitempty"`
+	InputTokens   int64  `json:"input_tokens"`
+	OutputTokens  int64  `json:"output_tokens"`
+	Summary       string `json:"summary,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 // LogKind classifies one line of a run's streamed output.

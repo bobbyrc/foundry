@@ -44,6 +44,8 @@ type rtOpts struct {
 	// projectExtra maps a project name to extra YAML lines for its entry (agents, routing),
 	// each indented four spaces.
 	projectExtra map[string]string
+	// fakePrice, when set, is the YAML body of the fake harness price (e.g. "input_per_mtok: 2").
+	fakePrice string
 }
 
 // rtEnv is a real engine wired to an in-memory store, a shared fake SCM and local bare repos.
@@ -101,11 +103,11 @@ func rtNewEngine(t *testing.T, o rtOpts) *rtEnv {
   max_concurrent_runs: %d
   max_runs_per_project: %d
 harnesses:
-  fake: {type: fake}
+  fake: {type: fake%s}
   alt: {type: fake}
 agents:
 %sprojects:
-%s`, dataDir, self, o.maxAttempts, o.maxConcurrent, o.maxPerProject, agents.String(), projects.String())
+%s`, dataDir, self, o.maxAttempts, o.maxConcurrent, o.maxPerProject, fakeHarnessExtra(o.fakePrice), agents.String(), projects.String())
 	cfg, err := config.Parse([]byte(yaml), "")
 	require.NoError(t, err, yaml)
 
@@ -937,4 +939,11 @@ func TestRunnerFailingCheckRequeuesWithOutput(t *testing.T) {
 		}
 		return false
 	})
+}
+
+func fakeHarnessExtra(price string) string {
+	if price == "" {
+		return ""
+	}
+	return ", price: {" + price + "}"
 }

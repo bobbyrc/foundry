@@ -616,7 +616,11 @@ func runShow(e *env, args []string) error {
 	fmt.Fprintf(e.out, "Branch:   %s\n", orDash(oneLine(r.Branch)))
 	fmt.Fprintf(e.out, "Workdir:  %s\n", orDash(oneLine(r.Workdir)))
 	fmt.Fprintf(e.out, "Started:  %s   Ended: %s\n", stamp(r.StartedAt), stamp(derefTime(r.EndedAt)))
-	fmt.Fprintf(e.out, "Exit:     %d   Cost: $%.4f   Tokens in/out: %d/%d\n", r.ExitCode, r.CostUSD, r.InputTokens, r.OutputTokens)
+	approx := ""
+	if r.CostEstimated {
+		approx = "~"
+	}
+	fmt.Fprintf(e.out, "Exit:     %d   Cost: %s$%.4f   Tokens in/out: %d/%d\n", r.ExitCode, approx, r.CostUSD, r.InputTokens, r.OutputTokens)
 	if r.Summary != "" {
 		fmt.Fprintf(e.out, "Summary:  %s\n", cleanText(r.Summary))
 	}

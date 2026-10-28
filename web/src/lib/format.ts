@@ -10,10 +10,11 @@ export const shortId = (id: string): string => id.slice(-8);
 export const shortSha = (sha: string): string => sha.slice(0, 7);
 
 /** "$0.42"; amounts under a cent show as "<$0.01". */
-export function formatCost(usd: number | null | undefined): string {
+export function formatCost(usd: number | null | undefined, estimated = false): string {
   if (usd === null || usd === undefined || Number.isNaN(usd)) return '—';
-  if (usd > 0 && usd < 0.01) return '<$0.01';
-  return `$${usd.toFixed(2)}`;
+  const approx = estimated ? '~' : '';
+  if (usd > 0 && usd < 0.01) return `${approx}<$0.01`;
+  return `${approx}$${usd.toFixed(2)}`;
 }
 
 /** "950", "12.3k", "15k", "1.5M". */
