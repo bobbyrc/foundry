@@ -407,3 +407,7 @@ never enable it themselves; if a task cannot be verified without it, report it a
 - **A task is `blocked` with a denial**: read the run log with `./foundry run logs RUN_ID`. The agent's
   tool call was refused. Fix the cause (for example, a missing permission or a path outside the
   checkout) and retry with a note.
+
+## Next: run foundry on itself
+
+`examples/dogfood/` shows a full loop: issues labelled `foundry` become tasks, agents open PRs against a `dogfood` branch, and low-risk PRs merge on their own. Each merge is released to a staging copy on port 7798 and verified, and a failed release rolls back and opens an incident. See [`examples/dogfood/README.md`](../examples/dogfood/README.md) for the steps.
