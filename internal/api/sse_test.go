@@ -193,3 +193,28 @@ func TestSSEReplaysPagesInOrder(t *testing.T) {
 	assert.Equal(t, fmt.Sprint(stored+1), live.id)
 	assert.Equal(t, "live", live.data.Message)
 }
+
+func TestSSEAfterZeroReplaysFromStart(t *testing.T) {
+	x := newHarness(t)
+	ctx := context.Background()
+	const total = 1200
+	for i := 0; i < total; i++ {
+		_, err := x.bus.Publish(ctx, domain.Event{Type: domain.EvTaskCreated, Message: fmt.Sprint(i)})
+		require.NoError(t, err)
+	}
+
+	resp := openStream(t, x, "/api/v1/events?after=0", testToken)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	frames := readFrames(t, resp.Body)
+	for i := 0; i < total; i++ {
+		f := nextFrame(t, frames)
+		require.Equal(t, fmt.Sprint(i+1), f.id, "frame %d", i)
+		require.Equal(t, fmt.Sprint(i), f.data.Message)
+	}
+
+	_, err := x.bus.Publish(ctx, domain.Event{Type: domain.EvTaskUpdated, Message: "live"})
+	require.NoError(t, err)
+	live := nextFrame(t, frames)
+	assert.Equal(t, fmt.Sprint(total+1), live.id)
+	assert.Equal(t, "live", live.data.Message)
+}
