@@ -114,6 +114,37 @@ paused project.
 
 To use the web UI on a phone, add it to the home screen; see [docs/ui.md](docs/ui.md#install-on-a-phone).
 
+### Commands
+
+Run `foundry <command> -h` for a command's flags. For `task`, `run` and `project`, put the verb first,
+as in `foundry task create -h`.
+
+| Command | What it does |
+|---------|--------------|
+| `serve` | run the daemon: API, web UI and engine |
+| `init` | write a starter foundry.yaml |
+| `token` | print the API token |
+| `open` | open the web UI in a browser |
+| `status` | what is running, and what needs you |
+| `projects` | list managed projects |
+| `project add\|pause\|resume` | add a project to the config, or pause or resume one |
+| `agents` | list agent roles |
+| `config` | print the redacted config, or `--reload` it |
+| `task` | create, list, show, cancel and retry tasks |
+| `run` | list, show, cancel and print logs of agent runs |
+| `deploys` | list releases, or show one with its log |
+| `approvals` | list approvals waiting for a decision |
+| `approve` | approve or reject an approval |
+| `events` | show history, or follow the event stream |
+| `loops` | list recurring loops |
+| `loop run NAME` | run a loop now |
+| `pause` | stop starting runs and loops |
+| `resume` | resume a paused factory |
+| `chat` | message the orchestrator and print its reply |
+| `service` | install, uninstall or check the launchd service that keeps serve running |
+| `doctor` | check the setup: config, git, gh, harness CLIs, projects and the daemon |
+| `version` | print the foundry version |
+
 ### Run it as a service
 
 On macOS, `foundry service install` keeps the daemon running in the background and restarts it if it

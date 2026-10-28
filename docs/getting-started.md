@@ -404,8 +404,8 @@ never enable it themselves; if a task cannot be verified without it, report it a
 
 ## Troubleshooting
 
-- **`no config at ...: run foundry init`**: the CLI cannot find the config file. Run `foundry init`, or
-  pass `--config` / set `FOUNDRY_CONFIG`.
+- **``no config at <path>: run `foundry init` to create one``**: the CLI cannot find the config file.
+  Run `foundry init`, or pass `--config` / set `FOUNDRY_CONFIG`.
 - **`no token: set FOUNDRY_TOKEN or run on the machine running foundry serve`**: the CLI cannot read
   the token. Run the command on the machine that runs the daemon, or set `FOUNDRY_API` and
   `FOUNDRY_TOKEN`.

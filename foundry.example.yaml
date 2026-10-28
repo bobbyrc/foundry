@@ -14,6 +14,7 @@ server:
   public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>, with 0.0.0.0 or :: shown as loopback)
   retain_events: 720h                  # event history kept this long; older events are deleted daily (default 720h = 30 days)
   retain_run_logs: 2160h               # agent run logs kept this long (default 2160h = 90 days)
+  # allowed_hosts: [foundry.tailnet.ts.net]   # extra Host names the API accepts (e.g. a Tailscale name); needed for remote access (default none)
 
 # Limits: caps on how much runs at once and how long a run may go.
 limits:
@@ -87,6 +88,8 @@ policies:
   strict:
     max_lines: 200                     # a diff above this many changed lines is at least medium risk (default 400)
     max_files: 10                      # a diff touching more files than this is at least medium risk (default 20)
+    require_checks: false              # true: a PR with no CI checks waits (then blocks after 30m) instead of counting as "no CI"; use for repos that always run CI
+    ci_grace: 3m                       # after a push, a PR with no checks yet counts as CI pending this long (default 3m)
     # "rules" REPLACES the built-in rules (migrations, CI/deploy, auth, dependency manifests,
     # foundry's own gates) with the list you give. Setting it drops all of those protections
     # unless you copy them. "extra_rules" is usually what you want: it adds to the built-in rules.
@@ -222,7 +225,7 @@ notify:
   - type: ntfy                         # push notifications via ntfy.sh
     options:
       topic: foundry-bcraig-example    # pick a hard-to-guess topic; anyone who knows it can read it
-    min_priority: normal               # low, normal or high; empty sends everything
+    min_priority: normal               # low, normal or high; empty means normal (low-priority messages are not sent)
 
   # An exec notifier runs a command with the message. Uncomment to use it.
   # Push to your phone through the Herdr app. The exec notifier runs a shell command with the

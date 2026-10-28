@@ -33,7 +33,8 @@ commands inherit it from there.
 ## How work arrives
 
 - Issues labelled `foundry` in `bobbyrc/foundry` become tasks.
-- Or create one by hand: `foundry task create`.
+- Or create one by hand:
+  `foundry task create --project foundry --kind feature --title "..." --body "..."`.
 
 ## What needs a human
 

@@ -53,7 +53,7 @@ Radius 8px on cards, 6px on controls, 999px on pills. Spacing scale 4/8/12/16/24
 ## Shell
 
 - Left sidebar 224px (`--panel`, right border): wordmark "foundry" in semibold with a 10px
-  amber square before it; nav items with counts where useful: Overview, Chat, Tasks,
+  amber square before it; nav items with counts where useful: Overview, Projects, Chat, Tasks,
   Approvals (accent count badge when > 0), Runs, Deploys, Signals, Friction, Loops, Agents,
   Config. Active item: `--panel-2` background and a 2px accent bar on the left.
 - Sidebar footer: the **pause switch** — a full-width button. Running: secondary

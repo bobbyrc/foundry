@@ -186,8 +186,9 @@ file that keeps growing until the service stops. The `deploy` result is read fro
 evidence is the last 4 KB of stdout followed by stderr. Before evidence (deploy output, `logs` output,
 failure notes) is stored or handed to an agent, foundry replaces secret values with `***`: the value
 of every environment variable (foundry's own and the project's `env`) whose name has a segment such
-as `TOKEN`, `SECRET`, `PASSWORD`, `KEY` or `AUTH`, and any URL with credentials in it. Values shorter
-than 8 characters are left alone.
+as `TOKEN`, `SECRET`, `PASSWORD`, `PASS`, `PASSWD`, `KEY`, `AUTH`, `APIKEY`, `CREDENTIAL`, `DSN`,
+`COOKIE` or `PAT` (plural forms count too, such as `TOKENS` or `KEYS`), and any URL with credentials
+in it. Values shorter than 8 characters are left alone.
 
 | Option     | Required | Default | Meaning                                                              |
 |------------|----------|---------|----------------------------------------------------------------------|

@@ -55,7 +55,7 @@ func commandList() []command {
 		{"agents", "list agent roles", cmdAgents},
 		{"config", "print the redacted config, or --reload it", cmdConfig},
 		{"task", "create, list, show, cancel and retry tasks", cmdTask},
-		{"run", "list, show, cancel and tail agent runs", cmdRun},
+		{"run", "list, show, cancel and print logs of agent runs", cmdRun},
 		{"deploys", "list releases, or show one with its log: deploys show ID", cmdDeploys},
 		{"approvals", "list approvals waiting for a decision", cmdApprovals},
 		{"approve", "approve or reject an approval", cmdApprove},
@@ -125,10 +125,27 @@ func usage(w io.Writer) {
 	fmt.Fprintf(tw, "  %s\t%s\n", "help", "show this help")
 	_ = tw.Flush()
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, `Run "foundry <command> -h" for a command's flags.`)
+	fmt.Fprintln(w, `Run "foundry <command> -h" for a command's flags; for task, run and project, put the verb first: "foundry task create -h".`)
 	fmt.Fprintln(w, "Environment: FOUNDRY_CONFIG (config file), FOUNDRY_API (server URL),")
 	fmt.Fprintln(w, "FOUNDRY_TOKEN (API token). Without them the config file's server address and")
 	fmt.Fprintln(w, "data_dir are used.")
+}
+
+// Usage text for the commands whose first argument is a verb. They print it for -h, -help, --help
+// and help, and exit 0, as service does.
+const (
+	taskHelp = "usage: foundry task create|list|show|cancel|retry [flags] [arguments]\n" +
+		"Run \"foundry task <verb> -h\" for a verb's flags."
+	runHelp = "usage: foundry run list|show|cancel|logs [flags] [arguments]\n" +
+		"Run \"foundry run <verb> -h\" for a verb's flags."
+	projectHelp = "usage: foundry project add|pause|resume NAME [flags]\n" +
+		"Run \"foundry project <verb> -h\" for a verb's flags."
+	loopHelp = "usage: foundry loop run NAME [--project P]"
+)
+
+// isHelpFlag reports whether arg asks for help: -h, -help or --help.
+func isHelpFlag(arg string) bool {
+	return arg == "-h" || arg == "-help" || arg == "--help"
 }
 
 // usageError marks a mistake in how a command was invoked (exit code 2).

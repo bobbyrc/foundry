@@ -243,6 +243,10 @@ func cmdTask(e *env, args []string) error {
 		return usagef("usage: foundry task create|list|show|cancel|retry ...")
 	}
 	sub, rest := args[0], args[1:]
+	if isHelpFlag(sub) || sub == "help" {
+		fmt.Fprintln(e.out, taskHelp)
+		return nil
+	}
 	switch sub {
 	case "create":
 		return taskCreate(e, rest)
@@ -505,6 +509,10 @@ func cmdRun(e *env, args []string) error {
 		return usagef("usage: foundry run list|show|cancel|logs ...")
 	}
 	sub, rest := args[0], args[1:]
+	if isHelpFlag(sub) || sub == "help" {
+		fmt.Fprintln(e.out, runHelp)
+		return nil
+	}
 	switch sub {
 	case "list":
 		return runList(e, rest)
@@ -771,7 +779,7 @@ func cmdEvents(e *env, args []string) error {
 	fs := newFlagSet("events", e)
 	follow := fs.Bool("follow", false, "keep printing new events")
 	after := fs.Int64("after", 0, "only events with an ID greater than this")
-	limit := fs.Int("limit", 0, "maximum events in the history (default 200)")
+	limit := fs.Int("limit", 0, "maximum events in the history (default: the server's, 500)")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -862,6 +870,10 @@ func cmdLoops(e *env, args []string) error {
 }
 
 func cmdLoop(e *env, args []string) error {
+	if len(args) > 0 && isHelpFlag(args[0]) {
+		fmt.Fprintln(e.out, loopHelp)
+		return nil
+	}
 	if len(args) == 0 || args[0] != "run" {
 		return usagef("usage: foundry loop run NAME [--project P]")
 	}
@@ -873,6 +885,9 @@ func cmdLoop(e *env, args []string) error {
 	}
 	if err := requireArgs(positional, 1, "loop run NAME [--project P]"); err != nil {
 		return err
+	}
+	if strings.HasPrefix(positional[0], "-") {
+		return usagef("usage: foundry loop run NAME [--project P]")
 	}
 	c, err := apiClient()
 	if err != nil {
@@ -898,6 +913,10 @@ func cmdProject(e *env, args []string) error {
 		return usagef("usage: foundry project add|pause|resume NAME")
 	}
 	sub, rest := args[0], args[1:]
+	if isHelpFlag(sub) || sub == "help" {
+		fmt.Fprintln(e.out, projectHelp)
+		return nil
+	}
 	switch sub {
 	case "add":
 		return addProject(e, rest)
@@ -908,8 +927,15 @@ func cmdProject(e *env, args []string) error {
 }
 
 func setProjectPaused(e *env, sub string, args []string) error {
+	if len(args) == 1 && isHelpFlag(args[0]) {
+		fmt.Fprintln(e.out, projectHelp)
+		return nil
+	}
 	if err := requireArgs(args, 1, "project "+sub+" NAME"); err != nil {
 		return err
+	}
+	if strings.HasPrefix(args[0], "-") {
+		return usagef("usage: foundry project %s NAME (NAME cannot start with \"-\")", sub)
 	}
 	c, err := apiClient()
 	if err != nil {
