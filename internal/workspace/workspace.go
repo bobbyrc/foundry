@@ -32,6 +32,9 @@ type Workspace struct {
 	Branch   string
 	BaseRef  string // "origin/<DefaultBranch>"
 	StartSHA string // HEAD when Prepare returned
+	// RemoteSHA is origin/<Branch> as Prepare saw it, or "" when the branch did not exist on origin.
+	// Push refuses to overwrite origin unless the remote branch still has this value.
+	RemoteSHA string
 }
 
 // Manager creates, commits, pushes and removes worktrees under Root.
@@ -123,10 +126,11 @@ func (m *Manager) Prepare(ctx context.Context, r Repo, branch, runID string) (Wo
 		return Workspace{}, err
 	}
 
-	var start string
-	if _, err := git(ctx, r.Path, "rev-parse", "--verify", "--quiet",
+	var start, remoteSHA string
+	if sha, err := git(ctx, r.Path, "rev-parse", "--verify", "--quiet",
 		"refs/remotes/origin/"+branch); err == nil {
 		start = "origin/" + branch
+		remoteSHA = sha
 		_, err = git(ctx, r.Path, "worktree", "add", "-B", branch, dir, start)
 		if err != nil {
 			return Workspace{}, fmt.Errorf("add worktree for %s: %w", branch, err)
@@ -150,7 +154,7 @@ func (m *Manager) Prepare(ctx context.Context, r Repo, branch, runID string) (Wo
 		return Workspace{}, fmt.Errorf("create outbox in %s: %w", dir, err)
 	}
 
-	ws := Workspace{Dir: dir, Branch: branch, BaseRef: baseRef}
+	ws := Workspace{Dir: dir, Branch: branch, BaseRef: baseRef, RemoteSHA: remoteSHA}
 	sha, err := m.HeadSHA(ctx, ws)
 	if err != nil {
 		return Workspace{}, err
@@ -345,9 +349,13 @@ func (m *Manager) HeadSHA(ctx context.Context, ws Workspace) (string, error) {
 }
 
 // Push pushes the worktree's branch to origin. It uses --force-with-lease because agents may
-// rebase their own branch.
+// rebase their own branch, but the lease names the value Prepare saw on origin (ws.RemoteSHA),
+// not git's remote-tracking ref. A fetch by any other task moves that ref, so comparing against it
+// could overwrite a commit a human pushed after Prepare. An empty RemoteSHA means the branch must
+// not exist on origin. The push fails when origin has moved since Prepare.
 func (m *Manager) Push(ctx context.Context, r Repo, ws Workspace) error {
-	if _, err := git(ctx, ws.Dir, "push", "--force-with-lease", "-u", "origin", ws.Branch); err != nil {
+	lease := "--force-with-lease=refs/heads/" + ws.Branch + ":" + ws.RemoteSHA
+	if _, err := git(ctx, ws.Dir, "push", lease, "-u", "origin", ws.Branch); err != nil {
 		return fmt.Errorf("push %s: %w", ws.Branch, err)
 	}
 	return nil

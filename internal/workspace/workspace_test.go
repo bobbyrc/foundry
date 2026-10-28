@@ -402,3 +402,109 @@ func gitExitCodeForTest(dir string, args ...string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
+
+// humanPush clones origin into a fresh directory, commits a file on branch as a human would, and
+// pushes it. It returns the new commit.
+func humanPush(t *testing.T, repo Repo, branch, file string) string {
+	t.Helper()
+	human := filepath.Join(t.TempDir(), "human")
+	runGit(t, filepath.Dir(human), "clone", repo.Remote, human)
+	runGit(t, human, "checkout", "-B", branch, "origin/main")
+	writeFile(t, filepath.Join(human, file), "written by a human\n")
+	runGit(t, human, "add", "-A")
+	runGit(t, human, "-c", "user.name=Human", "-c", "user.email=human@example.com", "commit", "-m", "human work")
+	runGit(t, human, "push", "origin", branch)
+	return runGit(t, human, "rev-parse", "HEAD")
+}
+
+// A human pushes to an existing PR branch after Prepare, and a background fetch moves
+// origin/<branch>. Foundry's push must not overwrite the human's commit.
+func TestPushRefusesWhenRemoteBranchMovedAfterPrepare(t *testing.T) {
+	repo, m, seed := setup(t)
+	ctx := context.Background()
+	runGit(t, seed, "push", repo.Remote, "main:refs/heads/foundry/pr")
+
+	ws, err := m.Prepare(ctx, repo, "foundry/pr", "run1")
+	require.NoError(t, err)
+	assert.Equal(t, runGit(t, repo.Remote, "rev-parse", "refs/heads/foundry/pr"), ws.RemoteSHA)
+
+	humanSHA := humanPush(t, repo, "foundry/pr", "human.txt")
+	require.NoError(t, m.EnsureClone(ctx, repo)) // the background fetch that moves origin/foundry/pr
+	require.Equal(t, humanSHA, runGit(t, repo.Path, "rev-parse", "origin/foundry/pr"))
+
+	writeFile(t, filepath.Join(ws.Dir, "agent.txt"), "agent work\n")
+	committed, err := m.Commit(ctx, ws, "agent work")
+	require.NoError(t, err)
+	require.True(t, committed)
+
+	err = m.Push(ctx, repo, ws)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rejected")
+	assert.Equal(t, humanSHA, runGit(t, repo.Remote, "rev-parse", "refs/heads/foundry/pr"),
+		"the human's commit is still on origin")
+}
+
+// Prepare finds no foundry/new on origin, someone creates it, and a background fetch sees it.
+// Foundry's push must fail rather than overwrite it.
+func TestPushRefusesWhenBranchCreatedRemotelyAfterPrepare(t *testing.T) {
+	repo, m, _ := setup(t)
+	ctx := context.Background()
+
+	ws, err := m.Prepare(ctx, repo, "foundry/new", "run1")
+	require.NoError(t, err)
+	assert.Empty(t, ws.RemoteSHA)
+
+	humanSHA := humanPush(t, repo, "foundry/new", "human.txt")
+	require.NoError(t, m.EnsureClone(ctx, repo))
+
+	writeFile(t, filepath.Join(ws.Dir, "agent.txt"), "agent work\n")
+	committed, err := m.Commit(ctx, ws, "agent work")
+	require.NoError(t, err)
+	require.True(t, committed)
+
+	err = m.Push(ctx, repo, ws)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rejected")
+	assert.Equal(t, humanSHA, runGit(t, repo.Remote, "rev-parse", "refs/heads/foundry/new"),
+		"the human's branch is still on origin")
+}
+
+// A worktree on a branch the remote does not move is pushed as before.
+func TestPushSucceedsWhenRemoteUnchangedSincePrepare(t *testing.T) {
+	repo, m, seed := setup(t)
+	ctx := context.Background()
+	runGit(t, seed, "push", repo.Remote, "main:refs/heads/foundry/pr")
+
+	ws, err := m.Prepare(ctx, repo, "foundry/pr", "run1")
+	require.NoError(t, err)
+	writeFile(t, filepath.Join(ws.Dir, "agent.txt"), "agent work\n")
+	_, err = m.Commit(ctx, ws, "agent work")
+	require.NoError(t, err)
+	require.NoError(t, m.Push(ctx, repo, ws))
+	assert.Equal(t, runGit(t, ws.Dir, "rev-parse", "HEAD"), runGit(t, repo.Remote, "rev-parse", "refs/heads/foundry/pr"))
+}
+
+// Hooks in the clone's shared hooks dir must not run for foundry's git commands.
+func TestGitCommandsDoNotRunHooks(t *testing.T) {
+	repo, m, _ := setup(t)
+	ctx := context.Background()
+	ws, err := m.Prepare(ctx, repo, "foundry/hooks", "run1")
+	require.NoError(t, err)
+
+	marker := filepath.Join(t.TempDir(), "hook-ran")
+	hooks := filepath.Join(repo.Path, ".git", "hooks")
+	require.NoError(t, os.MkdirAll(hooks, 0o755))
+	for _, name := range []string{"pre-commit", "pre-push"} {
+		script := "#!/bin/sh\ntouch " + marker + "-" + name + "\nexit 1\n"
+		require.NoError(t, os.WriteFile(filepath.Join(hooks, name), []byte(script), 0o755))
+	}
+
+	writeFile(t, filepath.Join(ws.Dir, "README.md"), "hello\nworld\n")
+	committed, err := m.Commit(ctx, ws, "add world")
+	require.NoError(t, err)
+	assert.True(t, committed)
+	assert.NoFileExists(t, marker+"-pre-commit")
+
+	require.NoError(t, m.Push(ctx, repo, ws))
+	assert.NoFileExists(t, marker+"-pre-push")
+}
