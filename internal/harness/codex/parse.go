@@ -32,8 +32,9 @@ type errorBody struct {
 
 type usage struct {
 	// InputTokens already includes CachedInputTokens, so only InputTokens is counted.
-	InputTokens  int64 `json:"input_tokens"`
-	OutputTokens int64 `json:"output_tokens"`
+	InputTokens       int64 `json:"input_tokens"`
+	CachedInputTokens int64 `json:"cached_input_tokens"`
+	OutputTokens      int64 `json:"output_tokens"`
 }
 
 // item is the payload of item.started and item.completed. Fields are used per item type.
@@ -64,6 +65,7 @@ type parser struct {
 	// from, so an error alone does not fail the run.
 	errorPending bool
 	input        int64
+	cached       int64
 	output       int64
 }
 
@@ -91,6 +93,7 @@ func (p *parser) parseLine(line string) []harness.Event {
 		p.errorPending = false
 		if sl.Usage != nil {
 			p.input += sl.Usage.InputTokens
+			p.cached += sl.Usage.CachedInputTokens
 			p.output += sl.Usage.OutputTokens
 		}
 	case "turn.failed":
@@ -176,12 +179,13 @@ func (p *parser) itemEvents(raw json.RawMessage, started bool) []harness.Event {
 // result builds the Result once the process has exited.
 func (p *parser) result(exitCode int, stderrTail []string) harness.Result {
 	res := harness.Result{
-		SessionID:    p.sessionID,
-		ExitCode:     exitCode,
-		FinalText:    p.lastText,
-		InputTokens:  p.input,
-		OutputTokens: p.output,
-		IsError:      p.turnFailed || p.errorPending || exitCode != 0,
+		SessionID:         p.sessionID,
+		ExitCode:          exitCode,
+		FinalText:         p.lastText,
+		InputTokens:       p.input,
+		CachedInputTokens: p.cached,
+		OutputTokens:      p.output,
+		IsError:           p.turnFailed || p.errorPending || exitCode != 0,
 	}
 	if p.lastText == "" && exitCode != 0 && len(stderrTail) > 0 {
 		res.FinalText = strings.Join(stderrTail, "\n")

@@ -86,6 +86,7 @@ export interface Run {
   last_output_at: string;
   exit_code: number;
   cost_usd: number;
+  cost_estimated?: boolean;
   input_tokens: number;
   output_tokens: number;
   summary?: string;

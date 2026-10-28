@@ -95,7 +95,7 @@ similar secrets are not passed on. A harness can name extra variables to pass th
 
 **Budget.** `limits.daily_budget_usd` stops new task runs once the day's reported cost reaches it.
 A run's cost is recorded when it ends, so runs in flight count only after they finish. Codex
-reports no cost.
+reports no cost, so give its harness a `price` to count an estimate (shown as `~$0.42`).
 
 Check the setup before you start the daemon:
 

@@ -1216,6 +1216,9 @@ components:
           type: integer
         cost_usd:
           type: number
+        cost_estimated:
+          type: boolean
+          description: cost_usd was estimated from tokens and the harness price, not reported.
         input_tokens:
           type: integer
           format: int64

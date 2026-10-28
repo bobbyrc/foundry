@@ -31,6 +31,9 @@ func (c *Config) Validate() error {
 		if h.Type == "" {
 			add("harnesses.%s.type: must not be empty", name)
 		}
+		if p := h.Price; p != nil && (p.InputPerMTok < 0 || p.OutputPerMTok < 0 || p.CachedInputPerMTok < 0) {
+			add("harnesses.%s.price: prices must be 0 (unknown) or greater", name)
+		}
 	}
 
 	for name, a := range c.Agents {

@@ -224,3 +224,19 @@ func TestValidateAllowedHosts(t *testing.T) {
 		assert.Contains(t, err.Error(), tc.want, name)
 	}
 }
+
+func TestValidateHarnessPriceMustNotBeNegative(t *testing.T) {
+	_, err := Parse([]byte("harnesses:\n  codex:\n    type: codex\n    price: {output_per_mtok: -1}\n"), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "harnesses.codex.price")
+
+	_, err = Parse([]byte("harnesses:\n  codex:\n    type: codex\n    price: {input_per_mtok: 1}\n"), "")
+	assert.NoError(t, err, "unset prices mean unknown")
+}
+
+func TestPriceEstimate(t *testing.T) {
+	p := Price{InputPerMTok: 2, OutputPerMTok: 10}
+	assert.InDelta(t, 2+10, p.Estimate(1_000_000, 500_000, 1_000_000), 1e-9, "cached falls back to the input price")
+	p.CachedInputPerMTok = 0.5
+	assert.InDelta(t, 1+0.25, p.Estimate(1_000_000, 500_000, 0), 1e-9)
+}

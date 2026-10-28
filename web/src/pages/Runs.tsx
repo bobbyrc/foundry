@@ -59,7 +59,7 @@ export function Runs() {
         return start ? formatDuration(elapsedMs(start, parseTime(r.ended_at), now)) : '—';
       },
     },
-    { key: 'cost', header: 'Cost', cell: (r) => <Link to={`/runs/${r.id}`}>{formatCost(r.cost_usd)}</Link> },
+    { key: 'cost', header: 'Cost', cell: (r) => <Link to={`/runs/${r.id}`}>{formatCost(r.cost_usd, r.cost_estimated)}</Link> },
   ];
 
   return (
