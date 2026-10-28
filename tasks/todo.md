@@ -116,7 +116,10 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] defect review of 47ee9be..b167957 (two fresh reviewers) → fixed: wildcard bind address broke the CLI, foundry open and orchestrator chat (Host guard 421) → LocalURL; public_url validated; exec intake over 1 MB is an error; secrets redacted from deploy/logs evidence and failure notes; deploy stdout bounded to a 64 KB tail; issue outcome comments serialised (no double post)
 - [x] SECURITY: checks ran with foundry's full env (GH_TOKEN), and a check such as `go test` runs agent-written code. Checks and the new `setup` commands now run with the agent's environment
 - [x] project `setup` commands (friction #20): run in each fresh worktree before the agent. The dogfood project now runs `npm ci` for web/
-- [ ] factory: #36 Deploys page shows a release's evidence log. It is also the first real run of web setup; if it goes well, close friction #20
-- [ ] cleanup: the deployHealth tally (package-level map) moves into the Engine struct
+- [x] factory: #36 Deploys page shows a release's evidence log (PR #38, auto-merged, released healthy). Its run used the web setup and ran vitest/build in the worktree; friction #20 closed
+- [x] cleanup (dropped): the deployHealth tally is keyed by unique deployment IDs, so the package-level map cannot cause cross-talk; not worth a run
 - [ ] known gaps from review: prod_watch runs deploy.logs synchronously (30s max per new incident); an issue report lost at shutdown is not retried; issue comments post agent summaries verbatim (no @mention or #ref neutralising)
+- [x] UI pass on live dogfood data (Playwright): tables split short words mid-word ("foundr/y", "#3/0") → #37 → factory PR #39 (overflow-wrap instead of word-break), verified in a screenshot
+- [x] merged tasks blocked by a failed release now become done when a later healthy release contains their merge commit (git merge-base --is-ancestor). Three such stale tasks (#23, #24, #30) should resolve on the next healthy release
+- [ ] factory: #40 wider release-log modal with wrapped lines; its release should also resolve the 3 stale blocked tasks (verify)
 
