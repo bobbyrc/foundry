@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Approval } from '../types';
-import { useDecideApproval } from '../queries';
+import { useDecideApproval, useTask } from '../queries';
+import { latestDoneReview } from '../lib/review';
+import { ClampedMarkdown } from './ClampedMarkdown';
 import { Button } from './Button';
 import { ErrorLine } from './ErrorLine';
 import { Field } from './Field';
@@ -14,6 +16,9 @@ export function ApprovalCard({ approval, showTask = true }: { approval: Approval
   const [note, setNote] = useState('');
   const decide = useDecideApproval(approval.id);
   const pending = approval.status === 'pending';
+  const detail = useTask(approval.task_id);
+  const summary = detail.data?.task.summary;
+  const review = latestDoneReview(detail.data?.children);
 
   return (
     <article className="card approval-card">
@@ -36,6 +41,18 @@ export function ApprovalCard({ approval, showTask = true }: { approval: Approval
         <RelTime value={approval.created_at} />
       </p>
       <Markdown text={approval.reason} />
+      {summary ? (
+        <section className="approval-section">
+          <h4>What changed</h4>
+          <ClampedMarkdown text={summary} lines={6} />
+        </section>
+      ) : null}
+      {detail.isSuccess ? (
+        <section className="approval-section">
+          <h4>Reviewer</h4>
+          {review?.summary ? <ClampedMarkdown text={review.summary} lines={4} /> : <p className="muted small">No review yet</p>}
+        </section>
+      ) : null}
       {approval.note ? <p className="small">Note: {approval.note}</p> : null}
       {pending ? (
         <div className="decide">
