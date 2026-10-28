@@ -77,6 +77,9 @@ type Config struct {
 	Command []string          // binary and fixed leading args; adapters have a default
 	Env     map[string]string // added to every session
 	Args    []string          // added to every session, before Spec.Args
+	// InheritEnv names variables passed through from foundry's environment on top of the
+	// base allowlist (see proc.go). Everything else in foundry's environment is withheld.
+	InheritEnv []string
 }
 
 var (

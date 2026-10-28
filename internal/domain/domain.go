@@ -95,13 +95,15 @@ type Task struct {
 	PRURL     string `json:"pr_url,omitempty"`
 	MergeSHA  string `json:"merge_sha,omitempty"`
 	// ApprovedSHA is the PR head commit a reviewer run approved; a new push invalidates it.
-	ApprovedSHA   string    `json:"approved_sha,omitempty"`
-	Summary       string    `json:"summary,omitempty"` // latest agent summary
-	BlockedReason string    `json:"blocked_reason,omitempty"`
-	Attempts      int       `json:"attempts"`
-	MaxAttempts   int       `json:"max_attempts"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ApprovedSHA string `json:"approved_sha,omitempty"`
+	// PushedAt is when foundry last pushed the task branch (CI may not have registered yet).
+	PushedAt      *time.Time `json:"pushed_at,omitempty"`
+	Summary       string     `json:"summary,omitempty"` // latest agent summary
+	BlockedReason string     `json:"blocked_reason,omitempty"`
+	Attempts      int        `json:"attempts"`
+	MaxAttempts   int        `json:"max_attempts"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 type RunStatus string

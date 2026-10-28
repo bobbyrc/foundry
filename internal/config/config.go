@@ -27,6 +27,8 @@ type Config struct {
 
 	// Path is the file this config was loaded from (not part of the file).
 	Path string `yaml:"-" json:"path"`
+
+	expanded []string `yaml:"-" json:"-"` // values substituted for ${NAME} references at load time; redacted wherever they appear
 }
 
 type Server struct {
@@ -53,6 +55,10 @@ type Harness struct {
 	Command []string          `yaml:"command" json:"command,omitempty"`
 	Args    []string          `yaml:"args" json:"args,omitempty"`
 	Env     map[string]string `yaml:"env" json:"env,omitempty"`
+	// InheritEnv names extra variables passed through from foundry's own environment. Agents
+	// otherwise get only a small allowlist (PATH, HOME, USER, LANG, TERM, TMPDIR, ...), so
+	// secrets loaded into foundry (GH_TOKEN, provider tokens) do not reach them.
+	InheritEnv []string `yaml:"inherit_env" json:"inherit_env,omitempty"`
 }
 
 // Agent is a role: which harness and model run it and with what instructions.
@@ -87,6 +93,9 @@ type Policy struct {
 	// MaxFiles: a diff touching more files than this is at least medium risk.
 	MaxFiles int    `yaml:"max_files" json:"max_files"`
 	Rules    []Rule `yaml:"rules" json:"rules"`
+	// CIGrace: after foundry pushes, a PR with no checks yet counts as CI pending (not "no CI")
+	// for this long, so a fast review cannot merge before CI registers. Default 3m.
+	CIGrace Duration `yaml:"ci_grace" json:"ci_grace"`
 	// Gates by risk level: "low", "medium", "high".
 	Gates map[string]Gate `yaml:"gates" json:"gates"`
 }

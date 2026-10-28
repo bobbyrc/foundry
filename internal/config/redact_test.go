@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,4 +66,60 @@ notify:
 	data, err := json.Marshal(red)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), `"verify_for":"10m0s"`)
+}
+
+func TestRedactedMasksExpandedValuesEverywhere(t *testing.T) {
+	t.Setenv("FOUNDRY_TEST_VERCEL_TOKEN", "vcp_live_secret_1")
+	t.Setenv("FOUNDRY_TEST_CLI_KEY", "harness-key-value")
+	t.Setenv("FOUNDRY_TEST_NTFY_PATH", "abc123-topic-path")
+	t.Setenv("FOUNDRY_TEST_INSTR_SECRET", "sk-instruction-secret")
+	t.Setenv("FOUNDRY_TEST_SHORT", "tiny")
+	t.Setenv("FOUNDRY_TEST_EMPTY", "")
+	cfg, err := Parse([]byte(`
+harnesses:
+  exec:
+    type: exec
+    command: ["agent"]
+    args: ["--api-key=${FOUNDRY_TEST_CLI_KEY}"]
+projects:
+  app:
+    repo: bob/app
+    instructions: "Use the key ${FOUNDRY_TEST_INSTR_SECRET} for the API."
+    deploy:
+      type: command
+      options:
+        deploy: "vercel --token ${FOUNDRY_TEST_VERCEL_TOKEN}"
+        label: "${FOUNDRY_TEST_SHORT}-deploy${FOUNDRY_TEST_EMPTY}"
+notify:
+  - type: ntfy
+    options:
+      url: "https://ntfy.example/${FOUNDRY_TEST_NTFY_PATH}"
+      label: "${FOUNDRY_TEST_SHORT}"
+`), "/conf/foundry.yaml")
+	require.NoError(t, err)
+
+	red := cfg.Redacted()
+
+	assert.Equal(t, "/conf/foundry.yaml", red.Path)
+	assert.Equal(t, "app", red.Projects["app"].Name)
+	assert.Equal(t, "--api-key=***", red.Harness["exec"].Args[0])
+	assert.Equal(t, "Use the key *** for the API.", red.Projects["app"].Instructions)
+	assert.Equal(t, "vercel --token ***", red.Projects["app"].Deploy.Options["deploy"])
+	assert.Equal(t, "https://ntfy.example/***", red.Notify[0].Options["url"])
+
+	// Values shorter than six characters are not masked.
+	assert.Equal(t, "tiny-deploy", red.Projects["app"].Deploy.Options["label"])
+	assert.Equal(t, "tiny", red.Notify[0].Options["label"])
+
+	data, err := json.Marshal(red)
+	require.NoError(t, err)
+	for _, secret := range []string{"vcp_live_secret_1", "harness-key-value", "abc123-topic-path", "sk-instruction-secret"} {
+		assert.False(t, strings.Contains(string(data), secret), "redacted JSON leaks %q", secret)
+	}
+	assert.NotContains(t, string(data), "expanded")
+
+	// The original is untouched.
+	assert.Equal(t, "vercel --token vcp_live_secret_1", cfg.Projects["app"].Deploy.Options["deploy"])
+	assert.Equal(t, []string{"--api-key=harness-key-value"}, cfg.Harness["exec"].Args)
+	assert.Equal(t, "https://ntfy.example/abc123-topic-path", cfg.Notify[0].Options["url"])
 }

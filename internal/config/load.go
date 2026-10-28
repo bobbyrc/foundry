@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"unicode/utf8"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 	"go.yaml.in/yaml/v3"
@@ -40,7 +41,7 @@ func Load(path string) (*Config, error) {
 // resolve relative agent prompt paths; an empty path resolves them against the working
 // directory. An empty document is valid and yields the defaults.
 func Parse(data []byte, path string) (*Config, error) {
-	expanded, err := expandEnv(data)
+	expanded, values, err := expandEnv(data)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +52,7 @@ func Parse(data []byte, path string) (*Config, error) {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	cfg.Path = path
+	cfg.expanded = values
 	ApplyDefaults(&cfg)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -58,13 +60,20 @@ func Parse(data []byte, path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// minSecretLen is the shortest substituted value that Redacted masks. Shorter values are too
+// likely to occur by chance inside other config text, and masking them would garble the output.
+const minSecretLen = 6
+
 // expandEnv replaces ${NAME} with the value of the environment variable NAME. A variable that is
 // set to the empty string expands to nothing. A variable that is not set is an error, so a typo
 // or a missing secret fails at startup instead of becoming an empty value. The error names each
-// unset variable once, in sorted order.
-func expandEnv(data []byte) ([]byte, error) {
+// unset variable once, in sorted order. On success it also returns each distinct substituted
+// value of at least minSecretLen characters, so that Redacted can mask them wherever they appear.
+func expandEnv(data []byte) ([]byte, []string, error) {
 	var missing []string
 	seen := map[string]bool{}
+	var values []string
+	seenValue := map[string]bool{}
 	out := envRef.ReplaceAllFunc(data, func(match []byte) []byte {
 		name := string(envRef.FindSubmatch(match)[1])
 		value, ok := os.LookupEnv(name)
@@ -75,17 +84,21 @@ func expandEnv(data []byte) ([]byte, error) {
 			}
 			return nil
 		}
+		if utf8.RuneCountInString(value) >= minSecretLen && !seenValue[value] {
+			seenValue[value] = true
+			values = append(values, value)
+		}
 		return []byte(value)
 	})
 	if len(missing) == 0 {
-		return out, nil
+		return out, values, nil
 	}
 	sort.Strings(missing)
 	errs := make([]error, len(missing))
 	for i, name := range missing {
 		errs[i] = fmt.Errorf("undefined environment variable ${%s}", name)
 	}
-	return nil, errors.Join(errs...)
+	return nil, nil, errors.Join(errs...)
 }
 
 // RollbackEnabled reports whether a failed verify window rolls the release back. Default true.
