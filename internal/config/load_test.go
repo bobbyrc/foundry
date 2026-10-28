@@ -196,7 +196,7 @@ func TestExampleFileLoads(t *testing.T) {
 	assert.Equal(t, "fatal", loops.ProdWatch.MinLevel)
 
 	pol := cfg.PolicyFor("myapp")
-	assert.Len(t, pol.Rules, 6, "the example adds rules with extra_rules, so the built-ins stay")
+	assert.Len(t, pol.Rules, 7, "the example adds rules with extra_rules, so the built-ins stay")
 	assert.Len(t, pol.ExtraRules, 2)
 	assert.Equal(t, 200, pol.MaxLines)
 }

@@ -60,7 +60,7 @@ self_project: ghost
 		"routing.feature: unknown agent \"nobody\"",
 		"policies.bad.rules[0].risk",
 		"policies.bad.rules[0].paths[0]",
-		"policies.bad.rules[1]: must set paths, labels or kinds",
+		"policies.bad.rules[1]: must set paths, labels, kinds or sources",
 		"policies.bad.extra_rules[0].risk",
 		"policies.bad.extra_rules[0].paths[0]",
 		"policies.bad.gates.urgent",
@@ -170,4 +170,14 @@ func TestValidateRetroLookbackMustNotBeNegative(t *testing.T) {
 	_, err = Parse([]byte("projects:\n  app:\n    repo: bob/app\n    loops:\n      retro:\n        lookback: -1h\n"), "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "projects.app.loops.retro.lookback")
+}
+
+func TestValidateRuleSourcesMustNotBeEmpty(t *testing.T) {
+	_, err := Parse([]byte("policies:\n  bad:\n    extra_rules:\n      - risk: high\n        reason: x\n        sources: [\"followup\", \" \"]\n"), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "policies.bad.extra_rules[0].sources[1]: must not be empty")
+	assert.NotContains(t, err.Error(), "sources[0]")
+
+	_, err = Parse([]byte("policies:\n  ok:\n    extra_rules:\n      - risk: high\n        reason: x\n        sources: [\"retro\"]\n"), "")
+	assert.NoError(t, err, "a rule that matches only on source is valid")
 }

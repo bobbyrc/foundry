@@ -74,10 +74,11 @@ func (e *Engine) retroLoop(ctx context.Context, p *config.Project) error {
 // retroEvidence builds the Markdown evidence sections for project since the given time. It returns
 // "" when every section is empty.
 func (e *Engine) retroEvidence(ctx context.Context, project string, since time.Time) (string, error) {
-	tasks, err := e.d.Store.ListTasks(ctx, store.TaskFilter{Project: project, Limit: retroScanLimit})
+	all, err := e.d.Store.ListTasks(ctx, store.TaskFilter{Project: project, Limit: retroScanLimit})
 	if err != nil {
 		return "", fmt.Errorf("list tasks: %w", err)
 	}
+	tasks := retroWithoutSelfWork(all)
 	friction, err := e.d.Store.ListFriction(ctx, project, retroScanLimit)
 	if err != nil {
 		return "", fmt.Errorf("list friction: %w", err)
@@ -103,6 +104,34 @@ func (e *Engine) retroEvidence(ctx context.Context, project string, since time.T
 		return "", nil
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n", nil
+}
+
+// retroWithoutSelfWork drops the retrospectives foundry filed, and the work they spawned (their
+// follow-ups and reviews, and theirs in turn). Otherwise a retro's own problems would make the
+// next day's retro due, so the factory would retrospect on its retrospectives forever.
+func retroWithoutSelfWork(tasks []domain.Task) []domain.Task {
+	excluded := map[string]bool{}
+	for _, t := range tasks {
+		if t.Source == "retro" {
+			excluded[t.ID] = true
+		}
+	}
+	for changed := true; changed; {
+		changed = false
+		for _, t := range tasks {
+			if !excluded[t.ID] && excluded[t.ParentID] {
+				excluded[t.ID] = true
+				changed = true
+			}
+		}
+	}
+	out := make([]domain.Task, 0, len(tasks))
+	for _, t := range tasks {
+		if !excluded[t.ID] {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // retroBlocked lists blocked and failed tasks updated since the given time, newest first.
@@ -184,7 +213,8 @@ func retroIncidents(tasks []domain.Task, since time.Time) []string {
 }
 
 // retroReviewFindings lists review tasks done since the given time whose parent was re-queued
-// because the reviewer requested changes, naming the parent. Parents are read from the store.
+// because the reviewer requested changes, naming the parent once, however many reviews it had.
+// Parents are read from the store.
 func (e *Engine) retroReviewFindings(ctx context.Context, tasks []domain.Task, since time.Time) ([]string, error) {
 	var picked []domain.Task
 	for _, t := range tasks {
@@ -194,10 +224,16 @@ func (e *Engine) retroReviewFindings(ctx context.Context, tasks []domain.Task, s
 	}
 	sortNewest(picked, func(t domain.Task) time.Time { return t.UpdatedAt })
 	var out []string
+	seen := map[string]bool{}
 	for _, r := range picked {
 		if len(out) == retroSectionLimit {
 			break
 		}
+		// Newest first, so the first review of a parent is the one that counts.
+		if seen[r.ParentID] {
+			continue
+		}
+		seen[r.ParentID] = true
 		parent, err := e.d.Store.GetTask(ctx, r.ParentID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue

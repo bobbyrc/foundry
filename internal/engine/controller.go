@@ -104,7 +104,8 @@ func (e *Engine) cancelTree(ctx context.Context, id string) error {
 }
 
 // RetryTask re-queues a blocked, failed or cancelled task with its attempts reset. A note is
-// appended to the body as guidance for the next agent.
+// appended to the body as guidance for the next agent. Reviews of the old attempt that have not
+// finished are cancelled, so the new head gets a review of its own.
 func (e *Engine) RetryTask(ctx context.Context, id, note string) error {
 	_, err := e.setTask(ctx, id, "re-queued by owner", func(t *domain.Task) error {
 		switch t.Status {
@@ -120,7 +121,38 @@ func (e *Engine) RetryTask(ctx context.Context, id, note string) error {
 		}
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return e.cancelStaleReviews(ctx, id)
+}
+
+// cancelStaleReviews cancels the review children of task id that have not finished: a review
+// that is queued, running or blocked judges an attempt that is being replaced. A review that
+// ended (done) stands as it was. A review's run is stopped as well, so two runs never share a
+// branch.
+func (e *Engine) cancelStaleReviews(ctx context.Context, id string) error {
+	children, err := e.d.Store.ListTasks(ctx, store.TaskFilter{ParentID: id, Limit: 10000})
+	if err != nil {
+		return err
+	}
+	for _, c := range children {
+		if c.Kind != domain.KindReview {
+			continue
+		}
+		if _, _, err := e.setTaskFrom(ctx, c.ID,
+			[]domain.TaskStatus{domain.TaskQueued, domain.TaskRunning, domain.TaskBlocked},
+			"cancelled: the task was retried", func(x *domain.Task) error {
+				x.Status = domain.TaskCancelled
+				return nil
+			}); err != nil {
+			return err
+		}
+		if err := e.cancelTree(ctx, c.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CancelRun stops one live run. The task is not changed by the run's own outcome, so the
@@ -186,6 +218,20 @@ func (e *Engine) DecideApproval(ctx context.Context, id string, approve bool, no
 		return a, nil
 	}
 
+	if cur.HeadSHA == "" {
+		// Without the head the approval cannot say what it covers, so it must not merge. The
+		// approval stays pending; the task goes back to review, where the shepherd re-requests it.
+		const msg = "approval has no head commit; foundry will re-check it"
+		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskAwaitingApproval}, msg,
+			func(x *domain.Task) error {
+				x.Status = domain.TaskReview
+				return nil
+			}); err != nil {
+			return cur, err
+		}
+		return cur, fmt.Errorf("%w: %s", api.ErrConflict, msg)
+	}
+
 	p, err := e.project(t.Project)
 	if err != nil {
 		return domain.Approval{}, err
@@ -198,7 +244,7 @@ func (e *Engine) DecideApproval(ctx context.Context, id string, approve bool, no
 	if err != nil {
 		return domain.Approval{}, fmt.Errorf("read PR #%d: %w", t.PRNumber, err)
 	}
-	if cur.HeadSHA != "" && pr.HeadSHA != cur.HeadSHA {
+	if pr.HeadSHA != cur.HeadSHA {
 		// The reviewed code is no longer what would merge: the approval does not cover it.
 		const msg = "the pull request changed after this approval was requested; foundry will re-check it"
 		a, err := e.recordDecision(ctx, id, domain.ApprovalRejected, msg)
@@ -325,10 +371,12 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 	}
 	e.d.Bus.Emit(ctx, domain.EvChatMessage, conv.Project, "", "", "message from owner", msg)
 
-	// The reply outlives the request, so it does not use the request's context.
+	// The reply outlives the request, so it does not use the request's context. It derives from
+	// Run's context instead, so shutdown cancels it.
 	timeout := e.Config().Limits.RunTimeout.Duration
+	base := e.replyBase()
 	started := e.goTracked(func() {
-		runCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		runCtx, cancel := context.WithTimeout(base, timeout)
 		defer cancel()
 		e.chatReply(runCtx, conv, text)
 	})
@@ -337,6 +385,17 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 		return domain.ChatMessage{}, errStopped
 	}
 	return msg, nil
+}
+
+// replyBase is the context chat replies derive from: Run's context once Run has started, so
+// shutdown cancels in-flight replies, and Background before that.
+func (e *Engine) replyBase() context.Context {
+	e.lifeMu.Lock()
+	defer e.lifeMu.Unlock()
+	if e.baseCtx == nil {
+		return context.Background()
+	}
+	return e.baseCtx
 }
 
 // recordDecision moves a pending approval to status and emits the decision. A decision on an

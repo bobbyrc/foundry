@@ -50,7 +50,7 @@ func TestDefaultsOnEmptyConfig(t *testing.T) {
 	pol := cfg.Policies["default"]
 	assert.Equal(t, 400, pol.MaxLines)
 	assert.Equal(t, 20, pol.MaxFiles)
-	assert.Len(t, pol.Rules, 6)
+	assert.Len(t, pol.Rules, 7)
 	assert.Nil(t, pol.ExtraRules, "extra rules default to none")
 	assert.Equal(t, DefaultGates(), pol.Gates)
 
@@ -149,7 +149,7 @@ policies:
 `), "")
 	require.NoError(t, err)
 
-	assert.Len(t, cfg.Policies["absent"].Rules, 6, "absent rules take the defaults")
+	assert.Len(t, cfg.Policies["absent"].Rules, 7, "absent rules take the defaults")
 	require.NotNil(t, cfg.Policies["empty"].Rules, "an explicit empty list stays non-nil")
 	assert.Empty(t, cfg.Policies["empty"].Rules)
 }
@@ -269,4 +269,15 @@ func TestRetroDefaultsToDailyWithLookbackOfEvery(t *testing.T) {
 	cfg, err = Parse([]byte("loops:\n  retro:\n    every: 6h\n"), "")
 	require.NoError(t, err)
 	assert.Equal(t, 6*time.Hour, cfg.Loops.Retro.Lookback.Duration, "lookback 0 takes every")
+}
+
+// Self-assigned work (follow-ups and retrospectives) is rated medium by default, and the rule
+// comes last so it does not change the order of the path rules.
+func TestDefaultRulesRateSelfAssignedWorkMedium(t *testing.T) {
+	rules := DefaultRules()
+	last := rules[len(rules)-1]
+	assert.Equal(t, domain.RiskMedium, last.Risk)
+	assert.Equal(t, "work foundry assigned itself (follow-up or retrospective)", last.Reason)
+	assert.Equal(t, []string{"followup", "retro"}, last.Sources)
+	assert.Empty(t, last.Paths)
 }

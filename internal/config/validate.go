@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/bobbyrc/foundry/internal/domain"
@@ -172,12 +173,17 @@ func validateRule(add func(string, ...any), prefix string, r Rule) {
 	default:
 		add("%s.risk: must be low, medium or high, not %q", prefix, r.Risk)
 	}
-	if len(r.Paths) == 0 && len(r.Labels) == 0 && len(r.Kinds) == 0 {
-		add("%s: must set paths, labels or kinds", prefix)
+	if len(r.Paths) == 0 && len(r.Labels) == 0 && len(r.Kinds) == 0 && len(r.Sources) == 0 {
+		add("%s: must set paths, labels, kinds or sources", prefix)
 	}
 	for j, pat := range r.Paths {
 		if !doublestar.ValidatePattern(pat) {
 			add("%s.paths[%d]: invalid glob %q", prefix, j, pat)
+		}
+	}
+	for j, src := range r.Sources {
+		if strings.TrimSpace(src) == "" {
+			add("%s.sources[%d]: must not be empty", prefix, j)
 		}
 	}
 }

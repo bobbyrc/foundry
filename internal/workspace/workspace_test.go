@@ -239,6 +239,37 @@ func TestDiffNumstatRenameAndBinary(t *testing.T) {
 	assert.Len(t, changes, 4)
 }
 
+// A commit SHA as head judges that commit, even after the branch has moved on.
+func TestDiffPinsToCommitSHA(t *testing.T) {
+	repo, m, _ := setup(t)
+	ctx := context.Background()
+	ws, err := m.Prepare(ctx, repo, "foundry/pin", "run1")
+	require.NoError(t, err)
+
+	writeFile(t, filepath.Join(ws.Dir, "first.txt"), "one\n")
+	committed, err := m.Commit(ctx, ws, "first")
+	require.NoError(t, err)
+	require.True(t, committed)
+	require.NoError(t, m.Push(ctx, repo, ws))
+	judged := strings.TrimSpace(runGit(t, ws.Dir, "rev-parse", "HEAD"))
+
+	// A push after the judgement adds a second file to the branch.
+	writeFile(t, filepath.Join(ws.Dir, "second.txt"), "two\n")
+	committed, err = m.Commit(ctx, ws, "second")
+	require.NoError(t, err)
+	require.True(t, committed)
+	// Plain git: Push's lease is the SHA Prepare saw, so a second Push from the same workspace is refused.
+	runGit(t, ws.Dir, "push", "origin", "foundry/pin")
+
+	byCommit, err := m.Diff(ctx, repo, "main", judged)
+	require.NoError(t, err)
+	assert.Equal(t, []policy.FileChange{{Path: "first.txt", Added: 1}}, byCommit)
+
+	byBranch, err := m.Diff(ctx, repo, "main", "foundry/pin")
+	require.NoError(t, err)
+	assert.Len(t, byBranch, 2, "the branch name follows the newest push")
+}
+
 func TestDiffNoChangesReturnsEmptySlice(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()

@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -378,16 +379,24 @@ func (m *Manager) Push(ctx context.Context, r Repo, ws Workspace) error {
 	return nil
 }
 
-// Diff returns per-file line counts between origin/base and origin/head. Both are branch names
-// without the "origin/" prefix.
+// commitSHA matches a full commit ID, SHA-1 or SHA-256.
+var commitSHA = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// Diff returns per-file line counts between origin/base and head. head is either a branch name
+// without the "origin/" prefix, or a full commit SHA. A SHA pins the diff to that commit, so a
+// later push to the branch does not change what was judged.
 func (m *Manager) Diff(ctx context.Context, r Repo, base, head string) ([]policy.FileChange, error) {
 	unlock := m.lockClone(r.Path)
 	defer unlock()
 	if _, err := git(ctx, r.Path, "fetch", "origin", "--prune"); err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", r.Name, err)
 	}
+	headRef := "origin/" + head
+	if commitSHA.MatchString(head) {
+		headRef = head
+	}
 	out, err := git(ctx, r.Path, "diff", "--numstat",
-		"origin/"+base+"...origin/"+head)
+		"origin/"+base+"..."+headRef)
 	if err != nil {
 		return nil, fmt.Errorf("diff %s...%s: %w", base, head, err)
 	}

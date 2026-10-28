@@ -98,6 +98,13 @@ func DefaultRules() []Rule {
 				"**/requirements*.txt", "**/pyproject.toml", "**/Gemfile",
 			},
 		},
+		// Follow-ups and retrospectives are work foundry assigned itself. Both had design
+		// problems tonight, so their changes get a human look until the owner relaxes this.
+		{
+			Risk:    domain.RiskMedium,
+			Reason:  "work foundry assigned itself (follow-up or retrospective)",
+			Sources: []string{"followup", "retro"},
+		},
 	}
 }
 

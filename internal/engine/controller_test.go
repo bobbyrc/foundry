@@ -359,6 +359,7 @@ func TestControllerDecideApprovalMergeApprove(t *testing.T) {
 	r := ctNewRig(t)
 	e := r.engine(nil)
 	task := ctTask(t, e, "ship it")
+	r.fk.HeadSHA = func(string) string { return "sha-head" }
 
 	pr, err := r.fk.OpenPR(ctx, scm.PRSpec{Head: task.Branch, Base: "main", Title: "ship it"})
 	require.NoError(t, err)
@@ -366,7 +367,8 @@ func TestControllerDecideApprovalMergeApprove(t *testing.T) {
 		x.Status, x.PRNumber = domain.TaskAwaitingApproval, pr.Number
 	})
 	approval, err := r.st.CreateApproval(ctx, domain.Approval{
-		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "ship it", Status: domain.ApprovalPending,
+		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "ship it", HeadSHA: "sha-head",
+		Status: domain.ApprovalPending,
 	})
 	require.NoError(t, err)
 
@@ -385,6 +387,7 @@ func TestControllerDecideApprovalMergeFailureBlocksTask(t *testing.T) {
 	r := ctNewRig(t)
 	e := r.engine(nil)
 	task := ctTask(t, e, "conflicting")
+	r.fk.HeadSHA = func(string) string { return "sha-head" }
 
 	pr, err := r.fk.OpenPR(ctx, scm.PRSpec{Head: task.Branch, Base: "main", Title: "conflicting"})
 	require.NoError(t, err)
@@ -393,7 +396,8 @@ func TestControllerDecideApprovalMergeFailureBlocksTask(t *testing.T) {
 	})
 	r.fk.MergeErr = errors.New("merge conflict")
 	approval, err := r.st.CreateApproval(ctx, domain.Approval{
-		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "conflicting", Status: domain.ApprovalPending,
+		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "conflicting", HeadSHA: "sha-head",
+		Status: domain.ApprovalPending,
 	})
 	require.NoError(t, err)
 
@@ -558,4 +562,94 @@ func TestControllerSetProjectPausedErrors(t *testing.T) {
 	assert.Equal(t, "config", configPaused.ProjectPausedBy("demo"))
 	require.NoError(t, configPaused.SetProjectPaused(ctx, "demo", true))
 	assert.Equal(t, "config", configPaused.ProjectPausedBy("demo"))
+}
+
+// An approval with no head commit cannot say what it covers, so it never merges: it stays
+// pending and the task goes back to review.
+func TestControllerDecideApprovalWithoutHeadIsRefused(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	task := ctTask(t, e, "no head commit")
+	pr, err := r.fk.OpenPR(ctx, scm.PRSpec{Head: task.Branch, Base: "main", Title: "no head commit"})
+	require.NoError(t, err)
+	ctSetTask(t, r, task.ID, func(x *domain.Task) {
+		x.Status, x.PRNumber = domain.TaskAwaitingApproval, pr.Number
+	})
+	approval, err := r.st.CreateApproval(ctx, domain.Approval{
+		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "merge", Status: domain.ApprovalPending,
+	})
+	require.NoError(t, err)
+
+	_, err = e.DecideApproval(ctx, approval.ID, true, "")
+	assert.True(t, errors.Is(err, api.ErrConflict), "a headless approval is refused: %v", err)
+	assert.Contains(t, err.Error(), "approval has no head commit; foundry will re-check it")
+
+	a, err := r.st.GetApproval(ctx, approval.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.ApprovalPending, a.Status, "nothing is recorded")
+
+	stored, err := r.st.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskReview, stored.Status)
+	assert.Equal(t, "open", r.fk.PRs[pr.Number].State, "the pull request is not merged")
+}
+
+// Retrying a task cancels its reviews that have not finished, so the new attempt is reviewed
+// afresh; a review that finished stands.
+func TestControllerRetryCancelsStaleReviews(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	parent := ctTask(t, e, "retry with stale reviews")
+	ctSetTask(t, r, parent.ID, func(x *domain.Task) {
+		x.Status, x.Attempts, x.BlockedReason = domain.TaskBlocked, 3, "review could not complete"
+	})
+	queued, err := e.createTask(ctx, domain.Task{Project: "demo", Kind: domain.KindReview, ParentID: parent.ID, Title: "review queued"})
+	require.NoError(t, err)
+	finished, err := e.createTask(ctx, domain.Task{Project: "demo", Kind: domain.KindReview, ParentID: parent.ID, Title: "review finished"})
+	require.NoError(t, err)
+	ctSetTask(t, r, finished.ID, func(x *domain.Task) { x.Status = domain.TaskDone })
+
+	require.NoError(t, e.RetryTask(ctx, parent.ID, ""))
+
+	gotQueued, err := r.st.GetTask(ctx, queued.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskCancelled, gotQueued.Status, "an unfinished review is cancelled")
+
+	gotFinished, err := r.st.GetTask(ctx, finished.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskDone, gotFinished.Status, "a finished review stands")
+
+	gotParent, err := r.st.GetTask(ctx, parent.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskQueued, gotParent.Status)
+}
+
+// A task that was running when foundry restarted, with no attempts left, is blocked rather than
+// re-queued for an attempt it cannot make.
+func TestControllerRecoverBlocksExhaustedRunningTask(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	exhausted := ctTask(t, e, "exhausted orphan")
+	retryable := ctTask(t, e, "retryable orphan")
+	ctSetTask(t, r, exhausted.ID, func(x *domain.Task) {
+		x.Status, x.Attempts = domain.TaskRunning, x.MaxAttempts
+	})
+	ctSetTask(t, r, retryable.ID, func(x *domain.Task) {
+		x.Status, x.Attempts = domain.TaskRunning, 1
+	})
+
+	restarted := r.engine(nil)
+	require.NoError(t, restarted.recover(ctx))
+
+	got, err := r.st.GetTask(ctx, exhausted.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskBlocked, got.Status)
+	assert.Equal(t, "foundry restarted during the last attempt and attempts are exhausted", got.BlockedReason)
+
+	again, err := r.st.GetTask(ctx, retryable.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskQueued, again.Status, "a task with attempts left is re-queued")
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/harness"
+	"github.com/bobbyrc/foundry/internal/store"
 	// Registers the "fake" harness type that the test config uses.
 	hfake "github.com/bobbyrc/foundry/internal/harness/fake"
 )
@@ -202,4 +204,89 @@ func TestChatReplyGetsOrchestratorEnv(t *testing.T) {
 
 	env := <-envs
 	assert.Equal(t, "orchestrator-token", env["FOUNDRY_TOKEN"], "the orchestrator gets the API token")
+}
+
+// ctGateStore holds the first orchestrator run's creation until release is closed, which lets a
+// test shut the engine down between the start of a chat reply and the registration of its run.
+type ctGateStore struct {
+	store.Store
+	reached   chan struct{}
+	release   chan struct{}
+	once      sync.Once
+	claimed   chan struct{} // closed on the scheduler's first claim, which runs after recover
+	claimOnce sync.Once
+}
+
+func (s *ctGateStore) ClaimNextTask(ctx context.Context, busy []string) (domain.Task, error) {
+	s.claimOnce.Do(func() { close(s.claimed) })
+	return s.Store.ClaimNextTask(ctx, busy)
+}
+
+func (s *ctGateStore) CreateRun(ctx context.Context, r domain.Run) (domain.Run, error) {
+	if r.Role == "orchestrator" {
+		s.once.Do(func() {
+			close(s.reached)
+			<-s.release
+		})
+	}
+	return s.Store.CreateRun(ctx, r)
+}
+
+// Shutdown cancels a chat reply even when the reply starts after shutdown has already cancelled
+// the live runs: Run returns promptly and the reply's run ends cancelled.
+func TestChatShutdownCancelsReply(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	gate := &ctGateStore{Store: r.st, reached: make(chan struct{}), release: make(chan struct{}), claimed: make(chan struct{})}
+	e.d.Store = gate
+	conv, err := r.st.CreateConversation(ctx, domain.Conversation{Project: "demo"})
+	require.NoError(t, err)
+
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	runDone := make(chan error, 1)
+	go func() { runDone <- e.Run(runCtx) }()
+	require.Eventually(t, func() bool {
+		e.lifeMu.Lock()
+		defer e.lifeMu.Unlock()
+		return e.baseCtx != nil
+	}, 10*time.Second, 5*time.Millisecond, "Run did not start")
+	// Cancel only once Run is past recover, which a cancelled context would abort.
+	select {
+	case <-gate.claimed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the scheduler never started")
+	}
+
+	_, err = e.SendChat(ctx, conv.ID, "[fake:stall]")
+	require.NoError(t, err)
+	select {
+	case <-gate.reached:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the reply never reached run creation")
+	}
+
+	stop()
+	// Release the reply only once shutdown has begun, so its run registers after cancelRun ran.
+	require.Eventually(t, func() bool {
+		e.lifeMu.Lock()
+		defer e.lifeMu.Unlock()
+		return e.stopped
+	}, 10*time.Second, 5*time.Millisecond, "shutdown did not begin")
+	close(gate.release)
+
+	select {
+	case err := <-runDone:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run did not return: the chat reply ignored shutdown")
+	}
+
+	msgs, err := r.st.ListChatMessages(ctx, conv.ID)
+	require.NoError(t, err)
+	require.Len(t, msgs, 2)
+	run, err := r.st.GetRun(ctx, msgs[1].RunID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.RunCancelled, run.Status)
 }

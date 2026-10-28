@@ -794,3 +794,147 @@ func TestRunnerRerunWithEmptyPRBodyKeepsDescription(t *testing.T) {
 	env.rerun(task.ID)
 	assert.Zero(t, env.scm.BodyUpdates[got.PRNumber])
 }
+
+// rtChildren returns the tasks whose parent is parentID.
+func rtChildren(env *rtEnv, parentID string) []domain.Task {
+	env.t.Helper()
+	kids, err := env.st.ListTasks(env.ctx, store.TaskFilter{ParentID: parentID, Limit: 100})
+	require.NoError(env.t, err)
+	return kids
+}
+
+// An agent may file only the follow-up kinds it is allowed; a review follow-up on its own PR
+// would let it approve its own work, so it becomes a chore.
+func TestRunnerFollowupKindIsAllowlisted(t *testing.T) {
+	script := func(ctx context.Context, spec harness.Spec, emit func(harness.Event)) (harness.Result, error) {
+		dir := filepath.Join(spec.Workdir, domain.OutboxDir)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return harness.Result{IsError: true}, err
+		}
+		body := `{"status":"no_changes","summary":"nothing","followups":[` +
+			`{"title":"Approve my own PR","body":"b","kind":"review"},` +
+			`{"title":"Fix the typo","body":"c","kind":"bugfix"},` +
+			`{"title":"Look at the outage","body":"d","kind":"incident"}]}`
+		if err := os.WriteFile(filepath.Join(dir, domain.ResultFile), []byte(body), 0o644); err != nil {
+			return harness.Result{IsError: true}, err
+		}
+		return harness.Result{FinalText: "done"}, nil
+	}
+	env := rtNewEngine(t, rtOpts{script: script})
+	task := env.create(domain.Task{Body: "anything"})
+	env.waitStatus(task.ID, domain.TaskDone)
+
+	var kids []domain.Task
+	rtWait(t, 10*time.Second, "follow-ups queued", func() bool {
+		kids = rtChildren(env, task.ID)
+		return len(kids) == 3
+	})
+	kinds := map[string]domain.TaskKind{}
+	for _, k := range kids {
+		kinds[k.Title] = k.Kind
+	}
+	assert.Equal(t, domain.KindChore, kinds["Approve my own PR"], "a review follow-up becomes a chore")
+	assert.Equal(t, domain.KindBugfix, kinds["Fix the typo"], "an allowed kind is kept")
+	assert.Equal(t, domain.KindChore, kinds["Look at the outage"], "an incident follow-up becomes a chore")
+	for _, k := range kids {
+		assert.NotEqual(t, domain.KindReview, k.Kind, "no follow-up is ever a review")
+	}
+}
+
+// A verdict on a head that is no longer the PR head must not re-queue the parent, even while the
+// parent is running again: the late rejection is marked done and ignored.
+func TestRunnerStaleRejectionIgnoredWhenParentRunning(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{})
+	parent := env.waitStatus(env.create(domain.Task{Body: "[fake:commit]\n[fake:reject]"}).ID, domain.TaskReview)
+	// The parent's first run must finish before the parent is marked running again: until it
+	// unregisters, its cleanup could still see running and re-queue the task.
+	rtWait(t, 10*time.Second, "the parent's first run to finish", func() bool {
+		return len(env.e.liveRunsOf(parent.ID)) == 0
+	})
+	// The parent was re-queued and has been picked up again when the verdict arrives.
+	_, err := env.st.UpdateTask(env.ctx, parent.ID, func(x *domain.Task) error {
+		x.Status = domain.TaskRunning
+		return nil
+	})
+	require.NoError(t, err)
+
+	review := env.create(domain.Task{
+		Kind: domain.KindReview, Role: "reviewer", ParentID: parent.ID, Title: "Review " + parent.Title,
+		Branch: parent.Branch, PRNumber: parent.PRNumber,
+	})
+	rtWaitEvent(t, env, review.ID, "verdict for an old head; ignored")
+
+	got := env.task(parent.ID)
+	assert.Equal(t, domain.TaskRunning, got.Status, "the running parent is left alone")
+	assert.NotContains(t, got.Body, "reviewer requested changes")
+}
+
+// A rejection of a head that the PR no longer has is ignored while the parent awaits review.
+func TestRunnerStaleRejectionIgnoredWhenHeadMoved(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{})
+	parent := env.waitStatus(env.create(domain.Task{Body: "[fake:commit]\n[fake:reject]"}).ID, domain.TaskReview)
+	// Someone pushed to the PR after the reviewer's checkout.
+	env.scm.HeadSHA = func(string) string { return "sha-pushed-since" }
+
+	review := env.create(domain.Task{
+		Kind: domain.KindReview, Role: "reviewer", ParentID: parent.ID, Title: "Review " + parent.Title,
+		Branch: parent.Branch, PRNumber: parent.PRNumber,
+	})
+	rtWaitEvent(t, env, review.ID, "verdict for an old head; ignored")
+
+	got := env.task(parent.ID)
+	assert.Equal(t, domain.TaskReview, got.Status)
+	assert.NotContains(t, got.Body, "reviewer requested changes")
+}
+
+// rtWaitEvent waits until task taskID has an event whose message contains text.
+func rtWaitEvent(t *testing.T, env *rtEnv, taskID, text string) {
+	t.Helper()
+	rtWait(t, 10*time.Second, fmt.Sprintf("event %q on task %s", text, taskID), func() bool {
+		for _, ev := range env.events() {
+			if ev.TaskID == taskID && strings.Contains(ev.Message, text) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// A project check that passes lets the task publish as usual.
+func TestRunnerPassingCheckPublishes(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{projectExtra: map[string]string{
+		"demo": `    checks: [{name: present, run: "test -f README.md"}]` + "\n",
+	}})
+	task := env.create(domain.Task{Body: "[fake:commit]"})
+
+	got := env.waitStatus(task.ID, domain.TaskReview)
+	assert.NotZero(t, got.PRNumber, "a passing check lets the change publish")
+}
+
+// A failing check fails the attempt: the task is re-queued with the check's output, and nothing
+// is pushed or given a pull request.
+func TestRunnerFailingCheckRequeuesWithOutput(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{maxAttempts: 2, projectExtra: map[string]string{
+		"demo": `    checks: [{name: lint, run: "echo boom; exit 3"}]` + "\n",
+	}})
+	task := env.create(domain.Task{Body: "[fake:commit]"})
+
+	got := env.waitStatus(task.ID, domain.TaskBlocked)
+	assert.Contains(t, got.BlockedReason, "check failed: lint")
+	assert.Contains(t, got.BlockedReason, "gave up after 2 attempts")
+	assert.Contains(t, got.Body, "## Attempt 1: check failed: lint", "the first failure re-queued the task")
+	assert.Contains(t, got.Body, "boom", "the check's output reaches the next agent")
+
+	runs := env.runs(task.ID)
+	require.Len(t, runs, 2)
+	assert.Empty(t, env.scm.PRs, "no pull request is opened for a failed check")
+	assert.Empty(t, rtRevParseQuiet(env.bare["demo"], "refs/heads/"+runs[0].Branch), "nothing is pushed")
+	rtWait(t, 5*time.Second, "a check failure event", func() bool {
+		for _, ev := range env.events() {
+			if ev.Type == domain.EvSystem && strings.Contains(ev.Message, "check lint failed") {
+				return true
+			}
+		}
+		return false
+	})
+}

@@ -75,6 +75,9 @@ func (e *Engine) deployLoop(ctx context.Context, p *config.Project) error {
 			return e.advanceRelease(ctx, p, dep, d)
 		}
 	}
+	if e.projectPaused(p.Name) {
+		return nil // paused: releases in flight were advanced above, but nothing new starts
+	}
 	return e.startRelease(ctx, p, dep)
 }
 

@@ -280,6 +280,42 @@ func TestEvaluate(t *testing.T) {
 			},
 		},
 		{
+			name: "source rule matches the task source and names no file",
+			policy: config.Policy{
+				Rules: []config.Rule{{Sources: []string{"followup", "retro"}, Risk: domain.RiskMedium, Reason: "self-assigned"}},
+				Gates: testGates(),
+			},
+			in:   Input{Kind: domain.KindBugfix, Source: "retro", AgentRisk: domain.RiskLow},
+			want: Decision{Risk: domain.RiskMedium, Reasons: []string{"self-assigned"}, RequireReview: true, RequireCI: true, RequireApproval: true},
+		},
+		{
+			name: "source rule does not match another source",
+			policy: config.Policy{
+				Rules: []config.Rule{{Sources: []string{"followup", "retro"}, Risk: domain.RiskMedium, Reason: "self-assigned"}},
+				Gates: testGates(),
+			},
+			in:   Input{Kind: domain.KindBugfix, Source: "github_issue", AgentRisk: domain.RiskLow},
+			want: lowGate(),
+		},
+		{
+			name: "source criterion is ANDed with kinds",
+			policy: config.Policy{
+				Rules: []config.Rule{{Sources: []string{"followup"}, Kinds: []string{"chore"}, Risk: domain.RiskHigh, Reason: "x"}},
+				Gates: testGates(),
+			},
+			in:   Input{Kind: domain.KindBugfix, Source: "followup", AgentRisk: domain.RiskLow},
+			want: lowGate(),
+		},
+		{
+			name: "a source rule with no task source never matches an empty source",
+			policy: config.Policy{
+				Rules: []config.Rule{{Sources: []string{"followup"}, Risk: domain.RiskHigh, Reason: "x"}},
+				Gates: testGates(),
+			},
+			in:   Input{Kind: domain.KindFeature, AgentRisk: domain.RiskLow},
+			want: lowGate(),
+		},
+		{
 			name:   "missing gate requires approval and review and CI",
 			policy: config.Policy{Gates: map[string]config.Gate{}},
 			in:     Input{Kind: domain.KindFeature, AgentRisk: domain.RiskLow},

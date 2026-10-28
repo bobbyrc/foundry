@@ -80,11 +80,11 @@ func Evaluate(p config.Policy, in Input) Decision {
 	}
 }
 
-// matchRule reports whether every non-empty criterion of rule matches. It returns the first
-// changed file that matched the rule's Paths, and whether Paths was a criterion that matched.
-// A rule with no criteria never matches.
+// matchRule reports whether every non-empty criterion of rule matches (paths, labels, kinds and
+// sources). It returns the first changed file that matched the rule's Paths, and whether Paths
+// was a criterion that matched. A rule with no criteria never matches.
 func matchRule(rule config.Rule, paths []string, in Input) (file string, pathMatched, ok bool) {
-	if len(rule.Paths) == 0 && len(rule.Labels) == 0 && len(rule.Kinds) == 0 {
+	if len(rule.Paths) == 0 && len(rule.Labels) == 0 && len(rule.Kinds) == 0 && len(rule.Sources) == 0 {
 		return "", false, false
 	}
 	if len(rule.Paths) > 0 {
@@ -97,6 +97,9 @@ func matchRule(rule config.Rule, paths []string, in Input) (file string, pathMat
 		return "", false, false
 	}
 	if len(rule.Kinds) > 0 && !slices.Contains(rule.Kinds, string(in.Kind)) {
+		return "", false, false
+	}
+	if len(rule.Sources) > 0 && !slices.Contains(rule.Sources, in.Source) {
 		return "", false, false
 	}
 	return file, pathMatched, true

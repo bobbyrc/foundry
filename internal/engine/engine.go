@@ -139,6 +139,9 @@ func New(d Deps) (*Engine, error) {
 // Run recovers state left by a previous process, then runs the scheduler and every loop until
 // ctx is cancelled. It cancels live runs and waits for them before returning.
 func (e *Engine) Run(ctx context.Context) error {
+	e.lifeMu.Lock()
+	e.baseCtx = ctx
+	e.lifeMu.Unlock()
 	if err := e.recover(ctx); err != nil {
 		return fmt.Errorf("engine recover: %w", err)
 	}
@@ -222,6 +225,12 @@ func (e *Engine) recover(ctx context.Context) error {
 		return err
 	}
 	for _, t := range tasks {
+		if t.Attempts >= t.MaxAttempts {
+			// The attempt that was running counted, so this task has no attempts left.
+			e.blockTaskFrom(context.WithoutCancel(ctx), t.ID, []domain.TaskStatus{domain.TaskRunning},
+				"foundry restarted during the last attempt and attempts are exhausted")
+			continue
+		}
 		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskRunning},
 			"re-queued after restart", func(t *domain.Task) error {
 				t.Status = domain.TaskQueued

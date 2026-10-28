@@ -121,6 +121,8 @@ infra, dependency manifests with major bumps, `.foundry/`, and foundry's own gat
 prompts (in foundry's repo only); default size limit 400 changed lines. A policy's `extra_rules`
 add to these defaults, while `rules` replaces them, so use `extra_rules` unless you mean to drop
 the built-in protections.
+Work foundry assigned itself (follow-ups and retrospectives, matched by task source) is rated
+`medium` by default, so a human approves it until the owner relaxes that rule.
 
 ### Deploy watch
 

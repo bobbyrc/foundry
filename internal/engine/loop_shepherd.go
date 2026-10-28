@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/domain"
@@ -18,6 +19,10 @@ import (
 // shepherdStatuses are the statuses the shepherd works on. Every transition it makes is guarded
 // by these, so a task that moved on while a network call was in flight is left alone.
 var shepherdStatuses = []domain.TaskStatus{domain.TaskReview, domain.TaskAwaitingApproval}
+
+// requireChecksLimit is how long a head may show no CI checks under require_checks before the
+// task is blocked. Checks that never appear mean CI is not wired up, which a human must fix.
+const requireChecksLimit = 30 * time.Minute
 
 // notMergeableError is returned by mergeTask when the task is not waiting for a merge.
 type notMergeableError struct{ status domain.TaskStatus }
@@ -96,6 +101,27 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 		return nil
 	}
 
+	// Without a head commit nothing below can be pinned to what was judged, so never act on it.
+	if pr.HeadSHA == "" {
+		e.d.Logger.Warn("PR has no head commit; task skipped this pass", "task", t.ID, "pr", t.PRNumber)
+		return nil
+	}
+
+	// A new head starts its own CI grace period, whoever pushed it.
+	if t.CIHeadSHA != pr.HeadSHA || t.CIHeadSeenAt == nil {
+		seen := e.d.Now().UTC()
+		saved, applied, err := e.setTaskFrom(ctx, t.ID, shepherdStatuses,
+			"new PR head "+deployShortRef(pr.HeadSHA), func(x *domain.Task) error {
+				x.CIHeadSHA = pr.HeadSHA
+				x.CIHeadSeenAt = &seen
+				return nil
+			})
+		if err != nil || !applied {
+			return err
+		}
+		t = saved
+	}
+
 	// Awaiting approval: the human decides, not the loop. Only check that the approval still
 	// applies to this PR head.
 	if t.Status == domain.TaskAwaitingApproval {
@@ -112,7 +138,8 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 		return nil
 	}
 
-	files, err := e.d.Workspaces.Diff(ctx, e.repoFor(p), p.DefaultBranch, t.Branch)
+	// Judge the commit we were asked about, not whatever the branch points at by now.
+	files, err := e.d.Workspaces.Diff(ctx, e.repoFor(p), p.DefaultBranch, pr.HeadSHA)
 	if err != nil {
 		return fmt.Errorf("diff: %w", err)
 	}
@@ -125,6 +152,7 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 		AgentRisk:        t.Risk,
 		AgentRiskReasons: t.RiskReasons,
 		Labels:           pr.Labels,
+		Source:           t.Source,
 	})
 	if d.Risk != t.Risk || !slices.Equal(d.Reasons, t.RiskReasons) {
 		saved, applied, err := e.setTaskFrom(ctx, t.ID, shepherdStatuses, "risk "+string(d.Risk), func(x *domain.Task) error {
@@ -148,9 +176,22 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 		case scm.CIPending:
 			return nil
 		case scm.CINone:
-			// GitHub often registers checks a few seconds after a push. Within the grace
-			// period after foundry's push, "no checks" is not yet "no CI".
-			if t.PushedAt != nil && e.d.Now().Sub(*t.PushedAt) < e.Config().PolicyFor(p.Name).CIGrace.Duration {
+			// GitHub often registers checks a few seconds after a push, so "no checks" on a head
+			// is not yet "no CI" until the head has been visible for the grace period.
+			pol := e.Config().PolicyFor(p.Name)
+			seen := e.d.Now()
+			if t.CIHeadSeenAt != nil {
+				seen = *t.CIHeadSeenAt
+			}
+			waited := e.d.Now().Sub(seen)
+			if pol.RequireChecks {
+				if waited < requireChecksLimit {
+					return nil
+				}
+				e.blockTask(ctx, t.ID, fmt.Sprintf("no CI checks reported for %s (require_checks is on)", pr.HeadSHA))
+				return nil
+			}
+			if waited < pol.CIGrace.Duration {
 				return nil
 			}
 		case scm.CIFailure:
@@ -207,7 +248,7 @@ func (e *Engine) mergeRefused(ctx context.Context, s scm.SCM, t domain.Task, jud
 
 // ensureReview makes sure a reviewer run exists for the PR's current head commit, and waits for
 // it. A review that ends without approving the head blocks the task, because nothing else would
-// move it on.
+// move it on. A review that was cancelled or failed is not a verdict: a new one is started.
 func (e *Engine) ensureReview(ctx context.Context, p *config.Project, t domain.Task, pr scm.PR) error {
 	ref := "review:" + t.ID + ":" + pr.HeadSHA
 	children, err := e.d.Store.ListTasks(ctx, store.TaskFilter{
@@ -221,6 +262,9 @@ func (e *Engine) ensureReview(ctx context.Context, p *config.Project, t domain.T
 	}
 	for _, c := range children {
 		if c.SourceRef != ref {
+			continue
+		}
+		if c.Status == domain.TaskCancelled || c.Status == domain.TaskFailed {
 			continue
 		}
 		switch {

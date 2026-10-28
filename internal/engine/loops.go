@@ -167,15 +167,27 @@ func (e *Engine) loopLock(name, project string) *sync.Mutex {
 	return m
 }
 
-// runLoopOnce runs loop name for project and records the outcome in LoopState. It does nothing
-// when the project is paused or, for a scheduled run, when the loop is disabled. A manual run
-// ignores the enabled flag.
+// loopRunsWhenPaused reports whether loop name keeps running while the factory or project is
+// paused. These are the safety loops: a release already in flight must still be health-checked
+// and rolled back, and a bad release must still open an incident. Each of them starts no new
+// deployment or work while paused; see deployLoop.
+func loopRunsWhenPaused(name string) bool {
+	return name == loopDeployWatch || name == loopProdWatch
+}
+
+// runLoopOnce runs loop name for project and records the outcome in LoopState. When the factory
+// or project is paused, only the safety loops run (see loopRunsWhenPaused); a scheduled run of
+// any other loop does nothing, and a manual run reports api.ErrConflict. For a scheduled run,
+// the loop must be enabled. A manual run ignores the enabled flag.
 func (e *Engine) runLoopOnce(ctx context.Context, name, project string, manual bool) error {
 	fn, ok := e.loopFuncs()[name]
 	if !ok {
 		return fmt.Errorf("%w: unknown loop %q", api.ErrInvalid, name)
 	}
-	if e.projectPaused(project) {
+	if e.projectPaused(project) && !loopRunsWhenPaused(name) {
+		if manual {
+			return fmt.Errorf("%w: project is paused", api.ErrConflict)
+		}
 		return nil
 	}
 	cfg := e.Config()
@@ -183,6 +195,9 @@ func (e *Engine) runLoopOnce(ctx context.Context, name, project string, manual b
 		return nil
 	}
 	p := cfg.Projects[project]
+	if p == nil {
+		return fmt.Errorf("%w: unknown project %q", api.ErrInvalid, project)
+	}
 
 	lock := e.loopLock(name, project)
 	lock.Lock()

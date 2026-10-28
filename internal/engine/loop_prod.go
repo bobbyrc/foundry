@@ -37,10 +37,11 @@ func signalLevelRank(level string) int {
 	}
 }
 
-// incidentFinished reports whether an incident task is over. A blocked incident is still open:
-// a human has to act on it, so a new signal must not open a second task for it.
-func incidentFinished(s domain.TaskStatus) bool {
-	return s == domain.TaskDone || s == domain.TaskCancelled || s == domain.TaskFailed
+// incidentReopens reports whether a new signal may reopen an incident task in this status. Only
+// a done or failed incident reopens, as a regression. A blocked incident is still open: a human
+// has to act on it. A cancelled one was dismissed by the owner, so a signal must not undo that.
+func incidentReopens(s domain.TaskStatus) bool {
+	return s == domain.TaskDone || s == domain.TaskFailed
 }
 
 // prodLoop polls every observer for the project and opens an incident task for each signal
@@ -127,7 +128,7 @@ func (e *Engine) handleObservation(ctx context.Context, p *config.Project, sourc
 		// No task yet: open one below.
 	case err != nil:
 		return err
-	case !incidentFinished(existing.Status):
+	case !incidentReopens(existing.Status):
 		return nil
 	case s.LastSeen.After(existing.UpdatedAt.Add(prodRegressionGrace)):
 		title = "Regressed: " + title

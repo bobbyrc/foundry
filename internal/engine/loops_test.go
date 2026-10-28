@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -114,6 +115,10 @@ type lpEnv struct {
 	dep  *lpDeployer
 	obs  *lpObserver
 	now  time.Time
+	// repo and head are set by the shepherd tests: the remote the PR branch lives on, and the
+	// commit the fake reports as the PR head.
+	repo lpRepo
+	head string
 }
 
 // lpNewEngine builds an engine from a full config document.
@@ -247,6 +252,31 @@ func (r lpRepo) pushBranch(t *testing.T, branch string, files map[string]string)
 	lpGit(t, r.seed, "commit", "-m", "work on "+branch)
 	lpGit(t, r.seed, "push", "-f", "origin", branch)
 	lpGit(t, r.seed, "checkout", "main")
+}
+
+// extend commits files on top of branch on origin, the way a later push to the branch would.
+func (r lpRepo) extend(t *testing.T, branch string, files map[string]string) {
+	t.Helper()
+	lpGit(t, r.seed, "checkout", branch)
+	for path, content := range files {
+		lpWrite(t, r.seed, path, content)
+	}
+	lpGit(t, r.seed, "add", "-A")
+	lpGit(t, r.seed, "commit", "-m", "push to "+branch)
+	lpGit(t, r.seed, "push", "origin", branch)
+	lpGit(t, r.seed, "checkout", "main")
+}
+
+// lpRevParse returns the full commit ID that ref names in dir.
+func lpRevParse(t *testing.T, dir, ref string) string {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", ref)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git rev-parse %s in %s: %v", ref, dir, err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // lpGit runs git in dir and fails the test on error.
@@ -478,5 +508,90 @@ func TestLoopHonoursIntervalBelowFiveSeconds(t *testing.T) {
 	// Runs land at about 1s, 2s and 3s; a fixed 5s wake would record none.
 	if len(seen) < 2 {
 		t.Fatalf("saw %d pr_shepherd runs in 3.5s, want at least 2", len(seen))
+	}
+}
+
+// While the factory is paused, deploy_watch still finishes a release in flight: its failed health
+// checks roll it back. It starts no new deployment for the merged work waiting behind it.
+func TestLoopPausedFactoryFinishesRollbackButStartsNothing(t *testing.T) {
+	health := lpNewHealth(t)
+	env := lpNewEngine(t, lpDeployDoc(t, health.srv.URL))
+	if _, err := env.st.CreateDeployment(env.ctx, domain.Deployment{
+		Project: "demo", Ref: "prev-sha", ProviderID: "prov-old", State: domain.DeployHealthy,
+		StartedAt: env.now.Add(-time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lpMergedTask(t, env, "Break things", "sha-2")
+	env.run(loopDeployWatch) // starts the release
+	env.dep.status = deploy.Status{State: deploy.StateReady}
+	env.run(loopDeployWatch) // verifying
+	waiting := lpMergedTask(t, env, "Next thing", "sha-3")
+
+	if err := env.e.SetPaused(env.ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	health.code.Store(500)
+	for range deployHealthAttempts {
+		env.run(loopDeployWatch)
+	}
+
+	if rel := lpDeployments(t, env)[0]; rel.State != domain.DeployRolledBack {
+		t.Fatalf("release = %s while paused, want rolled_back", rel.State)
+	}
+	if len(env.dep.rolledBack) != 1 {
+		t.Fatalf("rollbacks while paused = %v, want one", env.dep.rolledBack)
+	}
+	if len(env.dep.deployed) != 1 {
+		t.Fatalf("deployed while paused: %v, want only the release started before the pause", env.dep.deployed)
+	}
+	if got := env.task(waiting.ID); got.Status != domain.TaskMerged {
+		t.Fatalf("waiting task = %s while paused, want merged and not deploying", got.Status)
+	}
+}
+
+// prod_watch keeps watching while paused; the incident it opens waits in the queue.
+func TestLoopPausedProdWatchStillOpensIncidents(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	env.obs.obs = []domain.SignalObservation{lpObservation("error", 5, time.Now())}
+	if err := env.e.SetPaused(env.ctx, true); err != nil {
+		t.Fatal(err)
+	}
+
+	env.run(loopProdWatch)
+
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 || incidents[0].Status != domain.TaskQueued {
+		t.Fatalf("incidents while paused = %+v, want one queued incident", incidents)
+	}
+}
+
+// A paused factory or project refuses a manual run of every other loop with api.ErrConflict, and a
+// scheduled run of them does nothing.
+func TestLoopPausedSkipsOtherLoops(t *testing.T) {
+	pauses := map[string]func(env *lpEnv) error{
+		"factory": func(env *lpEnv) error { return env.e.SetPaused(env.ctx, true) },
+		"project": func(env *lpEnv) error { return env.e.SetProjectPaused(env.ctx, "demo", true) },
+	}
+	for name, pause := range pauses {
+		t.Run(name, func(t *testing.T) {
+			env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+			if err := pause(env); err != nil {
+				t.Fatal(err)
+			}
+			for _, loop := range []string{loopIssueIntake, loopPRShepherd, loopFriction, loopRetro} {
+				if err := env.e.RunLoop(env.ctx, loop, "demo"); !errors.Is(err, api.ErrConflict) {
+					t.Errorf("manual %s while paused: err = %v, want api.ErrConflict", loop, err)
+				}
+				if err := env.e.runLoopOnce(env.ctx, loop, "demo", false); err != nil {
+					t.Errorf("scheduled %s while paused: err = %v, want nil", loop, err)
+				}
+			}
+			for _, r := range env.e.Loops(env.ctx) {
+				if r.Project == "demo" && (r.Name == loopPRShepherd || r.Name == loopFriction) && !r.LastRunAt.IsZero() {
+					t.Errorf("%s ran while paused: %+v", r.Name, r)
+				}
+			}
+		})
 	}
 }

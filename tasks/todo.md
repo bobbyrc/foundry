@@ -86,5 +86,17 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] openapi.yaml + web/src/types.ts: add 'retro' to the loop names / loops config shape
 - [ ] OWNER: approve or reject dogfood PR #14 (retro's implementer-prompt change; high risk = foundry's own instructions). My approval attempt was refused as self-approval — correctly; it is yours. My read: safe and useful; one hint (GOMODCACHE→/tmp with GOPROXY=off) is slightly off.
 - [ ] OWNER: close duplicate friction issues #3 (dup of #5) and #6 (dup of #4), as the retro agent recommended
-- [ ] per-project `checks:` — commands foundry runs in the worktree after the agent and before commit/push (generic replacement for the cancelled Go-specific follow-ups); failure re-queues with the output
-- [ ] policy rule criterion `sources` + default rule: work foundry assigned itself (followup, retro) is at least medium — tonight 2 of 2 retro follow-ups had design problems (owner may relax)
+- [x] per-project `checks:` — commands foundry runs in the worktree after the agent and before commit/push (generic replacement for the cancelled Go-specific follow-ups); failure re-queues with the output
+- [x] policy rule criterion `sources` + default rule: work foundry assigned itself (followup, retro) is at least medium — tonight 2 of 2 retro follow-ups had design problems (owner may relax)
+- [ ] approval card: include the task's latest agent summary and the reviewer's verdict/summary (so the owner can decide without opening GitHub); spacing between PR link and Note label
+
+## Third review round (all confirmed by main agent; fixed and committed)
+- [x] follow-up kinds allowlisted (an implementer could file a `review` follow-up on its own PR)
+- [x] stale review rejection ignored unless parent in review at the reviewed head
+- [x] CI grace from when the shepherd first saw the head (human pushes too); `require_checks`
+- [x] policy diff pinned to the judged head SHA; empty head never passes
+- [x] cancelled/failed reviews don't condemn a head; owner Retry cancels stale reviews
+- [x] pause keeps deploy_watch (finish/rollback) and prod_watch running; manual loop run on paused project → 409
+- [x] chat replies tied to shutdown; crash recovery respects max attempts
+- [x] cancelled incidents stay dismissed; retro excludes its own work; review findings deduped
+- [ ] known limit: budget counts a run's cost only when it ends (in-flight runs count $0)

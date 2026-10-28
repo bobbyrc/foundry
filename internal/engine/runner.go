@@ -5,13 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/harness"
 	"github.com/bobbyrc/foundry/internal/scm"
+	"github.com/bobbyrc/foundry/internal/sysproc"
 	"github.com/bobbyrc/foundry/internal/workspace"
 )
 
@@ -278,7 +282,19 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		return
 	}
 
-	// completed or no_changes: commit leftovers, then publish or close out.
+	// completed or no_changes: the project's checks gate what is committed and pushed.
+	if f := runChecks(ctx, p, ws.Dir); f != nil {
+		if ctx.Err() != nil {
+			stopped() // the run was cancelled or timed out; that is its outcome
+			return
+		}
+		e.d.Bus.Emit(bg, domain.EvSystem, t.Project, t.ID, run.ID,
+			fmt.Sprintf("check %s failed: %v", f.name, f.err), nil)
+		e.requeueOrBlock(bg, t.ID, "check failed: "+f.name, f.context())
+		return
+	}
+
+	// commit leftovers, then publish or close out.
 	commitMsg := result.PRTitle
 	if commitMsg == "" {
 		commitMsg = t.Title
@@ -404,6 +420,92 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 	return true
 }
 
+// defaultCheckTimeout bounds a project check whose Timeout is unset.
+const defaultCheckTimeout = 10 * time.Minute
+
+// checkOutputTail is how much of a failing check's output is kept for the next attempt.
+const checkOutputTail = 8 << 10
+
+// checkFailure is the first project check that failed.
+type checkFailure struct {
+	name   string
+	output string // the tail of the check's combined stdout and stderr
+	note   string // "timed out after 10m" when the check ran out of time
+	err    error
+}
+
+// context renders the failure as the body of the re-queue note for the next agent.
+func (f *checkFailure) context() string {
+	out := strings.TrimSpace(f.output)
+	if out == "" {
+		out = "(no output)"
+	}
+	body := "```\n" + out + "\n```"
+	if f.note != "" {
+		body = f.note + "\n\n" + body
+	}
+	return body
+}
+
+// runChecks runs the project's checks in order in dir and stops at the first that fails. Each
+// check is `sh -c` with foundry's environment plus the project's env, and its own timeout. It
+// returns nil when every check passes.
+func runChecks(ctx context.Context, p *config.Project, dir string) *checkFailure {
+	env := os.Environ()
+	for k, v := range p.Env {
+		env = append(env, k+"="+v)
+	}
+	for _, c := range p.Checks {
+		timeout := c.Timeout.Duration
+		if timeout <= 0 {
+			timeout = defaultCheckTimeout
+		}
+		cctx, cancel := context.WithTimeout(ctx, timeout)
+		out := &tailWriter{max: checkOutputTail}
+		cmd := exec.CommandContext(cctx, "sh", "-c", c.Run)
+		cmd.Dir = dir
+		cmd.Env = env
+		cmd.Stdout, cmd.Stderr = out, out // one writer: stdout and stderr interleave in order
+		sysproc.Configure(cmd)
+		err := cmd.Start()
+		if err == nil {
+			err = sysproc.Wait(cmd)
+		}
+		timedOut := errors.Is(cctx.Err(), context.DeadlineExceeded)
+		cancel()
+		if err != nil {
+			f := &checkFailure{name: c.Name, output: out.String(), err: err}
+			if timedOut {
+				f.note = fmt.Sprintf("timed out after %s", timeout)
+			}
+			return f
+		}
+	}
+	return nil
+}
+
+// tailWriter keeps the last max bytes written to it.
+type tailWriter struct {
+	max int
+	buf []byte
+}
+
+func (w *tailWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	if len(w.buf) > 2*w.max { // trim in batches, not on every write
+		w.buf = append([]byte(nil), w.buf[len(w.buf)-w.max:]...)
+	}
+	return len(p), nil
+}
+
+// String returns the last max bytes written.
+func (w *tailWriter) String() string {
+	if len(w.buf) > w.max {
+		return string(w.buf[len(w.buf)-w.max:])
+	}
+	return string(w.buf)
+}
+
 // prBody is the pull request description: the agent's body (or its summary), a closing keyword
 // when the task came from a GitHub issue, and a footer naming the task.
 func prBody(t domain.Task, result domain.RunResult) string {
@@ -466,11 +568,40 @@ func (e *Engine) applyReview(ctx context.Context, rt domain.Task, parent *domain
 		return
 	}
 
+	if !e.reviewIsCurrent(ctx, rt.Project, parent.ID, reviewed) {
+		e.finishRunning(ctx, rt.ID, "verdict for an old head; ignored", func(x *domain.Task) error {
+			x.Status = domain.TaskDone
+			return nil
+		})
+		return
+	}
 	e.finishRunning(ctx, rt.ID, "changes requested", func(x *domain.Task) error {
 		x.Status = domain.TaskDone
 		return nil
 	})
-	e.requeueOrBlock(ctx, parent.ID, "reviewer requested changes", formatFindings(result.Review.Findings))
+	e.requeueOrBlockFrom(ctx, parent.ID, []domain.TaskStatus{domain.TaskReview},
+		"reviewer requested changes", formatFindings(result.Review.Findings))
+}
+
+// reviewIsCurrent reports whether a review of head still applies to the parent: the parent is
+// still in review, and head is still its pull request's head. A late verdict on an earlier push,
+// or for a parent that has since been re-queued, must not send the parent back again. A failed
+// lookup counts as not current.
+func (e *Engine) reviewIsCurrent(ctx context.Context, project, parentID, head string) bool {
+	cur, err := e.d.Store.GetTask(ctx, parentID)
+	if err != nil || cur.Status != domain.TaskReview {
+		return false
+	}
+	p, err := e.project(project)
+	if err != nil {
+		return false
+	}
+	s, err := e.d.SCMFor(p)
+	if err != nil {
+		return false
+	}
+	pr, err := s.GetPR(ctx, cur.PRNumber)
+	return err == nil && pr.HeadSHA == head
 }
 
 // formatFindings renders review findings as Markdown bullets for the next implementer run.
@@ -493,6 +624,12 @@ func formatFindings(findings []domain.ReviewFinding) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// followupKinds are the task kinds an agent may file as a follow-up. Anything else, review above
+// all, would let an implementer create the review of its own pull request, so it becomes a chore.
+var followupKinds = []domain.TaskKind{
+	domain.KindFeature, domain.KindBugfix, domain.KindChore, domain.KindImprove, domain.KindQuestion,
+}
+
 // queueFollowups turns the agent's follow-up suggestions into tasks, at most three per run.
 // Follow-ups do not spawn follow-ups.
 func (e *Engine) queueFollowups(ctx context.Context, t domain.Task, result domain.RunResult) {
@@ -507,9 +644,9 @@ func (e *Engine) queueFollowups(ctx context.Context, t domain.Task, result domai
 		if strings.TrimSpace(f.Title) == "" {
 			continue
 		}
-		kind := f.Kind
-		if kind == "" {
-			kind = domain.KindChore
+		kind := domain.KindChore
+		if slices.Contains(followupKinds, f.Kind) {
+			kind = f.Kind
 		}
 		if _, err := e.createTask(ctx, domain.Task{
 			Project:  t.Project,

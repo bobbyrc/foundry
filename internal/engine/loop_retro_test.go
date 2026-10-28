@@ -272,3 +272,68 @@ func TestRetroOneLineClipsAndCollapses(t *testing.T) {
 		t.Fatalf("clipped = %q, want four runes and an ellipsis", got)
 	}
 }
+
+// A retrospective's own failures (the retro task, its follow-ups and their reviews) are not
+// evidence, so they cannot make the next day's retrospective due.
+func TestLoopRetroExcludesItsOwnWork(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	since := env.now.Add(-24 * time.Hour)
+	retro := lpRetroTask(t, env, domain.Task{
+		Title: "Retrospective: last day", Kind: domain.KindImprove, Source: "retro",
+		Status: domain.TaskBlocked, BlockedReason: "agent denied a tool", UpdatedAt: env.now.Add(-time.Hour),
+	})
+	followup := lpRetroTask(t, env, domain.Task{
+		Title: "Fix the retro prompt", Source: "followup", ParentID: retro.ID,
+		Status: domain.TaskFailed, BlockedReason: "tests failed", UpdatedAt: env.now.Add(-time.Hour),
+	})
+	lpRetroTask(t, env, domain.Task{
+		Title: "Review: Fix the retro prompt", Kind: domain.KindReview, Source: "shepherd",
+		Status: domain.TaskDone, ParentID: followup.ID, UpdatedAt: env.now.Add(-time.Hour),
+	})
+
+	evidence, err := env.e.retroEvidence(env.ctx, "demo", since)
+	if err != nil {
+		t.Fatalf("retro evidence: %v", err)
+	}
+	if evidence != "" {
+		t.Fatalf("retro's own work is evidence for the next retro:\n%s", evidence)
+	}
+
+	// Ordinary work still counts.
+	lpRetroTask(t, env, domain.Task{
+		Title: "Lint gate", Status: domain.TaskBlocked, BlockedReason: "CI failed: lint",
+		UpdatedAt: env.now.Add(-time.Hour),
+	})
+	evidence, err = env.e.retroEvidence(env.ctx, "demo", since)
+	if err != nil {
+		t.Fatalf("retro evidence: %v", err)
+	}
+	if !strings.Contains(evidence, "- Lint gate (id ") || strings.Contains(evidence, "retro prompt") {
+		t.Fatalf("evidence = %q, want the ordinary blocked task and not the retro's own work", evidence)
+	}
+}
+
+// A parent whose review was sent back several times is named once, from its newest review.
+func TestLoopRetroReviewFindingsOncePerParent(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	since := env.now.Add(-24 * time.Hour)
+	parent := lpRetroTask(t, env, domain.Task{
+		Title: "Add cache", Status: domain.TaskQueued,
+		Body:      "Build it.\n\nreviewer requested changes: nil check missing\n",
+		UpdatedAt: env.now.Add(-3 * time.Hour),
+	})
+	for i, age := range []time.Duration{5 * time.Hour, 2 * time.Hour, 4 * time.Hour} {
+		lpRetroTask(t, env, domain.Task{
+			Title: fmt.Sprintf("Review %d: Add cache", i), Kind: domain.KindReview, Status: domain.TaskDone,
+			ParentID: parent.ID, UpdatedAt: env.now.Add(-age),
+		})
+	}
+
+	evidence, err := env.e.retroEvidence(env.ctx, "demo", since)
+	if err != nil {
+		t.Fatalf("retro evidence: %v", err)
+	}
+	if n := strings.Count(evidence, "- Add cache (id "+parent.ID+")"); n != 1 {
+		t.Fatalf("parent named %d times, want once:\n%s", n, evidence)
+	}
+}

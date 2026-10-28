@@ -120,3 +120,19 @@ func TestLoopProdBlockedIncidentStaysOpen(t *testing.T) {
 		t.Fatalf("got %d incidents while the first is blocked, want 1", n)
 	}
 }
+
+// A cancelled incident was dismissed by the owner: a signal seen well after it must not reopen it.
+func TestLoopProdCancelledIncidentStaysDismissed(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	env.obs.obs = []domain.SignalObservation{lpObservation("error", 5, time.Now())}
+	env.run(loopProdWatch)
+	inc := env.tasks(domain.KindIncident)[0]
+	lpSetTask(t, env, inc.ID, func(x *domain.Task) { x.Status = domain.TaskCancelled })
+
+	env.obs.obs = []domain.SignalObservation{lpObservation("error", 7, time.Now().Add(time.Hour))}
+	env.run(loopProdWatch)
+
+	if n := len(env.tasks(domain.KindIncident)); n != 1 {
+		t.Fatalf("got %d incidents after the owner cancelled the first, want 1", n)
+	}
+}

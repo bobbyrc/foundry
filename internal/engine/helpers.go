@@ -137,7 +137,12 @@ var activeStatuses = []domain.TaskStatus{
 // blocks and exhausted retries. Never retry automatically after this. It does nothing to a
 // task that is no longer active (e.g. cancelled by the owner).
 func (e *Engine) blockTask(ctx context.Context, id, reason string) {
-	t, applied, err := e.setTaskFrom(ctx, id, activeStatuses, "blocked: "+reason, func(t *domain.Task) error {
+	e.blockTaskFrom(ctx, id, activeStatuses, reason)
+}
+
+// blockTaskFrom is blockTask limited to tasks whose status is one of from.
+func (e *Engine) blockTaskFrom(ctx context.Context, id string, from []domain.TaskStatus, reason string) {
+	t, applied, err := e.setTaskFrom(ctx, id, from, "blocked: "+reason, func(t *domain.Task) error {
 		t.Status, t.BlockedReason = domain.TaskBlocked, reason
 		return nil
 	})
@@ -154,16 +159,23 @@ func (e *Engine) blockTask(ctx context.Context, id, reason string) {
 // requeueOrBlock re-queues a task for another attempt, appending context for the next agent to
 // its body, or blocks it when attempts are exhausted.
 func (e *Engine) requeueOrBlock(ctx context.Context, id, why, context string) {
+	e.requeueOrBlockFrom(ctx, id, []domain.TaskStatus{domain.TaskRunning, domain.TaskReview, domain.TaskAwaitingApproval}, why, context)
+}
+
+// requeueOrBlockFrom is requeueOrBlock limited to tasks whose status is one of from. Both the
+// re-queue and the block happen only while the task is in from, so a late outcome cannot
+// re-queue a task that has been re-queued and is running again.
+func (e *Engine) requeueOrBlockFrom(ctx context.Context, id string, from []domain.TaskStatus, why, context string) {
 	t, err := e.d.Store.GetTask(ctx, id)
 	if err != nil {
 		e.d.Logger.Error("requeue task", "task", id, "err", err)
 		return
 	}
 	if t.Attempts >= t.MaxAttempts {
-		e.blockTask(ctx, id, fmt.Sprintf("%s (gave up after %d attempts)", why, t.Attempts))
+		e.blockTaskFrom(ctx, id, from, fmt.Sprintf("%s (gave up after %d attempts)", why, t.Attempts))
 		return
 	}
-	if _, _, err := e.setTaskFrom(ctx, id, []domain.TaskStatus{domain.TaskRunning, domain.TaskReview, domain.TaskAwaitingApproval}, "re-queued: "+why, func(t *domain.Task) error {
+	if _, _, err := e.setTaskFrom(ctx, id, from, "re-queued: "+why, func(t *domain.Task) error {
 		t.Status = domain.TaskQueued
 		if context != "" {
 			t.Body = strings.TrimRight(t.Body, "\n") + fmt.Sprintf("\n\n## Attempt %d: %s\n\n%s\n", t.Attempts, why, context)

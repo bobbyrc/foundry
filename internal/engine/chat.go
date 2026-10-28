@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,7 +60,9 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 		return "I can't run: " + err.Error(), "", ""
 	}
 
-	run, err := e.d.Store.CreateRun(ctx, domain.Run{
+	// The run row is bookkeeping for a reply that is already underway, so it is written even when
+	// shutdown has cancelled ctx; otherwise the reply would fail to start and leave no run.
+	run, err := e.d.Store.CreateRun(context.WithoutCancel(ctx), domain.Run{
 		Project: conv.Project, Role: "orchestrator", Harness: agent.Harness, Model: agent.Model,
 		Status: domain.RunStarting, Workdir: dir,
 	})
@@ -72,6 +75,10 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 	defer cancel()
 	ar := e.registerRun(run.ID, "", conv.Project, cancel)
 	defer e.unregisterRun(run.ID)
+	if errors.Is(ctx.Err(), context.Canceled) {
+		// Shutdown cancelled the reply before its run was registered, so cancelRun missed it.
+		ar.reason.CompareAndSwap(nil, errStopped.Error())
+	}
 
 	// The orchestrator alone gets the foundry API token: it runs the foundry CLI.
 	env := make(map[string]string, len(e.d.AgentEnv)+len(e.d.OrchestratorEnv)+3)

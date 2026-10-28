@@ -93,6 +93,12 @@ policies:
       - risk: medium
         reason: labelled as risky
         labels: ["risky"]
+      # A rule can match on the task's source ("followup", "retro", "github_issue", "signal", ...),
+      # and a source rule with no paths is valid. Foundry's built-in default already rates
+      # follow-up and retro work medium, so it waits for you; uncomment to do the same for signals:
+      #   - risk: medium
+      #     reason: production signal fix
+      #     sources: ["signal"]
     gates:                             # per risk level; a missing level takes the default
       low:
         auto_merge: true               # merge without a human once checks pass (default true)
