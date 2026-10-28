@@ -97,6 +97,10 @@ func (e *Engine) setTask(ctx context.Context, id, message string, fn func(*domai
 	if t.Status == domain.TaskQueued {
 		e.wakeScheduler()
 	}
+	if t.Status.Terminal() {
+		bg := context.WithoutCancel(ctx)
+		e.goTracked(func() { e.reportToIssue(bg, t) })
+	}
 	return t, nil
 }
 

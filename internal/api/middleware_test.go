@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +47,9 @@ func TestSecurityHeadersOnRejectedHost(t *testing.T) {
 func TestCSPAllowsBuiltUIWithoutInlineScripts(t *testing.T) {
 	// The built index.html must reference its script and stylesheet by URL only.
 	body, err := fs.ReadFile(DefaultWeb(), "index.html")
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Skip("web UI not built (run npm run build in web/); CSP check needs the built index.html")
+	}
 	require.NoError(t, err)
 	assert.Contains(t, string(body), `<script type="module" crossorigin src="/assets/`)
 	assert.NotContains(t, string(body), "<script>")
