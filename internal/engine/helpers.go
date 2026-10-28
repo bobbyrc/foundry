@@ -36,10 +36,11 @@ func (e *Engine) repoFor(p *config.Project) workspace.Repo {
 	return workspace.Repo{Name: p.Name, Remote: p.Repo, Path: p.Path, DefaultBranch: p.DefaultBranch}
 }
 
-// harnessFor resolves an agent profile to a ready harness.
-func (e *Engine) harnessFor(agentName string) (harness.Harness, config.Agent, error) {
+// harnessFor resolves an agent role to a ready harness. The role is looked up among the roles
+// that apply to project (its overrides included); project "" means the global roles.
+func (e *Engine) harnessFor(project, agentName string) (harness.Harness, config.Agent, error) {
 	cfg := e.Config()
-	a, ok := cfg.Agents[agentName]
+	a, ok := cfg.AgentsFor(project)[agentName]
 	if !ok {
 		return nil, config.Agent{}, fmt.Errorf("unknown agent %q", agentName)
 	}
@@ -65,7 +66,7 @@ func (e *Engine) createTask(ctx context.Context, t domain.Task) (domain.Task, er
 	if t.Kind == "" {
 		t.Kind = domain.KindFeature
 	}
-	role, _, err := cfg.AgentFor(t.Kind, t.Role)
+	role, _, err := cfg.AgentForProject(t.Project, t.Kind, t.Role)
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("%w: %v", api.ErrInvalid, err)
 	}

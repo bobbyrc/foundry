@@ -71,6 +71,13 @@ clone from step 3. Foundry runs agents there, so it must be a real git checkout.
 Every other key is optional and has a default. `foundry.example.yaml` in the repository lists every
 option with its default.
 
+**Per-project agents.** A project can change the agent roles for itself. Under `agents:`, give a
+role name the fields to change (`harness`, `model`, `prompt`, `args`, `description`); the fields you
+leave out keep the global role's values, and a name the global config does not define adds a role
+that only this project has. Under `routing:`, send a task kind to a role for this project only, and
+kinds you leave out keep the global routing. `foundry.example.yaml` shows `myapp` running its
+implementer on Claude Code with a different model.
+
 Check the setup before you start the daemon:
 
 ```sh

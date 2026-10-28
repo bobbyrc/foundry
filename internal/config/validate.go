@@ -80,6 +80,24 @@ func (c *Config) Validate() error {
 		if _, ok := c.Policies[p.Policy]; !ok {
 			add("%s.policy: unknown policy %q", prefix, p.Policy)
 		}
+		// Roles are checked as merged, so a project sees the same roles the engine will run.
+		agents := c.AgentsFor(name)
+		for role, a := range agents {
+			if _, ok := c.Harness[a.Harness]; !ok {
+				add("%s.agents.%s.harness: unknown harness %q", prefix, role, a.Harness)
+			}
+			if a.Prompt == "" {
+				add("%s.agents.%s.prompt: must not be empty", prefix, role)
+			}
+		}
+		for kind, role := range p.Routing {
+			if !isTaskKind(kind) {
+				add("%s.routing.%s: unknown task kind %q", prefix, kind, kind)
+			}
+			if _, ok := agents[role]; !ok {
+				add("%s.routing.%s: unknown agent %q", prefix, kind, role)
+			}
+		}
 		if p.Deploy != nil && p.Deploy.Type == "" {
 			add("%s.deploy.type: must not be empty", prefix)
 		}

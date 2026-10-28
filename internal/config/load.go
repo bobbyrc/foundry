@@ -166,25 +166,84 @@ func (c *Config) LoopsFor(project string) Loops {
 	return out
 }
 
-// AgentFor picks the agent for a task. A non-empty role names the agent directly and must
-// exist. Otherwise the agent is the one routed to kind. It returns the agent's name too.
+// AgentsFor returns the agent roles that apply to project: the global roles with the project's
+// overrides applied. A set field of an override (Harness, Model, Prompt, Args, Description)
+// replaces the global role's field; a name the global map lacks adds a project-only role. The
+// map is fresh, so the caller may change it. An empty or unconfigured project gets the global
+// roles.
+func (c *Config) AgentsFor(project string) map[string]Agent {
+	out := make(map[string]Agent, len(c.Agents))
+	for name, a := range c.Agents {
+		out[name] = a
+	}
+	p := c.Projects[project]
+	if p == nil {
+		return out
+	}
+	for name, ov := range p.Agents {
+		base, ok := out[name]
+		if !ok {
+			out[name] = ov
+			continue
+		}
+		if ov.Harness != "" {
+			base.Harness = ov.Harness
+		}
+		if ov.Model != "" {
+			base.Model = ov.Model
+		}
+		if ov.Prompt != "" {
+			base.Prompt = ov.Prompt
+		}
+		if len(ov.Args) > 0 {
+			base.Args = ov.Args
+		}
+		if ov.Description != "" {
+			base.Description = ov.Description
+		}
+		out[name] = base
+	}
+	return out
+}
+
+// AgentFor picks the agent for a task from the global roles. See AgentForProject.
 func (c *Config) AgentFor(kind domain.TaskKind, role string) (string, Agent, error) {
+	return c.AgentForProject("", kind, role)
+}
+
+// AgentForProject picks the agent for a task of project. A non-empty role names the agent
+// directly and must exist in AgentsFor(project). Otherwise the agent is the one routed to kind:
+// the project's Routing entry if it has one, else the global Routing entry. It returns the
+// agent's name too.
+func (c *Config) AgentForProject(project string, kind domain.TaskKind, role string) (string, Agent, error) {
+	agents := c.AgentsFor(project)
 	if role != "" {
-		a, ok := c.Agents[role]
+		a, ok := agents[role]
 		if !ok {
 			return "", Agent{}, fmt.Errorf("config: unknown agent role %q", role)
 		}
 		return role, a, nil
 	}
-	name, ok := c.Routing[string(kind)]
+	name, ok := c.routeFor(project, kind)
 	if !ok {
 		return "", Agent{}, fmt.Errorf("config: no agent routed for task kind %q", kind)
 	}
-	a, ok := c.Agents[name]
+	a, ok := agents[name]
 	if !ok {
 		return "", Agent{}, fmt.Errorf("config: routing %q names unknown agent %q", kind, name)
 	}
 	return name, a, nil
+}
+
+// routeFor returns the agent name routed to kind for project, preferring the project's routing.
+func (c *Config) routeFor(project string, kind domain.TaskKind) (string, bool) {
+	if p := c.Projects[project]; p != nil {
+		if name, ok := p.Routing[string(kind)]; ok {
+			return name, true
+		}
+	}
+	name, ok := c.Routing[string(kind)]
+	return name, ok
 }
 
 // PolicyFor returns the policy for project: its named policy, falling back to "default".

@@ -95,6 +95,18 @@ mobile):
 - Right: **Activity** — the event feed, newest first, each row: type tag (muted mono), the
   event message, RelTime, links to task/run when present. Live events prepend.
 
+**Projects** (`/projects`) — one card per project, in a responsive grid (one column on
+mobile). Card header: project name (semibold), repo as a muted link to
+`https://github.com/<repo>`, and on the right a pause toggle (secondary "Pause" / danger-fill
+"Paused — Resume"). When the project is paused in foundry.yaml, the toggle is replaced by a
+muted "Paused in foundry.yaml" label (the file wins; the UI cannot unpause it). Body: a row of
+counts (queued, running, review, awaiting approval, blocked — each a link to `/tasks` filtered
+by project and that status; zero counts muted), then muted lines for the default branch, the
+deployer type (or "no deployer") and observers (or "no observers"). Footer: the project's
+loops as small pills (name, a dot coloured by health: `--ok` when last run had no error,
+`--danger` with the error as a tooltip, `--muted` when disabled or never run). The sidebar
+gets **Projects** between Overview and Chat.
+
 **Chat** (`/chat`, `/chat/:id`) — conversation list on the left (240px, "New chat" button,
 items show title and RelTime), thread on the right. User messages: right-aligned
 `--panel-2` bubbles. Assistant messages: left-aligned, no bubble, rendered Markdown. While

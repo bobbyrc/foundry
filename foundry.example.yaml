@@ -129,6 +129,12 @@ projects:
     default_branch: main
     policy: strict                     # uses the "strict" policy defined above
     instructions: Keep the mobile API backward compatible.
+    agents:                            # this project's overrides of the global agent roles
+      implementer:                     # set fields replace the global role's fields
+        harness: claude                # this project's implementer runs on Claude Code
+        model: sonnet                  # and uses this model; its prompt and other fields stay global
+    routing:                           # task kind -> role, for this project only
+      bugfix: implementer              # bugfix tasks here go to the implementer above
     deploy:
       type: command                    # runs the commands under options below
       options:

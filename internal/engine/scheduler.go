@@ -5,17 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/notify"
 	"github.com/bobbyrc/foundry/internal/store"
 )
-
-// budgetAlerted maps each *Engine to the local date (YYYY-MM-DD) on which its daily budget alert
-// was last emitted, so the alert fires once per day rather than on every scheduling pass.
-var budgetAlerted sync.Map
 
 // runScheduler claims queued tasks and starts runs until ctx is done. It looks for work on every
 // SchedulerTick and whenever woken (a task was queued, a run ended).
@@ -87,7 +82,11 @@ func (e *Engine) withinDailyBudget(ctx context.Context, budget float64) bool {
 		return true
 	}
 	day := midnight.Format("2006-01-02")
-	if prev, _ := budgetAlerted.Swap(e, day); prev != day {
+	e.budgetMu.Lock()
+	first := e.budgetDay != day
+	e.budgetDay = day
+	e.budgetMu.Unlock()
+	if first {
 		msg := fmt.Sprintf("daily budget of $%.2f reached ($%.2f spent today); no new runs until midnight — raise limits.daily_budget_usd to continue", budget, cost)
 		e.d.Bus.Emit(ctx, domain.EvSystem, "", "", "", msg, nil)
 		e.notify(ctx, notify.PriorityHigh, "Daily budget reached", msg, "/")

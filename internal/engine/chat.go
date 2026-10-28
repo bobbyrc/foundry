@@ -46,7 +46,7 @@ func (e *Engine) chatReply(ctx context.Context, conv domain.Conversation, text s
 // ID ("" when no run started) and the harness session ID to resume next turn ("" if unknown).
 func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text string) (string, string, string) {
 	cfg := e.Config()
-	h, agent, err := e.harnessFor("orchestrator")
+	h, agent, err := e.harnessFor(conv.Project, "orchestrator")
 	if err != nil {
 		return "I can't run: " + err.Error(), "", ""
 	}

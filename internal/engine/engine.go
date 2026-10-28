@@ -75,6 +75,10 @@ type Engine struct {
 	kickMu sync.Mutex
 	kicks  map[string]chan string
 
+	// budgetMu guards budgetDay, the local date the daily-budget notice was last sent.
+	budgetMu  sync.Mutex
+	budgetDay string
+
 	// lifeMu guards stopped; goTracked refuses new goroutines once Run is shutting down.
 	lifeMu  sync.Mutex
 	stopped bool

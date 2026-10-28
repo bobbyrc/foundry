@@ -178,17 +178,28 @@ func applyAgentDefaults(c *Config) {
 			c.Agents[name] = a
 		}
 	}
-	dir := ""
-	if c.Path != "" {
-		dir = filepath.Dir(c.Path)
-	}
+	dir := configDir(c)
 	for name, a := range c.Agents {
-		if a.Prompt == "" || strings.HasPrefix(a.Prompt, "builtin:") || filepath.IsAbs(a.Prompt) {
-			continue
-		}
-		a.Prompt = filepath.Join(dir, a.Prompt)
-		c.Agents[name] = a
+		c.Agents[name] = resolvePrompt(dir, a)
 	}
+}
+
+// configDir is the directory of the config file, or "" when the config has no path.
+func configDir(c *Config) string {
+	if c.Path == "" {
+		return ""
+	}
+	return filepath.Dir(c.Path)
+}
+
+// resolvePrompt makes a relative prompt path absolute against dir. Builtin and absolute prompts
+// and empty prompts are left alone.
+func resolvePrompt(dir string, a Agent) Agent {
+	if a.Prompt == "" || strings.HasPrefix(a.Prompt, "builtin:") || filepath.IsAbs(a.Prompt) {
+		return a
+	}
+	a.Prompt = filepath.Join(dir, a.Prompt)
+	return a
 }
 
 func applyRoutingDefaults(c *Config) {
@@ -245,12 +256,16 @@ func applyProjectDefaults(c *Config) {
 	if c.Projects == nil {
 		c.Projects = map[string]*Project{}
 	}
+	dir := configDir(c)
 	for name, p := range c.Projects {
 		if p == nil {
 			p = &Project{}
 			c.Projects[name] = p
 		}
 		p.Name = name
+		for role, a := range p.Agents {
+			p.Agents[role] = resolvePrompt(dir, a)
+		}
 		if p.DefaultBranch == "" {
 			p.DefaultBranch = "main"
 		}

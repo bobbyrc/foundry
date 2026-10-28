@@ -100,8 +100,14 @@ type Project struct {
 	// Instructions are appended to every agent prompt for this project.
 	Instructions string            `yaml:"instructions" json:"instructions,omitempty"`
 	Env          map[string]string `yaml:"env" json:"env,omitempty"` // added to agent sessions
-	Deploy       *Deploy           `yaml:"deploy" json:"deploy,omitempty"`
-	Observe      []Observer        `yaml:"observe" json:"observe,omitempty"`
+	// Agents overrides agent roles for this project only: set fields replace the global
+	// role's fields (Harness, Model, Prompt, Args, Description); a new name adds a role that
+	// only this project has.
+	Agents map[string]Agent `yaml:"agents" json:"agents,omitempty"`
+	// Routing overrides the global task kind → agent routing for this project.
+	Routing map[string]string `yaml:"routing" json:"routing,omitempty"`
+	Deploy  *Deploy           `yaml:"deploy" json:"deploy,omitempty"`
+	Observe []Observer        `yaml:"observe" json:"observe,omitempty"`
 	// Loops overrides the global loop settings for this project.
 	Loops *Loops `yaml:"loops" json:"loops,omitempty"`
 	// Paused stops the scheduler from starting runs and the loops from creating tasks.

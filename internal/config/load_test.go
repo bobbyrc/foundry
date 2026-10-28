@@ -217,3 +217,97 @@ func mustJSON(t *testing.T, v any) []byte {
 func unmarshalJSON(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
+
+func TestAgentsForMergesProjectOverrides(t *testing.T) {
+	cfg, err := Parse([]byte(`
+agents:
+  implementer:
+    harness: codex
+    model: gpt-5
+    prompt: builtin:implementer
+    description: global implementer
+projects:
+  app:
+    repo: bob/app
+    agents:
+      implementer:
+        model: sonnet
+      designer:
+        harness: claude
+        prompt: builtin:implementer
+        description: project only
+  plain:
+    repo: bob/plain
+`), "")
+	require.NoError(t, err)
+
+	app := cfg.AgentsFor("app")
+	impl := app["implementer"]
+	assert.Equal(t, "codex", impl.Harness, "override model only keeps the global harness")
+	assert.Equal(t, "sonnet", impl.Model)
+	assert.Equal(t, "builtin:implementer", impl.Prompt, "override model only keeps the global prompt")
+	assert.Equal(t, "global implementer", impl.Description)
+
+	assert.Equal(t, Agent{Harness: "claude", Prompt: "builtin:implementer", Description: "project only"},
+		app["designer"], "a name the global map lacks adds a project-only role")
+	assert.NotContains(t, cfg.AgentsFor("plain"), "designer")
+	assert.Equal(t, "codex", cfg.AgentsFor("plain")["implementer"].Harness)
+	assert.Equal(t, "gpt-5", cfg.Agents["implementer"].Model, "global roles are not changed")
+	assert.NotContains(t, cfg.Agents, "designer")
+
+	app["implementer"] = Agent{}
+	assert.Equal(t, "sonnet", cfg.AgentsFor("app")["implementer"].Model, "changing the returned map does not change the config")
+}
+
+func TestAgentForProjectRoutingFallsBackToGlobal(t *testing.T) {
+	cfg, err := Parse([]byte(`
+agents:
+  implementer:
+    harness: codex
+    prompt: builtin:implementer
+projects:
+  app:
+    repo: bob/app
+    agents:
+      implementer:
+        harness: claude
+    routing:
+      bugfix: implementer
+      chore: reviewer
+  plain:
+    repo: bob/plain
+    routing:
+      feature: triager
+`), "")
+	require.NoError(t, err)
+
+	// The project routes bugfix to its overridden implementer, which runs on claude.
+	name, agent, err := cfg.AgentForProject("app", domain.KindBugfix, "")
+	require.NoError(t, err)
+	assert.Equal(t, "implementer", name)
+	assert.Equal(t, "claude", agent.Harness)
+
+	// No project routing for review: the global routing applies.
+	name, _, err = cfg.AgentForProject("app", domain.KindReview, "")
+	require.NoError(t, err)
+	assert.Equal(t, "reviewer", name)
+
+	// The project's routing wins over the global one for the same kind.
+	name, _, err = cfg.AgentForProject("plain", domain.KindFeature, "")
+	require.NoError(t, err)
+	assert.Equal(t, "triager", name)
+	name, _, err = cfg.AgentForProject("plain", domain.KindBugfix, "")
+	require.NoError(t, err)
+	assert.Equal(t, "implementer", name, "kinds the project does not route use the global routing")
+
+	// An explicit role is checked against the project's roles.
+	_, _, err = cfg.AgentForProject("app", domain.KindFeature, "triager")
+	assert.NoError(t, err)
+	_, _, err = cfg.AgentForProject("plain", domain.KindFeature, "nobody")
+	assert.ErrorContains(t, err, `unknown agent role "nobody"`)
+
+	// AgentFor is the global view: the project-only designer role does not exist there.
+	_, agent, err = cfg.AgentFor(domain.KindBugfix, "")
+	require.NoError(t, err)
+	assert.Equal(t, "codex", agent.Harness)
+}

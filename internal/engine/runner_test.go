@@ -40,6 +40,9 @@ type rtOpts struct {
 	maxPerProject int
 	// wrapStore, when set, wraps the engine's store (the test reads the raw store).
 	wrapStore func(store.Store) store.Store
+	// projectExtra maps a project name to extra YAML lines for its entry (agents, routing),
+	// each indented four spaces.
+	projectExtra map[string]string
 }
 
 // rtEnv is a real engine wired to an in-memory store, a shared fake SCM and local bare repos.
@@ -77,8 +80,8 @@ func rtNewEngine(t *testing.T, o rtOpts) *rtEnv {
 		env.bare[name] = filepath.Join(t.TempDir(), name+".git")
 		env.clone[name] = filepath.Join(t.TempDir(), name+"-clone")
 		rtSeedRepo(t, env.bare[name])
-		fmt.Fprintf(&projects, "  %s:\n    repo: %s\n    path: %s\n    default_branch: main\n",
-			name, env.bare[name], env.clone[name])
+		fmt.Fprintf(&projects, "  %s:\n    repo: %s\n    path: %s\n    default_branch: main\n%s",
+			name, env.bare[name], env.clone[name], o.projectExtra[name])
 	}
 	var agents strings.Builder
 	for _, a := range []string{"orchestrator", "implementer", "reviewer", "triager", "sre", "improver"} {
@@ -98,6 +101,7 @@ func rtNewEngine(t *testing.T, o rtOpts) *rtEnv {
   max_runs_per_project: %d
 harnesses:
   fake: {type: fake}
+  alt: {type: fake}
 agents:
 %sprojects:
 %s`, dataDir, self, o.maxAttempts, o.maxConcurrent, o.maxPerProject, agents.String(), projects.String())
@@ -640,4 +644,30 @@ func TestRunnerStartTaskFailureLandsAfterCancel(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, domain.TaskBlocked, got.Status, "the block lands even though the request was cancelled")
 	assert.Contains(t, got.BlockedReason, "could not resolve agent")
+}
+
+func TestRunnerProjectAgentOverrideRunsOnItsHarness(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{projectExtra: map[string]string{
+		"demo": "    agents: {implementer: {harness: alt}}\n",
+	}})
+	task := env.create(domain.Task{Title: "Add greeting", Body: "[fake:commit]"})
+
+	env.waitStatus(task.ID, domain.TaskReview)
+	runs := env.runs(task.ID)
+	require.Len(t, runs, 1)
+	assert.Equal(t, "implementer", runs[0].Role)
+	assert.Equal(t, "alt", runs[0].Harness, "the project's implementer override picks the harness")
+}
+
+func TestCreateTaskRoutesByProjectRouting(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{projectExtra: map[string]string{
+		"demo": "    routing: {chore: reviewer}\n",
+	}})
+
+	routed := env.create(domain.Task{Kind: domain.KindChore, Title: "Tidy"})
+	assert.Equal(t, "reviewer", routed.Role, "the project's routing wins over the global one")
+	assert.Equal(t, "reviewer", env.task(routed.ID).Role)
+
+	global := env.create(domain.Task{Kind: domain.KindBugfix, Title: "Fix it"})
+	assert.Equal(t, "implementer", global.Role, "kinds the project does not route use the global routing")
 }

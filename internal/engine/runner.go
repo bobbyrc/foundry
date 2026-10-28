@@ -29,7 +29,7 @@ func (e *Engine) startTask(ctx context.Context, t domain.Task) {
 		e.blockTask(bg, t.ID, fmt.Sprintf("unknown project %q", t.Project))
 		return
 	}
-	h, agent, err := e.harnessFor(t.Role)
+	h, agent, err := e.harnessFor(t.Project, t.Role)
 	if err != nil {
 		e.blockTask(bg, t.ID, "could not resolve agent "+t.Role+": "+err.Error())
 		return

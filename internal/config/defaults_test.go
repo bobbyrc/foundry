@@ -220,3 +220,25 @@ func TestDefaultPolicyReturnsFreshValues(t *testing.T) {
 	assert.True(t, b.Gates["low"].AutoMerge)
 	assert.Equal(t, domain.RiskHigh, b.Rules[0].Risk)
 }
+
+func TestProjectAgentPromptPathsResolveAgainstConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "foundry.yaml")
+	cfg, err := Parse([]byte(`
+projects:
+  app:
+    repo: bob/app
+    agents:
+      implementer:
+        prompt: prompts/app.md
+      designer:
+        harness: claude
+        prompt: /abs/designer.md
+`), path)
+	require.NoError(t, err)
+
+	app := cfg.Projects["app"]
+	assert.Equal(t, filepath.Join(dir, "prompts", "app.md"), app.Agents["implementer"].Prompt)
+	assert.Equal(t, "/abs/designer.md", app.Agents["designer"].Prompt, "absolute paths are left alone")
+	assert.Equal(t, app.Agents["implementer"].Prompt, cfg.AgentsFor("app")["implementer"].Prompt, "merged roles see the resolved path")
+}

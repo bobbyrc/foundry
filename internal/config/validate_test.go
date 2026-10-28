@@ -92,3 +92,58 @@ func TestValidateDailyBudgetMustNotBeNegative(t *testing.T) {
 	_, err = Parse([]byte("limits:\n  daily_budget_usd: 0\n"), "")
 	assert.NoError(t, err, "0 means no limit")
 }
+
+func TestValidateProjectAgentsAndRouting(t *testing.T) {
+	_, err := Parse([]byte(`
+harnesses:
+  alt: {type: fake}
+projects:
+  app:
+    repo: bob/app
+    agents:
+      implementer:
+        harness: nowhere
+      designer:
+        harness: alt
+        description: no prompt for a project-only role
+      reviewer:
+        prompt: ""
+    routing:
+      bogus: implementer
+      bugfix: ghost
+`), "")
+	require.Error(t, err)
+	msg := err.Error()
+	for _, want := range []string{
+		`projects.app.agents.implementer.harness: unknown harness "nowhere"`,
+		"projects.app.agents.designer.prompt: must not be empty",
+		"projects.app.routing.bogus: unknown task kind",
+		`projects.app.routing.bugfix: unknown agent "ghost"`,
+	} {
+		assert.Contains(t, msg, want)
+	}
+	assert.NotContains(t, msg, "projects.app.agents.designer.harness", "designer names a harness that exists")
+}
+
+func TestValidateAcceptsProjectOverrides(t *testing.T) {
+	_, err := Parse([]byte(`
+harnesses:
+  alt: {type: fake}
+agents:
+  designer:
+    harness: alt
+    prompt: builtin:implementer
+projects:
+  app:
+    repo: bob/app
+    agents:
+      implementer:
+        harness: alt
+      designer:
+        model: sonnet
+    routing:
+      bugfix: designer
+      feature: implementer
+`), "")
+	require.NoError(t, err)
+}
