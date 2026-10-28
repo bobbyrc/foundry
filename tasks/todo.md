@@ -41,3 +41,8 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] config: unset `${NAME}` → load error naming the variable (decision: fail loudly on missing secrets)
 - [ ] foundry.example.yaml: "five built-in roles" lists six; max_attempts exhaustion → "blocked", not "failed"
 - [ ] merge docs/plugins-deploy-observe.md into docs/plugins.md
+- [ ] workspace.Manager: per-repo mutex (concurrent fetch/worktree-add on one clone collide on git's lock)
+- [ ] scm/github OpenPR: add labels with `gh pr edit`, not `gh issue edit`
+- [ ] web IdChip: UUIDv7 IDs share their first 8 chars (timestamp) — show the last 8
+- [ ] web: add web/public/.keep so every build recreates internal/api/webdist/.keep (embed needs it on fresh clones)
+- [ ] web: visual + runtime pass against a live backend (main agent, Playwright screenshots)
