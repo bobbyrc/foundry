@@ -508,3 +508,50 @@ func TestGitCommandsDoNotRunHooks(t *testing.T) {
 	require.NoError(t, m.Push(ctx, repo, ws))
 	assert.NoFileExists(t, marker+"-pre-push")
 }
+
+// The clone's own checkout follows the project's default branch, not the remote's HEAD, and
+// moves forward with origin on later fetches.
+func TestEnsureCloneChecksOutDefaultBranch(t *testing.T) {
+	repo, m, seed := setup(t)
+	ctx := context.Background()
+
+	runGit(t, seed, "checkout", "-b", "dev")
+	writeFile(t, filepath.Join(seed, "DEV.md"), "dev\n")
+	runGit(t, seed, "add", "-A")
+	runGit(t, seed, "-c", "user.name=Seed", "-c", "user.email=seed@example.com", "commit", "-m", "dev")
+	runGit(t, seed, "push", repo.Remote, "dev")
+	repo.DefaultBranch = "dev"
+
+	require.NoError(t, m.EnsureClone(ctx, repo))
+	assert.FileExists(t, filepath.Join(repo.Path, "DEV.md"))
+
+	writeFile(t, filepath.Join(seed, "DEV2.md"), "dev again\n")
+	runGit(t, seed, "add", "-A")
+	runGit(t, seed, "-c", "user.name=Seed", "-c", "user.email=seed@example.com", "commit", "-m", "dev2")
+	runGit(t, seed, "push", repo.Remote, "dev")
+
+	require.NoError(t, m.EnsureClone(ctx, repo))
+	assert.FileExists(t, filepath.Join(repo.Path, "DEV2.md"))
+	assert.Equal(t, runGit(t, repo.Path, "rev-parse", "origin/dev"), runGit(t, repo.Path, "rev-parse", "HEAD"))
+}
+
+// A clone with local modifications keeps its checkout; EnsureClone does not touch the files.
+func TestEnsureCloneLeavesDirtyCheckoutAlone(t *testing.T) {
+	repo, m, seed := setup(t)
+	ctx := context.Background()
+
+	runGit(t, seed, "checkout", "-b", "dev")
+	writeFile(t, filepath.Join(seed, "DEV.md"), "dev\n")
+	runGit(t, seed, "add", "-A")
+	runGit(t, seed, "-c", "user.name=Seed", "-c", "user.email=seed@example.com", "commit", "-m", "dev")
+	runGit(t, seed, "push", repo.Remote, "dev")
+	repo.DefaultBranch = "dev"
+
+	require.NoError(t, m.EnsureClone(ctx, repo))
+	writeFile(t, filepath.Join(repo.Path, "README.md"), "local edit\n")
+
+	require.NoError(t, m.EnsureClone(ctx, repo))
+	got, err := os.ReadFile(filepath.Join(repo.Path, "README.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "local edit\n", string(got))
+}

@@ -535,7 +535,7 @@ func (e *Engine) recordFriction(ctx context.Context, t domain.Task, run domain.R
 			RunID:       run.ID,
 			Title:       fr.Title,
 			Body:        fr.Body,
-			Fingerprint: frictionFingerprint(fr.Title),
+			Fingerprint: e.frictionFingerprintFor(ctx, target, fr.Title),
 			Count:       1,
 		})
 		if err != nil {

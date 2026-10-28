@@ -108,6 +108,23 @@ func (m *Manager) ensureClone(ctx context.Context, r Repo) error {
 	if _, err := git(ctx, r.Path, "fetch", "origin", "--prune"); err != nil {
 		return fmt.Errorf("fetch %s: %w", r.Name, err)
 	}
+	return alignCheckout(ctx, r)
+}
+
+// alignCheckout detaches the clone's own checkout at origin/<DefaultBranch>. A fresh clone checks
+// out the remote's HEAD, which can be another branch, and people reading the project path should
+// see the project's default branch. A clone with local modifications is left alone.
+func alignCheckout(ctx context.Context, r Repo) error {
+	status, err := git(ctx, r.Path, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("status %s: %w", r.Name, err)
+	}
+	if status != "" {
+		return nil
+	}
+	if _, err := git(ctx, r.Path, "checkout", "--detach", "--quiet", "origin/"+r.DefaultBranch); err != nil {
+		return fmt.Errorf("check out origin/%s in %s: %w", r.DefaultBranch, r.Name, err)
+	}
 	return nil
 }
 

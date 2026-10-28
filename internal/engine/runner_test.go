@@ -688,3 +688,35 @@ func TestRunnerPublishRecordsPushTime(t *testing.T) {
 	require.NotNil(t, got.PushedAt)
 	assert.WithinDuration(t, time.Now(), *got.PushedAt, time.Minute)
 }
+
+// Two reports of one problem in different words in the same project become one friction row
+// whose count goes up; an unrelated report keeps its own row.
+func TestRunnerFrictionDedupesSimilarTitles(t *testing.T) {
+	script := func(ctx context.Context, spec harness.Spec, emit func(harness.Event)) (harness.Result, error) {
+		dir := filepath.Join(spec.Workdir, domain.OutboxDir)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return harness.Result{IsError: true}, err
+		}
+		body := `{"status":"no_changes","summary":"nothing","friction":[` +
+			`{"title":"Worker sandbox prevents Go HTTP test listeners","body":"b","target":"project"},` +
+			`{"title":"Worker sandbox denies HTTP test listening sockets","body":"c","target":"project"},` +
+			`{"title":"Missing docs for the deploy command","body":"d","target":"project"}]}`
+		if err := os.WriteFile(filepath.Join(dir, domain.ResultFile), []byte(body), 0o644); err != nil {
+			return harness.Result{IsError: true}, err
+		}
+		return harness.Result{FinalText: "done"}, nil
+	}
+	env := rtNewEngine(t, rtOpts{script: script})
+	task := env.create(domain.Task{Body: "anything"})
+	env.waitStatus(task.ID, domain.TaskDone)
+
+	got, err := env.st.ListFriction(env.ctx, "demo", 10)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	counts := map[string]int{}
+	for _, f := range got {
+		counts[f.Title] = f.Count
+	}
+	assert.Equal(t, 2, counts["Worker sandbox prevents Go HTTP test listeners"])
+	assert.Equal(t, 1, counts["Missing docs for the deploy command"])
+}

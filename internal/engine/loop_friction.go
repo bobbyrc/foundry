@@ -5,11 +5,90 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/scm"
 )
+
+// frictionMatchThreshold is the Jaccard similarity of two titles' token sets at which they count
+// as the same problem.
+const frictionMatchThreshold = 0.5
+
+// frictionStopWords are dropped from titles before comparing them.
+var frictionStopWords = map[string]bool{
+	"a": true, "an": true, "the": true, "is": true, "are": true, "to": true, "of": true, "in": true,
+	"on": true, "for": true, "with": true, "and": true, "or": true, "by": true, "at": true,
+	"from": true, "it": true, "this": true, "that": true, "be": true, "not": true, "no": true,
+	"so": true, "as": true,
+}
+
+// frictionSuffixes are stripped by frictionStem, in order.
+var frictionSuffixes = []string{"ing", "ed", "er", "es", "s"}
+
+// frictionTokens turns a title into the set of its significant stems: lowercase words split on
+// anything that is not a letter or digit, without stop words and words shorter than three
+// characters.
+func frictionTokens(title string) map[string]bool {
+	out := map[string]bool{}
+	words := strings.FieldsFunc(strings.ToLower(title), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	for _, w := range words {
+		if utf8.RuneCountInString(w) < 3 || frictionStopWords[w] {
+			continue
+		}
+		out[frictionStem(w)] = true
+	}
+	return out
+}
+
+// frictionStem strips the suffixes in frictionSuffixes, repeatedly, while at least four characters
+// remain. It is a crude stemmer: "listening" and "listeners" both become "listen".
+func frictionStem(w string) string {
+	for stripped := true; stripped; {
+		stripped = false
+		for _, suf := range frictionSuffixes {
+			if strings.HasSuffix(w, suf) && len(w)-len(suf) >= 4 {
+				w = w[:len(w)-len(suf)]
+				stripped = true
+				break
+			}
+		}
+	}
+	return w
+}
+
+// frictionSimilarity is the Jaccard similarity of two token sets: the size of their intersection
+// over the size of their union. Two empty sets are not similar.
+func frictionSimilarity(a, b map[string]bool) float64 {
+	shared := 0
+	for t := range a {
+		if b[t] {
+			shared++
+		}
+	}
+	union := len(a) + len(b) - shared
+	if union == 0 {
+		return 0
+	}
+	return float64(shared) / float64(union)
+}
+
+// similarTitle returns the index of the candidate most similar to title, when that similarity is at
+// least frictionMatchThreshold. On a tie the earlier candidate wins.
+func similarTitle(title string, candidates []string) (int, bool) {
+	want := frictionTokens(title)
+	best, bestScore := -1, 0.0
+	for i, c := range candidates {
+		if s := frictionSimilarity(want, frictionTokens(c)); s >= frictionMatchThreshold && s > bestScore {
+			best, bestScore = i, s
+		}
+	}
+	return best, best >= 0
+}
 
 // frictionLoop files a GitHub issue for each friction report that has reached its threshold and
 // has no issue yet. An existing issue with the same title is linked instead of duplicated.
@@ -53,6 +132,23 @@ func (e *Engine) fileFriction(ctx context.Context, s scm.SCM, p *config.Project,
 		}
 	}
 	if url == "" {
+		open, err := s.ListIssues(ctx, loops.Friction.Label, "open")
+		if err != nil {
+			return fmt.Errorf("list open friction issues: %w", err)
+		}
+		titles := make([]string, len(open))
+		for i, is := range open {
+			titles[i] = is.Title
+		}
+		if i, ok := similarTitle(f.Title, titles); ok {
+			msg := fmt.Sprintf("Reported again by run `%s`: %s\n\n%s", f.RunID, f.Title, f.Body)
+			if err := s.CommentIssue(ctx, open[i].Number, msg); err != nil {
+				return fmt.Errorf("comment on issue #%d: %w", open[i].Number, err)
+			}
+			url = open[i].URL
+		}
+	}
+	if url == "" {
 		labels := []string{loops.Friction.Label}
 		if loops.Friction.AutoQueue {
 			labels = append(labels, loops.IssueIntake.Label)
@@ -72,4 +168,23 @@ func (e *Engine) fileFriction(ctx context.Context, s scm.SCM, p *config.Project,
 		return nil
 	})
 	return err
+}
+
+// frictionFingerprintFor returns the fingerprint that a new friction report with this title should
+// be stored under. When the project already has a similar report, that report's fingerprint is
+// reused so the count goes up instead of a near-duplicate row being added.
+func (e *Engine) frictionFingerprintFor(ctx context.Context, project, title string) string {
+	existing, err := e.d.Store.ListFriction(ctx, project, 200)
+	if err != nil {
+		e.d.Logger.Warn("friction dedupe: list", "project", project, "err", err)
+		return frictionFingerprint(title)
+	}
+	titles := make([]string, len(existing))
+	for i, f := range existing {
+		titles[i] = f.Title
+	}
+	if i, ok := similarTitle(title, titles); ok {
+		return existing[i].Fingerprint
+	}
+	return frictionFingerprint(title)
 }
