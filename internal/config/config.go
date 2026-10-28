@@ -133,6 +133,12 @@ type Project struct {
 	// pushes (formatters, linters, fast tests). A failing check fails the attempt: the task is
 	// re-queued with the check's output, like a CI failure, without spending a CI run.
 	Checks []Check `yaml:"checks" json:"checks,omitempty"`
+	// Setup runs in a fresh worktree before the agent starts (install dependencies, generate
+	// code), so the agent can build and test. A failing setup command fails the attempt before
+	// the agent runs: the task is re-queued with the command's output. Setup and checks run
+	// with the agent's environment, not foundry's, because they execute code the agent may
+	// have written.
+	Setup []Check `yaml:"setup" json:"setup,omitempty"`
 	// Intake sources turn external work queues into tasks: each command prints tasks as JSON
 	// lines (see docs/plugins.md, "Intake sources"). Run by the exec_intake loop.
 	Intake  []IntakeSource `yaml:"intake" json:"intake,omitempty"`
@@ -216,10 +222,12 @@ type Loops struct {
 	} `yaml:"friction" json:"friction"`
 }
 
-// Check is one command foundry runs before pushing an agent's work.
+// Check is one command foundry runs in an agent's worktree: a check before pushing its work, or a
+// setup command before the agent starts.
 type Check struct {
 	Name string `yaml:"name" json:"name"`
-	// Run is a shell command (sh -c) run in the worktree with the project's env.
+	// Run is a shell command (sh -c) run in the worktree with the agent's environment (the
+	// allowlist, the harness's inherit_env, the project's env).
 	Run string `yaml:"run" json:"run"`
 	// Timeout defaults to 10m.
 	Timeout Duration `yaml:"timeout" json:"timeout"`
