@@ -175,6 +175,7 @@ func TestInstallNeedsLoadableConfig(t *testing.T) {
 func TestUninstallBootsOutAndRemoves(t *testing.T) {
 	plistDir := stubHost(t)
 	cfg := writeServiceConfig(t, filepath.Join(t.TempDir(), "data"))
+	fakeRunner(t, nil)
 	code, _, errOut := runCLI("service", "install", "--config", cfg)
 	require.Equal(t, 0, code, errOut)
 
@@ -191,6 +192,7 @@ func TestUninstallBootsOutAndRemoves(t *testing.T) {
 func TestUninstallKeepsPlistOnRealBootoutError(t *testing.T) {
 	plistDir := stubHost(t)
 	cfg := writeServiceConfig(t, filepath.Join(t.TempDir(), "data"))
+	fakeRunner(t, nil)
 	code, _, errOut := runCLI("service", "install", "--config", cfg)
 	require.Equal(t, 0, code, errOut)
 

@@ -74,6 +74,7 @@ and logged in.
 mise exec -- go build -o foundry ./cmd/foundry
 
 ./foundry init --project myproject --repo you/myproject   # writes ~/.config/foundry/foundry.yaml
+./foundry doctor     # checks your setup: config, git, gh, harness CLIs, daemon
 ./foundry serve      # run the daemon; leave it running in its own terminal
 ./foundry open       # open the web UI in your browser (second terminal)
 ./foundry chat "What is running right now?"
@@ -82,6 +83,22 @@ mise exec -- go build -o foundry ./cmd/foundry
 Put `foundry` on your PATH to drop the `./`. Before you point foundry at a real repository, follow
 [docs/getting-started.md](docs/getting-started.md): it starts with a throwaway repository and a
 paused project.
+
+### Run it as a service
+
+On macOS, `foundry service install` keeps the daemon running in the background and restarts it if it
+crashes. It uses launchd, the macOS service manager, which reads a plist file (an XML settings file)
+from `~/Library/LaunchAgents`. The daemon's log is `foundry.log` in the config's data directory
+(`server.data_dir`, `~/.local/share/foundry` by default).
+
+```sh
+./foundry service install     # write the plist, start the daemon, keep it alive
+./foundry service status      # running (with pid) or installed/not installed, and the log path
+./foundry service uninstall   # stop the daemon and remove the plist
+```
+
+Run `service install` once, and do not also keep `foundry serve` running in a terminal: two daemons
+cannot both listen on the same address.
 
 ## Repository layout
 

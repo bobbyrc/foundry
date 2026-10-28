@@ -71,6 +71,16 @@ clone from step 3. Foundry runs agents there, so it must be a real git checkout.
 Every other key is optional and has a default. `foundry.example.yaml` in the repository lists every
 option with its default.
 
+Check the setup before you start the daemon:
+
+```sh
+./foundry doctor
+```
+
+It prints one `ok`, `warn` or `FAIL` line per check (config, git, `gh` login, the harness CLIs,
+each project's clone and pause state, and the daemon). A `FAIL` line says how to fix it and makes
+`doctor` exit 1. The daemon is not running yet, so its check is a warning at this point.
+
 ## 5. Start the daemon
 
 In its own terminal:
@@ -95,6 +105,18 @@ separately, so no run for `trial` will start yet.
 The CLI finds the daemon through the config file's `server` address and reads the token from the
 daemon's data directory (`~/.local/share/foundry/token` by default). On another machine, set
 `FOUNDRY_API` and `FOUNDRY_TOKEN` instead.
+
+To keep the daemon running without a terminal on macOS, install it as a launchd service (launchd is
+the macOS service manager). It starts at login and restarts the daemon if it crashes:
+
+```sh
+./foundry service install     # write the plist and start the daemon
+./foundry service status      # running (with pid) or not, and where the log is
+./foundry service uninstall   # stop it and remove the plist
+```
+
+The log is `foundry.log` in the data directory (`server.data_dir`). Use either `serve` in a terminal
+or the service, not both: the second one cannot listen on the same address.
 
 ## 6. Create a small task while the project is paused
 

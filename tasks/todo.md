@@ -40,7 +40,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] policy.Evaluate: unrecognised agent risk string → treat as high (today it passes through)
 - [x] config: unset `${NAME}` → load error naming the variable (decision: fail loudly on missing secrets)
 - [x] foundry.example.yaml: "five built-in roles" lists six; max_attempts exhaustion → "blocked", not "failed"
-- [ ] merge docs/plugins-deploy-observe.md into docs/plugins.md
+- [x] merge docs/plugins-deploy-observe.md into docs/plugins.md
 - [x] workspace.Manager: per-repo mutex (concurrent fetch/worktree-add on one clone collide on git's lock)
 - [x] scm/github OpenPR: add labels with `gh pr edit`, not `gh issue edit`
 - [x] web IdChip: UUIDv7 IDs share their first 8 chars (timestamp) — show the last 8
@@ -67,6 +67,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] L3 loop kick channels move from a package-level map into the Engine struct
 - [x] L4 UI: closed mobile drawer renders through the page; "active" preset chip highlighting; search field alignment; show "project paused" on queued tasks
 - [x] shepherd: pinned auto-merge refused because the PR head moved → leave in review and re-evaluate (block only if the head is unchanged)
-- [ ] README + docs/getting-started.md
-- [ ] `foundry service install|uninstall|status` (launchd KeepAlive) and `foundry doctor`
+- [x] README + docs/getting-started.md
+- [x] (unblocked by owner) `foundry service` (launchd KeepAlive) + `foundry doctor` — written but its test run was denied by the auto-mode classifier ("Unauthorized Persistence"); parked UNTESTED on local branch `service-doctor` for the owner
 - [x] UI polish: tool_use ▸ marker inline with its text; "—" for empty Task/Project on chat runs; workdir gets a full-width row
+- [x] CI workflow for foundry itself (.github/workflows/ci.yml): go vet/test -race, gofmt, web typecheck/test/build
