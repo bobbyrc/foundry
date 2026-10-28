@@ -129,4 +129,6 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] OWNER: PR #14 — recommend REJECT as written: its Go cache advice belongs in project env/setup, and GOMODCACHE=/tmp with GOPROXY=off breaks module resolution. Its rule "never report a skipped check as passed; rate it medium; file friction" is worth adding to the implementer prompt by hand
 - [x] #42 → PR #43 was the first release through the in-repo release script (22cccf4, healthy); friction #32 closed
 - [ ] OWNER: the dogfood daemon's data and clone live in a session scratch dir under /private/tmp. To keep it, follow examples/dogfood/README.md with DOGFOOD=~/.local/share/foundry-dogfood (or copy the scratch dir there)
+- [x] DRILL (real): a labelled synthetic ERROR line in the staging log → prod_watch signal → incident task → SRE run read the log evidence, found the drill, closed it with no code change and no PR (~1 min). The production-error loop works end to end; until then it had never fired (zero signals all night)
+- [x] UI at phone width (390px): tables become cards, nav collapses to a menu, approval cards readable
 
