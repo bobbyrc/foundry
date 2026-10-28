@@ -36,6 +36,10 @@ harnesses:
     args: ["--model", "fast"]                        # extra arguments appended to command
     env:                                             # added to the environment of each run
       MY_AGENT_MODE: "headless"
+    # Agents get only an allowlist of foundry's environment (PATH, HOME, LANG, ...), so tokens
+    # foundry holds (GH_TOKEN and the like) never reach them. inherit_env passes named variables
+    # through; give an agent only what it needs, and never foundry's own GitHub token.
+    inherit_env: ["MY_AGENT_API_KEY"]
 
 # Agents: roles. Each role runs on one harness with one model and one set of instructions.
 # The six built-in roles (orchestrator, implementer, reviewer, triager, sre, improver) are
@@ -124,10 +128,16 @@ projects:
       Run `mise exec -- go test -race ./...` before you report done.
     env:                               # added to each agent session for this project
       FOUNDRY_PROJECT: foundry
+    # Setup and checks run with the agent's environment (the allowlist, the harness's inherit_env
+    # and this project's env), not foundry's, because they run code the agent may have written.
     # setup:                           # run in each fresh worktree before the agent starts
     #   - name: web deps
     #     run: cd web && npm ci --prefer-offline --no-audit
     #     timeout: 5m
+    # checks:                          # run after the agent, before foundry commits and pushes
+    #   - name: test                   # a failing check re-queues the task with its output
+    #     run: mise exec -- go test -race ./...
+    #     timeout: 10m                 # default 10m
     # intake:                          # external queues that become tasks; see docs/plugins.md, "Intake sources"
     #   - name: inbox                  # lowercase letters, digits, - and _; unique per project
     #     command: cat ~/foundry-inbox.jsonl   # prints one JSON item per line: {"id","title","body","kind","priority","role"}
