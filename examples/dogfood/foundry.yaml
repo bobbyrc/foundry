@@ -1,0 +1,87 @@
+# Dogfood: foundry improving its own repo, with each merged change released to a local staging
+# copy of foundry. Agent PRs target the 'dogfood' branch of bobbyrc/foundry, never main.
+# Set DOGFOOD to the directory that holds the clone and staging copy before running foundry;
+# see README.md. The Go binary (go, gofmt) must be on PATH when foundry starts.
+# Notifications are log-only overnight.
+server:
+  addr: 127.0.0.1:7797
+  data_dir: ${DOGFOOD}/data
+limits:
+  max_concurrent_runs: 2
+  max_runs_per_project: 2
+  stall_timeout: 15m
+  run_timeout: 90m
+  max_attempts: 3
+  daily_budget_usd: 25
+agents:
+  implementer-claude:
+    harness: claude
+    model: sonnet
+    prompt: builtin:implementer
+    description: Implementer on Claude Code (dogfood comparison with the Codex implementer).
+# Codex's sandbox cannot bind localhost (this repo's tests need it), so code tasks go to Claude.
+routing:
+  feature: implementer-claude
+  bugfix: implementer-claude
+  chore: implementer-claude
+  issue: implementer-claude
+  improve: implementer-claude
+# Built-in rules apply (incl. foundry's own gates and self-assigned work). This repo always runs
+# CI, so a PR with no checks never passes.
+policies:
+  default:
+    require_checks: true
+    extra_rules:
+      # The release scripts run on this machine with foundry's environment: a change to them
+      # is a change to the deploy pipeline, so a human approves it.
+      - risk: high
+        reason: dogfood release pipeline
+        paths: ["examples/dogfood/**"]
+projects:
+  foundry:
+    repo: bobbyrc/foundry
+    default_branch: dogfood
+    path: ${DOGFOOD}/clone
+    env:
+      GOCACHE: /tmp/foundry-dogfood-gocache
+      GOTOOLCHAIN: local
+      GOFLAGS: -mod=readonly
+      GOPROXY: "off"
+    instructions: |
+      This repo is foundry itself (Go 1.27 + a React/Vite UI in web/). Read README.md and
+      docs/design.md first. Use `go` and `gofmt` from PATH (mise provides them; see README.md).
+      Before reporting success run `go vet ./...` and
+      `go test -race -count=1` on every package you touched, and gofmt every Go file you changed.
+      Keep changes small and focused; match the surrounding code's style and comment density.
+    deploy:
+      type: command
+      options:
+        # The scripts run from foundry's own clone of the dogfood branch, so a merged PR that
+        # changes them takes effect on the next release.
+        deploy: ${DOGFOOD}/clone/examples/dogfood/staging/release.sh "$FOUNDRY_REF"
+        rollback: ${DOGFOOD}/clone/examples/dogfood/staging/release.sh "$FOUNDRY_ROLLBACK_REF"
+        timeout: 10m
+      health_url: http://127.0.0.1:7798/api/v1/health
+      verify_for: 2m
+      logs: tail -n 100 ${DOGFOOD}/staging/log/staging.log
+    observe:
+      - name: staging-log
+        type: exec
+        options:
+          command: ${DOGFOOD}/clone/examples/dogfood/staging/observe.sh
+    setup:
+      - name: web deps
+        run: cd web && npm ci --prefer-offline --no-audit --no-fund
+        timeout: 5m
+    checks:
+      - name: gofmt
+        run: test -z "$(gofmt -l internal cmd)" || { gofmt -l internal cmd; exit 1; }
+      - name: go vet
+        run: go vet ./...
+    loops:
+      issue_intake:
+        enabled: true
+        every: 1m
+self_project: foundry
+notify:
+  - type: log

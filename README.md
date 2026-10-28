@@ -161,3 +161,4 @@ docs/             design, API, UI and plugin documentation
 - [docs/ui.md](docs/ui.md): the web UI pages and design.
 - [docs/plugins.md](docs/plugins.md): writing harnesses, deployers, observers and notifiers.
 - [foundry.example.yaml](foundry.example.yaml): every config option, annotated.
+- [examples/dogfood/README.md](examples/dogfood/README.md): run foundry on its own repo, with a local staging release.
