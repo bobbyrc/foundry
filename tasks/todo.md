@@ -110,7 +110,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] ROLLBACK TEST (real): killed staging during PR #30's verify window → release e697fd5 rolled_back, staging back on healthy 8f8fefa within ~1.5 min, incident opened. The SRE's diagnosis was stale (no logs: daemon predated the evidence change); induced incident cancelled, its PR #31 closed. Dogfood daemon now runs 3f1ecbd with `deploy.logs` set
 - [x] closed fixed friction issues #25 (CI/web build) and #27 (nohup service killed)
 - [x] factory queue: #28 (health-failure reason names URL, count, elapsed; spec in the body) and #33 (intake includes OWNER/MEMBER/COLLABORATOR comments; public repo, so others are ignored)
-- [ ] OWNER: PR #19 now conflicts with dogfood (foundry.example.yaml); approve → the factory must rebase it first, or reject
+- [ ] OWNER: PR #19 — recommend REJECT: superseded by the example on init (its example put GH_TOKEN in inherit_env, handing agents foundry's GitHub token). It also conflicts with dogfood (foundry.example.yaml); approve → the factory must rebase it first, or reject
 - [ ] OWNER: friction #32 — the dogfood release scripts live outside the repo (scratchpad), so agents can't fix them by PR; decide whether a staging setup belongs in the repo
 - [x] factory merged #34 (#33: intake includes OWNER/MEMBER/COLLABORATOR comments) and #35 (#28: health-failure reason names URL, count, elapsed). Both auto-merged at low risk, released and verified healthy on staging, and their issues closed automatically
 - [x] defect review of 47ee9be..b167957 (two fresh reviewers) → fixed: wildcard bind address broke the CLI, foundry open and orchestrator chat (Host guard 421) → LocalURL; public_url validated; exec intake over 1 MB is an error; secrets redacted from deploy/logs evidence and failure notes; deploy stdout bounded to a 64 KB tail; issue outcome comments serialised (no double post)
@@ -121,5 +121,10 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] known gaps from review: prod_watch runs deploy.logs synchronously (30s max per new incident); an issue report lost at shutdown is not retried; issue comments post agent summaries verbatim (no @mention or #ref neutralising)
 - [x] UI pass on live dogfood data (Playwright): tables split short words mid-word ("foundr/y", "#3/0") → #37 → factory PR #39 (overflow-wrap instead of word-break), verified in a screenshot
 - [x] merged tasks blocked by a failed release now become done when a later healthy release contains their merge commit (git merge-base --is-ancestor). Three such stale tasks (#23, #24, #30) should resolve on the next healthy release
-- [ ] factory: #40 wider release-log modal with wrapped lines; its release should also resolve the 3 stale blocked tasks (verify)
+- [x] factory: #40 wider release-log modal (PR #41, auto-merged, released healthy). Its release resolved the 3 stale blocked tasks: Overview shows Blocked 0
+- [x] agent text posted to GitHub has @mentions outside code wrapped in backticks (no pings from a public repo)
+- [x] redaction: SESSION removed from the secret words (it mangled paths containing CLAUDE_CODE_SESSION_ID)
+- [x] orchestrator chat verified live (56s, correct counts; it repeated stale incident diagnoses, which resolved once the blocked tasks did)
+- [x] PR #26 (Codex cost estimate): an independent review found flaky tests (reproduced: 2 of 120 runs failed under load) and unchecked .inf/.nan prices. Fixed both on the PR branch and merged dogfood into it (full suite and 57 web tests pass). foundry re-reviews it, then it returns to the owner for approval. Recommend APPROVE
+- [ ] OWNER: PR #14 — recommend REJECT as written: its Go cache advice belongs in project env/setup, and GOMODCACHE=/tmp with GOPROXY=off breaks module resolution. Its rule "never report a skipped check as passed; rate it medium; file friction" is worth adding to the implementer prompt by hand
 
