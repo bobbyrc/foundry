@@ -11,7 +11,7 @@
 server:
   addr: 127.0.0.1:7777                 # address the HTTP API and UI listen on (default 127.0.0.1:7777)
   data_dir: ~/.local/share/foundry     # database, logs and default clones live here (default shown)
-  public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>)
+  public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>, with 0.0.0.0 or :: shown as loopback)
 
 # Limits: caps on how much runs at once and how long a run may go.
 limits:

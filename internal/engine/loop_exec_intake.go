@@ -112,14 +112,17 @@ func (e *Engine) lpRunIntakeSource(ctx context.Context, p *config.Project, src c
 		}
 		return err
 	}
+	// Output cut at the cap ends mid-line. That partial line is dropped, so it is neither parsed
+	// nor counted as invalid.
+	output := stdout.buf.Bytes()
 	if stdout.truncated {
-		e.d.Logger.Warn("exec intake: stdout truncated", "project", p.Name, "source", src.Name, "cap", lpIntakeStdoutMax)
+		output = output[:bytes.LastIndexByte(output, '\n')+1]
 	}
 
 	var errs []error
 	invalid := 0
 	var firstInvalid error
-	scanner := bufio.NewScanner(bytes.NewReader(stdout.buf.Bytes()))
+	scanner := bufio.NewScanner(bytes.NewReader(output))
 	scanner.Buffer(make([]byte, 64<<10), lpIntakeStdoutMax)
 	for lineNo := 1; scanner.Scan(); lineNo++ {
 		raw := bytes.TrimSpace(scanner.Bytes())
@@ -143,6 +146,9 @@ func (e *Engine) lpRunIntakeSource(ctx context.Context, p *config.Project, src c
 	}
 	if err := scanner.Err(); err != nil {
 		errs = append(errs, fmt.Errorf("read output: %w", err))
+	}
+	if stdout.truncated {
+		errs = append(errs, fmt.Errorf("output exceeded %d bytes; lines after that were dropped", lpIntakeStdoutMax))
 	}
 	if invalid > 0 {
 		e.d.Logger.Warn("exec intake: skipped invalid lines", "project", p.Name, "source", src.Name,

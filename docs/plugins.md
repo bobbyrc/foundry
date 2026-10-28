@@ -442,7 +442,9 @@ projects:
   the skipped lines. The run still succeeds.
 - A non-zero exit or a timeout is an error for that source. Its items from that run are not used,
   and the error shows as the loop's last error in the web UI. Other sources still run.
-- Stdout is kept up to 1 MB; the rest is dropped. The last 4 KB of stderr is kept for errors.
+- Stdout is kept up to 1 MB. If the output is longer, the run reports an error and the items after
+  the cap are dropped; complete lines before the cap still create tasks. The last 4 KB of stderr is
+  kept for errors.
 
 ### Dedupe by id
 

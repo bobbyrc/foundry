@@ -438,3 +438,9 @@ func TestServeEnvsKeepTokenOutOfAgents(t *testing.T) {
 		"FOUNDRY_TOKEN": "secret-token",
 	}, orchestrator)
 }
+
+func TestServeEnvsUseLoopbackForWildcardAddr(t *testing.T) {
+	_, orchestrator := serveEnvs("/opt/foundry/bin/foundry", "0.0.0.0:7777", "secret-token")
+
+	assert.Equal(t, "http://127.0.0.1:7777", orchestrator["FOUNDRY_API"])
+}
