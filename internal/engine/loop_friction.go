@@ -114,20 +114,50 @@ func (e *Engine) frictionLoop(ctx context.Context, p *config.Project) error {
 			errs = append(errs, fmt.Errorf("friction %s: %w", f.ID, err))
 		}
 	}
+	if err := e.refreshFrictionStates(ctx, s, loops, items); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+// refreshFrictionStates copies each filed issue's current state ("open" or "closed") onto its
+// friction report, so the UI can tell resolved problems from open ones.
+func (e *Engine) refreshFrictionStates(ctx context.Context, s scm.SCM, loops config.Loops, items []domain.Friction) error {
+	issues, err := s.ListIssues(ctx, loops.Friction.Label, "all")
+	if err != nil {
+		return fmt.Errorf("friction: list issue states: %w", err)
+	}
+	states := make(map[string]string, len(issues))
+	for _, is := range issues {
+		states[is.URL] = is.State
+	}
+	var errs []error
+	for _, f := range items {
+		st, ok := states[f.IssueURL]
+		if f.IssueURL == "" || !ok || st == "" || st == f.IssueState {
+			continue
+		}
+		if _, err := e.d.Store.UpdateFriction(ctx, f.ID, func(x *domain.Friction) error {
+			x.IssueState = st
+			return nil
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("friction %s: set state: %w", f.ID, err))
+		}
+	}
 	return errors.Join(errs...)
 }
 
 // fileFriction links friction f to an issue with the same title, or creates one, and records
-// the issue URL on f.
+// the issue URL and state on f.
 func (e *Engine) fileFriction(ctx context.Context, s scm.SCM, p *config.Project, f domain.Friction, loops config.Loops) error {
 	matches, err := s.SearchIssues(ctx, f.Title)
 	if err != nil {
 		return fmt.Errorf("search issues: %w", err)
 	}
-	url := ""
+	url, state := "", ""
 	for _, m := range matches {
 		if strings.EqualFold(m.Title, f.Title) {
-			url = m.URL
+			url, state = m.URL, m.State
 			break
 		}
 	}
@@ -145,7 +175,7 @@ func (e *Engine) fileFriction(ctx context.Context, s scm.SCM, p *config.Project,
 			if err := s.CommentIssue(ctx, open[i].Number, msg); err != nil {
 				return fmt.Errorf("comment on issue #%d: %w", open[i].Number, err)
 			}
-			url = open[i].URL
+			url, state = open[i].URL, open[i].State
 		}
 	}
 	if url == "" {
@@ -158,13 +188,17 @@ func (e *Engine) fileFriction(ctx context.Context, s scm.SCM, p *config.Project,
 		if err != nil {
 			return fmt.Errorf("create issue: %w", err)
 		}
-		url = issue.URL
+		url, state = issue.URL, issue.State
 		e.d.Bus.Emit(ctx, domain.EvIssueFiled, p.Name, "", "",
 			fmt.Sprintf("filed issue #%d: %s", issue.Number, f.Title),
 			map[string]any{"number": issue.Number, "url": issue.URL, "title": f.Title})
 	}
+	if state == "" {
+		state = "open"
+	}
 	_, err = e.d.Store.UpdateFriction(ctx, f.ID, func(x *domain.Friction) error {
 		x.IssueURL = url
+		x.IssueState = state
 		return nil
 	})
 	return err

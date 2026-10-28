@@ -174,6 +174,7 @@ export interface Friction {
   fingerprint: string;
   count: number;
   issue_url?: string;
+  issue_state?: 'open' | 'closed';
   created_at: string;
   updated_at: string;
 }

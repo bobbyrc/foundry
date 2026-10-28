@@ -1411,6 +1411,10 @@ components:
           type: integer
         issue_url:
           type: string
+        issue_state:
+          type: string
+          enum: [open, closed]
+          description: State of the filed issue as last seen; absent until known.
         created_at:
           type: string
           format: date-time
