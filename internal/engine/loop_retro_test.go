@@ -272,3 +272,32 @@ func TestRetroOneLineClipsAndCollapses(t *testing.T) {
 		t.Fatalf("clipped = %q, want four runes and an ellipsis", got)
 	}
 }
+
+func TestLoopRetroReviewFindingsDedupesByParent(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	since := env.now.Add(-24 * time.Hour)
+
+	parent := lpRetroTask(t, env, domain.Task{
+		Title: "Add cache", Status: domain.TaskQueued,
+		Body:      "Build it.\n\n## Attempt 1: reviewer requested changes\n\n- nil check missing\n",
+		UpdatedAt: env.now.Add(-3 * time.Hour),
+	})
+	for _, age := range []time.Duration{2 * time.Hour, 3 * time.Hour} {
+		lpRetroTask(t, env, domain.Task{
+			Title: "Review: Add cache", Kind: domain.KindReview, Status: domain.TaskDone,
+			ParentID: parent.ID, UpdatedAt: env.now.Add(-age),
+		})
+	}
+
+	evidence, err := env.e.retroEvidence(env.ctx, "demo", since)
+	if err != nil {
+		t.Fatalf("retro evidence: %v", err)
+	}
+	_, reviews, ok := strings.Cut(evidence, "## Review findings sent back")
+	if !ok {
+		t.Fatalf("evidence has no review findings section:\n%s", evidence)
+	}
+	if got := strings.Count(reviews, "- Add cache (id "+parent.ID+")"); got != 1 {
+		t.Errorf("parent listed %d times in review findings, want once:\n%s", got, evidence)
+	}
+}

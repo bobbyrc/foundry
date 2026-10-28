@@ -194,10 +194,16 @@ func (e *Engine) retroReviewFindings(ctx context.Context, tasks []domain.Task, s
 	}
 	sortNewest(picked, func(t domain.Task) time.Time { return t.UpdatedAt })
 	var out []string
+	seen := map[string]bool{}
 	for _, r := range picked {
 		if len(out) == retroSectionLimit {
 			break
 		}
+		// A parent gets one review per PR head; picked is newest first, so the first wins.
+		if seen[r.ParentID] {
+			continue
+		}
+		seen[r.ParentID] = true
 		parent, err := e.d.Store.GetTask(ctx, r.ParentID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
