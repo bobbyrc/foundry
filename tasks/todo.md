@@ -196,12 +196,21 @@ Stream A — visual world (main agent sets the system, then delegates page rollo
       marker in `LogViewer.tsx` with a drawn icon (Run detail rollout)
 - [ ] Rollout: Task detail, Run detail, Chat, Approvals, phone layout, then remaining pages
 
-Stream B — accounts, sign-in and in-app config editor (own PR, after Overview lands)
-Decided with the owner: open first-run setup page creates the first account; users have roles
-(owner, operator, viewer); the browser signs in with password only; the API token stays for the
-CLI and orchestrator and can never save config or manage users; PBKDF2 (stdlib) hashes.
-- [ ] Design note in `docs/design.md` and the invariants (safety model change, owner sign-off)
-- [ ] Store: users + sessions (new migration); API: login/logout/setup/me, session cookie,
-      role checks; config read/write endpoints (write = owner session only, strict validation,
-      comments preserved, reload)
-- [ ] UI: sign-in and setup pages replacing Connect; visual config editor with raw YAML tab
+Stream B — accounts, sign-in and in-app config editor (branch `accounts-config`)
+Design: `docs/proposals/accounts-and-config-editor.md` (approved). Frozen by the main agent:
+`internal/domain/user.go`, the user/session methods and errors in `internal/store/store.go`,
+the API table in the proposal, and the `internal/auth` and `internal/config` APIs in the unit
+prompts.
+- [x] U1 store: migration 2, users.go + tests — `internal/store/sqlite/`
+- [x] U2 auth: password, session, limiter, roles + tests — `internal/auth/`
+- [x] U3 config: document tree, changes on the YAML tree, schema (9 types incl. `any` for options
+      maps), atomic write — `internal/config/`
+- [x] U5 web: sign-in/setup, session client, account panel, Users page, role-aware actions
+- [x] U4 API (after U1-U3): middleware, routes, cmd/foundry switch to config.WriteFileAtomic,
+      `foundry user reset-password`, docs/api.md, openapi.yaml
+- [x] U6 web (after U5): config page — visual editor + raw tab
+- [x] Docs: invariants in AGENTS.md, README safety model, docs/design.md, getting-started
+- [x] Verify on a throwaway daemon (setup, sign-in, viewer, users, visual save keeps comments,
+      token 403 on config/users); defect review: 7 of 10 fixed, 3 documented (setup page open by
+      decision, Secure cookie behind a proxy needs public_url, file access needs agent isolation)
+- [ ] PR, CI, owner decides merge (after merge the dogfood instance asks for an owner account)

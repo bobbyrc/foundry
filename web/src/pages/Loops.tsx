@@ -1,3 +1,4 @@
+import { useCan } from '../auth';
 import { useRunLoop, useLoops } from '../queries';
 import { Button } from '../components/Button';
 import { ErrorLine } from '../components/ErrorLine';
@@ -10,6 +11,7 @@ import { parseTime } from '../lib/time';
 export function Loops() {
   const loops = useLoops();
   const runLoop = useRunLoop();
+  const canOperate = useCan('operate');
 
   const columns: Column<LoopView>[] = [
     { key: 'name', header: 'Name', cell: (l) => <span className="mono">{l.name}</span> },
@@ -51,6 +53,9 @@ export function Loops() {
     },
   ];
 
+  // "Run now" is an operator action: viewers get the table without that column.
+  const visibleColumns = columns.filter((column) => canOperate || column.key !== 'run');
+
   return (
     <>
       <PageHeader title="Loops" />
@@ -63,7 +68,7 @@ export function Loops() {
       ) : null}
       {loops.isSuccess ? (
         <Table
-          columns={columns}
+          columns={visibleColumns}
           rows={loops.data}
           rowKey={(l) => `${l.name}/${l.project}`}
           empty="No loops are configured. Loops are set under loops in foundry.yaml."

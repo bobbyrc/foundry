@@ -116,6 +116,22 @@ var migrations = []string{
 		data TEXT NOT NULL,
 		PRIMARY KEY (name, project)
 	);`,
+	`CREATE TABLE users (
+		username TEXT PRIMARY KEY,
+		role TEXT NOT NULL,
+		password_hash TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	);
+
+	CREATE TABLE sessions (
+		id TEXT PRIMARY KEY,
+		username TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL
+	);
+	CREATE INDEX sessions_username ON sessions (username);
+	CREATE INDEX sessions_expires_at ON sessions (expires_at);`,
 }
 
 // migrate applies every migration whose version is not yet recorded, each in its own transaction.

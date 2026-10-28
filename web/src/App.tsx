@@ -1,14 +1,13 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useConnected, useUnauthorized } from './auth';
+import { useAuthState, useCan } from './auth';
 import { eventStream, invalidateFor, subscribe } from './events';
 import { Shell } from './components/Shell';
 import { Agents } from './pages/Agents';
 import { Approvals } from './pages/Approvals';
 import { Chat } from './pages/Chat';
 import { Config } from './pages/Config';
-import { Connect } from './pages/Connect';
 import { Deploys } from './pages/Deploys';
 import { Friction } from './pages/Friction';
 import { Loops } from './pages/Loops';
@@ -16,27 +15,44 @@ import { Projects } from './pages/Projects';
 import { Overview } from './pages/Overview';
 import { RunDetail } from './pages/RunDetail';
 import { Runs } from './pages/Runs';
+import { SignIn } from './pages/SignIn';
 import { Signals } from './pages/Signals';
 import { TaskDetail } from './pages/TaskDetail';
 import { Tasks } from './pages/Tasks';
+import { Users } from './pages/Users';
 
 export function App() {
   const qc = useQueryClient();
-  const unauthorized = useUnauthorized();
-  // Connected means a token is stored and the last call was not rejected. Without it, the
-  // stream stays closed and the Connect page shows.
-  const connected = useConnected();
+  const auth = useAuthState();
+  const administer = useCan('administer');
+  const signedIn = auth.status === 'signed-in';
 
+  // The event stream runs only for a signed-in user. Its cookie is what authenticates it.
   useEffect(() => {
-    if (!connected) return;
+    if (!signedIn) return;
     eventStream.start(qc);
     return () => eventStream.stop();
-  }, [connected, qc]);
+  }, [signedIn, qc]);
 
   // Every event refreshes the query keys it touches (see events.ts keysFor).
   useEffect(() => subscribe((ev) => invalidateFor(ev, qc)), [qc]);
 
-  if (!connected) return <Connect rejected={unauthorized} />;
+  // Cached data belongs to the account that fetched it, so it goes when the session ends.
+  useEffect(() => {
+    if (auth.status === 'signed-out' || auth.status === 'setup') qc.clear();
+  }, [auth.status, qc]);
+
+  if (auth.status === 'loading') {
+    return (
+      <div className="connect">
+        <p className="connect-loading">Loading…</p>
+      </div>
+    );
+  }
+
+  if (auth.status === 'setup' || auth.status === 'signed-out') {
+    return <SignIn setup={auth.status === 'setup'} expired={auth.status === 'signed-out' && auth.expired} />;
+  }
 
   return (
     <Shell>
@@ -56,6 +72,7 @@ export function App() {
         <Route path="/loops" element={<Loops />} />
         <Route path="/agents" element={<Agents />} />
         <Route path="/config" element={<Config />} />
+        <Route path="/users" element={administer ? <Users /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

@@ -27,8 +27,10 @@ Managed, later (do not build these yet, but do not close them off):
 - **Tenancy:** a daemon serves one owner today. The likely first managed shape is one isolated
   foundry instance per customer, running the same code as self-hosted; true multi-tenancy is a
   later choice. Keep all state behind `store.Store` so another database can be added.
-- **Auth:** the single API token becomes accounts and sessions. GitHub access moves from the
-  user's `gh` login to a GitHub App, which also gives agents a bot identity.
+- **Auth:** people already sign in with accounts and sessions (roles viewer, operator, owner;
+  `docs/proposals/accounts-and-config-editor.md`), and the API token is for the CLI and the
+  orchestrator only. Still to come: GitHub access moves from the user's `gh` login to a GitHub
+  App, which also gives agents a bot identity.
 - **Agent isolation is mandatory** when customers' code and agents run on shared hardware:
   containers or VMs per run (option B in `docs/proposals/agent-isolation.md`), never option C.
 - **Secrets:** per-project secrets held by foundry and given to runs explicitly, not the daemon's

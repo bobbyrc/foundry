@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,15 +9,18 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bobbyrc/foundry/internal/auth"
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/store"
 )
 
+// pingInterval is how often a ": ping" comment keeps idle connections open. It is a variable so
+// tests can shorten it; production never changes it.
+var pingInterval = 15 * time.Second
+
 const (
 	// replayPage is how many stored events are read per store query during replay.
 	replayPage = 500
-	// pingInterval is how often a ": ping" comment keeps idle connections open.
-	pingInterval = 15 * time.Second
 	// maxEventStreams caps concurrent /events streams. Each holds a bus subscription and a
 	// connection, so a client that opens streams without closing them must not exhaust the server.
 	maxEventStreams = 32
@@ -45,6 +49,11 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	p, ok := principalFrom(ctx)
+	if !ok {
+		writeErrorMsg(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	after, err := queryInt64(r.URL.Query(), "after")
 	if err != nil {
 		s.fail(w, err)
@@ -108,12 +117,34 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 				last = e.ID
 			}
 		case <-ticker.C:
+			// A stream outlives the request that opened it, so the credential is checked again
+			// on every ping. A signed-out or demoted user loses the stream within one interval.
+			if !s.stillAllowed(ctx, p) {
+				return
+			}
 			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
 				return
 			}
 			flusher.Flush()
 		}
 	}
+}
+
+// stillAllowed reports whether the principal behind an open stream may still read. The API token
+// always may. A signed-in user must still have a live session, still exist, and still have a role
+// that allows reading; the role is read fresh, so a demotion takes effect too.
+func (s *server) stillAllowed(ctx context.Context, p principal) bool {
+	if p.token {
+		return true
+	}
+	if _, err := s.opts.Store.GetSession(ctx, p.sessionID, s.now()); err != nil {
+		return false
+	}
+	u, err := s.opts.Store.GetUser(ctx, p.user.Username)
+	if err != nil {
+		return false
+	}
+	return auth.Allows(u.Role, auth.Read)
 }
 
 // writeEvent writes one SSE message. The id line is omitted for live-only events (ID 0). An

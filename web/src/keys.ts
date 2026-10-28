@@ -21,7 +21,10 @@ export const keys = {
   loopsAll: ['loops'] as const,
   agentsAll: ['agents'] as const,
   configAll: ['config'] as const,
+  configDocument: ['config', 'document'] as const,
+  configFile: ['config', 'file'] as const,
   conversationsAll: ['conversations'] as const,
   conversation: (id: string) => ['conversation', id] as const,
   eventsHistory: ['events', 'history'] as const,
+  usersAll: ['users'] as const,
 };

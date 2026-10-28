@@ -3,11 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
-import { captureTokenFromHash } from './auth';
+import { loadAuthState } from './auth';
 import { retryPolicy } from './queries';
 import './styles.css';
 
-captureTokenFromHash();
+// Asks the server who is signed in; App waits on the answer before drawing the rest of the UI.
+void loadAuthState();
 
 const queryClient = new QueryClient({
   defaultOptions: {

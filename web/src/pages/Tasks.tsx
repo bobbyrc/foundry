@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { Task, TaskKind } from '../types';
+import { useCan } from '../auth';
 import { usePausedProjects, useTasks } from '../queries';
 import { useParamState } from '../useParamState';
 import { Button } from '../components/Button';
@@ -78,6 +79,7 @@ export function Tasks() {
   const [kind, setKind] = useParamState('kind');
   const [search, setSearch] = useParamState('q');
   const [creating, setCreating] = useState(false);
+  const canOperate = useCan('operate');
 
   // An absent status param means the default active set; an empty one means every status.
   const statusParam = params.get('status');
@@ -113,7 +115,10 @@ export function Tasks() {
 
   return (
     <>
-      <PageHeader title="Tasks" actions={<Button variant="primary" onClick={() => setCreating(true)}>New task</Button>} />
+      <PageHeader
+        title="Tasks"
+        actions={canOperate ? <Button variant="primary" onClick={() => setCreating(true)}>New task</Button> : undefined}
+      />
       <div className="filter-bar">
         <ProjectSelect value={project} onChange={setProject} />
         <Field label="Kind">

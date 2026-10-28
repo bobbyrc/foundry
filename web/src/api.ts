@@ -1,10 +1,20 @@
-// One typed function per route in docs/api.md. Every call except health sends the bearer token
-// from auth.ts. A 401 dispatches UNAUTHORIZED_EVENT and throws ApiError.
-import { getToken, UNAUTHORIZED_EVENT } from './auth';
+// One typed function per route in docs/api.md. Browser calls authenticate with the session
+// cookie that the server set at sign-in, which the browser sends by itself, so no call carries
+// a credential here. A 401 on a normal call dispatches UNAUTHORIZED_EVENT (the session ended).
+// Sign-in, setup and the state check pass auth:false: they run before there is a session, so a
+// 401 from them is a wrong password, not an expired session. Sign-out and password change run
+// inside a session, so a 401 from them means the session is gone and the app must sign in again.
+import { UNAUTHORIZED_EVENT } from './auth';
 import type {
   AgentView,
   Approval,
+  AuthStateResponse,
   Config,
+  ConfigChange,
+  ConfigDocument,
+  ConfigProblem,
+  ConfigSaved,
+  ConfigText,
   Conversation,
   ConversationDetail,
   Deployment,
@@ -16,11 +26,13 @@ import type {
   ChatMessage,
   PausedBy,
   ProjectView,
+  Role,
   Run,
   Signal,
   Stats,
   Task,
   TaskDetail,
+  User,
 } from './types';
 
 export class ApiError extends Error {
@@ -52,8 +64,6 @@ async function request<T>(
   const auth = options.auth ?? true;
   const headers: Record<string, string> = {};
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-  const token = auth ? getToken() : null;
-  if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(`/api/v1${path}`, {
     method,
@@ -76,6 +86,37 @@ async function request<T>(
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }
+
+// ---- accounts and sessions ----
+
+export const getAuthState = () => request<AuthStateResponse>('GET', '/auth/state', { auth: false });
+
+export const setupOwner = (username: string, password: string) =>
+  request<User>('POST', '/auth/setup', { body: { username, password }, auth: false });
+
+export const login = (username: string, password: string) =>
+  request<User>('POST', '/auth/login', { body: { username, password }, auth: false });
+
+export const logout = () => request<void>('POST', '/auth/logout');
+
+/** A wrong current password is 403 (not 401), so a 401 here still means the session ended. */
+export const changePassword = (current: string, next: string) =>
+  request<void>('POST', '/auth/password', { body: { current, new: next } });
+
+// ---- users (owner only) ----
+
+export const listUsers = () => request<User[]>('GET', '/users');
+
+export const createUser = (username: string, password: string, role: Role) =>
+  request<User>('POST', '/users', { body: { username, password, role } });
+
+export const setUserRole = (name: string, role: Role) =>
+  request<User>('POST', `/users/${encodeURIComponent(name)}/role`, { body: { role } });
+
+export const setUserPassword = (name: string, password: string) =>
+  request<void>('POST', `/users/${encodeURIComponent(name)}/password`, { body: { password } });
+
+export const deleteUser = (name: string) => request<void>('DELETE', `/users/${encodeURIComponent(name)}`);
 
 // ---- health and events ----
 
@@ -192,3 +233,51 @@ export const getConversation = (id: string) =>
 
 export const sendMessage = (id: string, text: string) =>
   request<ChatMessage>('POST', `/conversations/${encodeURIComponent(id)}/messages`, { body: { text } });
+
+// ---- config editing (owner only) ----
+// These calls need the problems list from a 422 and the status of a 409, which the shared
+// request() helper does not keep, so they have their own fetch. Its session handling is the same.
+
+/** A refused save. `problems` is set for 422 (the edited file is invalid). */
+export class ConfigApiError extends ApiError {
+  readonly problems: ConfigProblem[];
+
+  constructor(status: number, message: string, problems: ConfigProblem[]) {
+    super(status, message);
+    this.name = 'ConfigApiError';
+    this.problems = problems;
+  }
+}
+
+async function configRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/api/v1${path}`, {
+    method,
+    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    let message = res.statusText || `HTTP ${res.status}`;
+    let problems: ConfigProblem[] = [];
+    try {
+      const data = (await res.json()) as { error?: string; problems?: ConfigProblem[] };
+      if (data.error) message = data.error;
+      if (Array.isArray(data.problems)) problems = data.problems;
+    } catch {
+      // Not JSON: keep the status text.
+    }
+    throw new ConfigApiError(res.status, message, problems);
+  }
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+export const getConfigDocument = () => configRequest<ConfigDocument>('GET', '/config/document');
+
+export const patchConfigDocument = (version: string, changes: ConfigChange[]) =>
+  configRequest<ConfigSaved>('PATCH', '/config/document', { version, changes });
+
+export const getConfigFile = () => configRequest<ConfigText>('GET', '/config/file');
+
+export const putConfigFile = (version: string, text: string) =>
+  configRequest<ConfigSaved>('PUT', '/config/file', { version, text });

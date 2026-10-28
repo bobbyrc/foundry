@@ -77,12 +77,17 @@ blinks on and off rather than pulsing; both stop under `prefers-reduced-motion`.
 
 - Left rail 216px in `--board`: wordmark "foundry" in Barlow Condensed with a 12px call-yellow
   square before it; nav items: Overview, Projects, Chat, Tasks, Approvals, Runs, Deploys,
-  Signals, Friction, Loops, Agents, Config. Approvals carries a yellow count badge when
-  approvals wait; Tasks a red one when tasks are blocked (each count has screen-reader text).
-  The active item is lit (`--board-2` background, white text).
-- Rail footer: the **pause switch**, the line's cord: a dark window with the line's state on the
-  left (green lamp "Running", or red lamp "Paused" with "No new runs start." and a red rule) and
-  the action on the right (an outlined "Pause", or a filled "Resume"). Below it the live
+  Signals, Friction, Loops, Agents, Config, and Users (owners only). Approvals carries a
+  yellow count badge when approvals wait; Tasks a red one when tasks are blocked (each count
+  has screen-reader text). The active item is lit (`--board-2` background, white text).
+- Rail footer: the **account panel**, then the **pause switch**. The account panel shows the
+  signed-in username, the role in muted lower case, a "Sign out" link and a "Change password"
+  link. Change password opens a dialog (current password, new password of at least 12
+  characters, confirm); on success it says "Password changed." for three seconds. The dialog
+  is drawn over the page, not inside the rail. The pause switch is the line's cord: a dark
+  window with the line's state on the left (green lamp "Running", or red lamp "Paused" with
+  "No new runs start." and a red rule) and the action on the right (an outlined "Pause", or a
+  filled "Resume"; viewers see only the state). Below it the live
   indicator: green square "live" when the event stream is connected, yellow "reconnecting…".
 - Main area: content up to 1360px wide, 28px top and 32px side padding.
 - Under 760px wide the rail becomes a charcoal top bar (wordmark, "1 approval" and "1 blocked"
@@ -92,10 +97,29 @@ blinks on and off rather than pulsing; both stop under `prefers-reduced-motion`.
 
 ## Auth
 
-If no token is stored or any call returns 401, show a centred card: "Connect to foundry",
-one password field "Token", help text "Run `foundry token` or read `<data_dir>/token`.", and
-a Connect button. A `#token=<value>` URL fragment on load is stored in localStorage and
-removed from the URL.
+Until someone signs in, the page shows one sheet on the charcoal board. If foundry has no
+accounts yet, the sheet is **Create the owner account**: a username, a password typed twice
+(at least 12 characters) and "Create account". That first account is the owner. Once accounts
+exist, the sheet is **Sign in**: a username, a password and "Sign in". A wrong username or
+password says so, and too many wrong attempts are refused for a few minutes.
+
+Signing in sets a session cookie that the server marks HttpOnly, so page scripts cannot read
+it. The browser sends it with every request and with the live event stream. Nothing is kept
+in localStorage; the UI only remembers who is signed in (`src/auth.ts`). When a request
+returns 401 during a session, the session has ended: the sheet comes back with "Your session
+ended. Sign in again." A wrong password at sign-in never shows that line. Sign-out, and an
+ended session, clear everything cached from the account so the next person does not see it.
+
+Roles decide what the page draws. The server checks every request as well.
+
+- **viewer** reads everything. No button that changes anything is drawn. In a chat, the
+  composer is replaced by "Viewers can read conversations but not send messages."
+- **operator** also approves and rejects, retries and cancels tasks and runs, pauses and
+  resumes the factory or a project, creates tasks and chat conversations, sends chat messages
+  and runs loops now.
+- **owner** also manages accounts on the Users page.
+
+A control a role may not use is left out, not shown greyed out.
 
 ## Install on a phone
 
@@ -110,8 +134,8 @@ that needs remote access, such as Tailscale, and the name you use must be in
 
 ## Live data
 
-One `EventSource` to `/api/v1/events?token=…&after=<last id>`, reconnecting with backoff
-(1s → 30s). Events invalidate react-query keys: `task.*` → tasks, task detail, stats;
+One `EventSource` to `/api/v1/events?after=<last id>`, which the browser sends with the session
+cookie. It starts only once someone is signed in. It reconnects with backoff (1s → 30s). Events invalidate react-query keys: `task.*` → tasks, task detail, stats;
 `run.updated` → runs, run detail; `approval.*` → approvals, stats; `deploy.updated` →
 deployments; `signal.new` → signals; `friction.reported`/`issue.filed` → friction;
 `chat.message` → that conversation. `run.log` and `chat.delta` are delivered to subscribers
@@ -207,9 +231,31 @@ seen, task link.
 **Loops** (`/loops`) — table: name, project, enabled, every, last run, last error (danger,
 truncated with title tooltip); "Run now" per row.
 
+**Users** (`/users`, owners only; anyone else is sent to Overview) — a table of accounts:
+username (your own row says "(you)"), role, added (relative time) and actions. The role is a
+select that saves as soon as it changes; changing your own role reloads your session so the
+menus match it. "Set password" opens a field under that row with Save and Cancel. "Remove"
+asks for confirmation. "Add user" opens a sheet above the table with username, password and
+role (default operator) and "Create user" or "Cancel". The server's message is shown under the
+table when it refuses a change, such as demoting or removing the last owner.
+
 **Agents** (`/agents`) — card grid: name, description, harness and its type, model,
 prompt, and the task kinds routed to it.
 
-**Config** (`/config`) — the file path, a Reload button, and the redacted config as
-syntax-highlighted JSON (keys `--info`, strings `--ok`, numbers `--warn`). Note above it:
-"Edit this file and press Reload. Secrets are hidden."
+**Config** (`/config`) — everyone sees the file path and the redacted config as syntax-highlighted
+JSON (keys `--info`, strings `--ok`, numbers `--warn`), with the note "Only an owner can change
+settings. Secrets are hidden." Operators also get a Reload button. An owner gets the editor, which
+opens on the **Visual** tab. The top-level sections of `foundry.yaml` sit in a list on the left (a
+square `--lamp-call` after a section with unsaved edits, `--lamp-stop` after one with problems); the
+active section's settings are on the right. A number, text or duration setting is an input; a
+checkbox is "On"; clearing an input removes the key. A value written as `${NAME}` shows as text with
+a note that foundry reads that environment variable. A map is one card per entry, with Rename and
+Remove (Remove asks first), and a form at the end to add one. A list has a row or a card per item,
+with Remove, and an Add button. A value with no simple form is edited as JSON. Edits stay on the
+page until saved: a bar at the bottom says how many there are, with Save and Discard. A save writes
+nothing when the file changed on disk since the page opened (a notice offers to load the latest,
+which discards your edits) or when the result would be invalid (the problems are listed above the
+editor, and each is also shown under its field). Settings that take effect only after a restart are
+named in a note until dismissed. The **YAML** tab edits the raw text of the file, with the same bar
+and checks, and switching tabs with unsaved edits asks first. "Reload from file" makes the daemon
+read the file again.

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useCan } from '../auth';
 import { useCancelTask, useRetryTask } from '../queries';
 import { Button } from './Button';
 import { ErrorLine } from './ErrorLine';
@@ -7,6 +8,8 @@ import { Field } from './Field';
 /** Cancels a task. Needs confirmation; the button reads "Confirm?" for 3 seconds. */
 export function CancelTaskButton({ taskId }: { taskId: string }) {
   const cancel = useCancelTask(taskId);
+  const canOperate = useCan('operate');
+  if (!canOperate) return null;
   return (
     <>
       <Button variant="danger" confirm disabled={cancel.isPending} onClick={() => cancel.mutate()}>
@@ -22,7 +25,9 @@ export function RetryTaskControl({ taskId }: { taskId: string }) {
   const retry = useRetryTask(taskId);
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
+  const canOperate = useCan('operate');
 
+  if (!canOperate) return null;
   if (!open) {
     return (
       <Button variant="secondary" onClick={() => setOpen(true)}>

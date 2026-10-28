@@ -141,15 +141,16 @@ In a second terminal:
 
 ```sh
 ./foundry status       # factory state, pending approvals, blocked tasks and running runs
-./foundry open         # open the web UI, already signed in with the API token
+./foundry open         # open the web UI; on first run you create the owner account there
 ```
 
 `foundry status` reads "Factory: running" because the factory is not paused. The project is paused
 separately, so no run for `trial` will start yet.
 
-The CLI finds the daemon through the config file's `server` address and reads the token from the
-daemon's data directory (`~/.local/share/foundry/token` by default). On another machine, set
-`FOUNDRY_API` and `FOUNDRY_TOKEN` instead.
+The web UI asks for a username and password; the first run creates the owner account. The CLI does
+not use a password. It finds the daemon through the config file's `server` address and reads the API
+token from the daemon's data directory (`~/.local/share/foundry/token` by default). On another
+machine, set `FOUNDRY_API` and `FOUNDRY_TOKEN` instead.
 
 To keep the daemon running without a terminal on macOS, install it as a launchd service (launchd is
 the macOS service manager). It starts at login and restarts the daemon if it crashes:

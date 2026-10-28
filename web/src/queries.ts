@@ -3,13 +3,13 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as api from './api';
 import { ApiError } from './api';
-import type { NewTask, Stats, TaskDetail } from './types';
+import type { ConfigChange, NewTask, Role, Stats, TaskDetail } from './types';
 import { keys } from './keys';
 import { normaliseProject } from './lib/projects';
 
 export const LIST_REFRESH_MS = 30_000;
 
-/** Retries transient failures twice, but never a 4xx such as an expired token. */
+/** Retries transient failures twice, but never a 4xx such as an expired session. */
 export function retryPolicy(failureCount: number, error: Error): boolean {
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
   return failureCount < 2;
@@ -258,5 +258,80 @@ export function useSendMessage(conversationId: string) {
   return useMutation({
     mutationFn: (text: string) => api.sendMessage(conversationId, text),
     onSuccess: () => invalidate(qc, keys.conversation(conversationId), keys.conversationsAll),
+  });
+}
+
+// ---- users (owner only) ----
+
+export function useUsers() {
+  return useQuery({ queryKey: keys.usersAll, queryFn: () => api.listUsers() });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { username: string; password: string; role: Role }) =>
+      api.createUser(vars.username, vars.password, vars.role),
+    onSuccess: () => invalidate(qc, keys.usersAll),
+  });
+}
+
+export function useSetUserRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { name: string; role: Role }) => api.setUserRole(vars.name, vars.role),
+    onSuccess: () => invalidate(qc, keys.usersAll),
+  });
+}
+
+export function useSetUserPassword() {
+  return useMutation({
+    mutationFn: (vars: { name: string; password: string }) => api.setUserPassword(vars.name, vars.password),
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.deleteUser(name),
+    onSuccess: () => invalidate(qc, keys.usersAll),
+  });
+}
+
+// ---- config editing (owner only). The document and the raw file are read fresh on demand, and
+// saves never refetch them by themselves: the editor refetches after it has handled the result. ----
+
+/** The file as JSON with its schema, for the visual editor. No refetch on focus: edits are kept. */
+export function useConfigDocument() {
+  return useQuery({
+    queryKey: keys.configDocument,
+    queryFn: () => api.getConfigDocument(),
+    refetchOnWindowFocus: false,
+  });
+}
+
+/** The raw text of the file, for the YAML tab. */
+export function useConfigFile() {
+  return useQuery({
+    queryKey: keys.configFile,
+    queryFn: () => api.getConfigFile(),
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useSaveConfigDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { version: string; changes: ConfigChange[] }) =>
+      api.patchConfigDocument(vars.version, vars.changes),
+    onSuccess: () => invalidate(qc, keys.configAll, keys.loopsAll, keys.agentsAll, keys.projectsAll),
+  });
+}
+
+export function useSaveConfigFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { version: string; text: string }) => api.putConfigFile(vars.version, vars.text),
+    onSuccess: () => invalidate(qc, keys.configAll, keys.loopsAll, keys.agentsAll, keys.projectsAll),
   });
 }

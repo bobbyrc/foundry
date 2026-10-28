@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api';
+import { useCan } from '../auth';
 import { subscribe } from '../events';
 import { errorMessage } from '../lib/format';
 import { parseTime, formatRelative } from '../lib/time';
@@ -20,6 +21,7 @@ export function Chat() {
   const navigate = useNavigate();
   const conversations = useConversations();
   const create = useCreateConversation();
+  const canOperate = useCan('operate');
 
   const startNew = async () => {
     const conversation = await create.mutateAsync('New chat');
@@ -31,9 +33,11 @@ export function Chat() {
       <PageHeader
         title="Chat"
         actions={
-          <Button variant="primary" disabled={create.isPending} onClick={() => void startNew()}>
-            New chat
-          </Button>
+          canOperate ? (
+            <Button variant="primary" disabled={create.isPending} onClick={() => void startNew()}>
+              New chat
+            </Button>
+          ) : undefined
         }
       />
       <ErrorLine error={create.error} />
@@ -59,7 +63,11 @@ export function Chat() {
           {id ? (
             <Thread key={id} conversationId={id} />
           ) : (
-            <Empty>Pick a conversation, or start a new one to talk to the orchestrator.</Empty>
+            <Empty>
+              {canOperate
+                ? 'Pick a conversation, or start a new one to talk to the orchestrator.'
+                : 'Pick a conversation to read it.'}
+            </Empty>
           )}
         </section>
       </div>
@@ -87,6 +95,7 @@ function Thread({ conversationId }: { conversationId: string }) {
   const [sendError, setSendError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const canOperate = useCan('operate');
 
   useEffect(
     () =>
@@ -155,7 +164,7 @@ function Thread({ conversationId }: { conversationId: string }) {
     <>
       <h2 className="thread-title">{conversation.data.conversation.title || 'Untitled'}</h2>
       <div className="messages">
-        {empty ? (
+        {empty && canOperate ? (
           <div className="examples">
             <p className="muted">Ask anything, or try one of these:</p>
             {EXAMPLES.map((example) => (
@@ -195,35 +204,39 @@ function Thread({ conversationId }: { conversationId: string }) {
         ) : null}
         <div ref={endRef} />
       </div>
-      <form
-        className="composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-      >
-        <label className="sr-only" htmlFor="composer">
-          Message the orchestrator
-        </label>
-        <textarea
-          id="composer"
-          ref={textareaRef}
-          rows={1}
-          value={draft}
-          disabled={working}
-          placeholder={working ? 'The orchestrator is replying…' : 'Message the orchestrator'}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              void submit();
-            }
+      {canOperate ? (
+        <form
+          className="composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
           }}
-        />
-        <Button type="submit" variant="primary" disabled={working || send.isPending || draft.trim() === ''}>
-          Send
-        </Button>
-      </form>
+        >
+          <label className="sr-only" htmlFor="composer">
+            Message the orchestrator
+          </label>
+          <textarea
+            id="composer"
+            ref={textareaRef}
+            rows={1}
+            value={draft}
+            disabled={working}
+            placeholder={working ? 'The orchestrator is replying…' : 'Message the orchestrator'}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+          />
+          <Button type="submit" variant="primary" disabled={working || send.isPending || draft.trim() === ''}>
+            Send
+          </Button>
+        </form>
+      ) : (
+        <p className="muted small">Viewers can read conversations but not send messages.</p>
+      )}
       {sendError ? <p className="error-line" role="alert">{sendError}</p> : null}
     </>
   );

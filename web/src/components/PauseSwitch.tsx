@@ -1,3 +1,4 @@
+import { useCan } from '../auth';
 import { useControl, useTogglePause } from '../queries';
 import { cx } from '../lib/format';
 import { Button } from './Button';
@@ -11,6 +12,8 @@ export function PauseSwitch() {
   const control = useControl();
   const toggle = useTogglePause();
   const paused = control.data?.paused ?? false;
+  // Viewers see the state but not the cord: the button is an operator action.
+  const canOperate = useCan('operate');
 
   return (
     <div className={cx('pause-switch', paused && 'is-paused')}>
@@ -18,9 +21,11 @@ export function PauseSwitch() {
         <span className={cx('lamp', paused ? 'lamp-stop' : 'lamp-run')} aria-hidden="true" />
         {control.data ? (paused ? 'Paused' : 'Running') : '—'}
       </span>
-      <Button variant="secondary" className="pause-button" disabled={!control.data || toggle.isPending} onClick={() => toggle.mutate(!paused)}>
-        {paused ? 'Resume' : 'Pause'}
-      </Button>
+      {canOperate ? (
+        <Button variant="secondary" className="pause-button" disabled={!control.data || toggle.isPending} onClick={() => toggle.mutate(!paused)}>
+          {paused ? 'Resume' : 'Pause'}
+        </Button>
+      ) : null}
       {paused ? <span className="pause-note">No new runs start.</span> : null}
       <ErrorLine error={toggle.error ?? control.error} />
     </div>

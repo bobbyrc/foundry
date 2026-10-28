@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/store"
 )
 
@@ -30,15 +31,25 @@ func writeErrorMsg(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, errorBody{Error: msg})
 }
 
-// writeError maps err to a status: not found 404, invalid 400, conflict 409, anything else 500.
-// The message of a 500 is hidden and the error is logged.
+// problemsBody is a 422 answer for a config that does not validate. Problems name the settings.
+type problemsBody struct {
+	Error    string           `json:"error"`
+	Problems []config.Problem `json:"problems"`
+}
+
+func writeErrorProblems(w http.ResponseWriter, status int, msg string, problems []config.Problem) {
+	writeJSON(w, status, problemsBody{Error: msg, Problems: nonNil(problems)})
+}
+
+// writeError maps err to a status: not found 404, invalid 400, conflict 409 (including removing
+// the last owner), anything else 500. The message of a 500 is hidden and the error is logged.
 func writeError(w http.ResponseWriter, log *slog.Logger, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeErrorMsg(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, ErrInvalid):
 		writeErrorMsg(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrConflict):
+	case errors.Is(err, ErrConflict), errors.Is(err, store.ErrLastOwner):
 		writeErrorMsg(w, http.StatusConflict, err.Error())
 	default:
 		log.Error("api: internal error", "err", err)

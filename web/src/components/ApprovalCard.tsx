@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Approval } from '../types';
+import { useCan } from '../auth';
 import { useDecideApproval, useTask } from '../queries';
 import { humanize, safeHref, shortSha } from '../lib/format';
 import { latestDoneReview } from '../lib/review';
@@ -21,6 +22,7 @@ import { IdChip } from './IdChip';
 export function ApprovalCard({ approval, showTask = true }: { approval: Approval; showTask?: boolean }) {
   const [note, setNote] = useState('');
   const decide = useDecideApproval(approval.id);
+  const canOperate = useCan('operate');
   const pending = approval.status === 'pending';
   const detail = useTask(approval.task_id);
   const task = detail.data?.task;
@@ -36,7 +38,8 @@ export function ApprovalCard({ approval, showTask = true }: { approval: Approval
         {pending ? null : <StatusPill kind="approval" status={approval.status} />}
       </div>
       <p className="call-meta">
-        {pending ? 'Waiting on you' : humanize(approval.status)} · {humanize(approval.kind)} · {approval.project}
+        {pending ? (canOperate ? 'Waiting on you' : 'Waiting on an operator') : humanize(approval.status)} ·{' '}
+        {humanize(approval.kind)} · {approval.project}
         {showTask ? (
           <>
             {' · task '}
@@ -87,7 +90,7 @@ export function ApprovalCard({ approval, showTask = true }: { approval: Approval
         ) : null}
         <ClampedMarkdown text={approval.reason} lines={3} />
         {approval.note ? <p className="small">Note: {approval.note}</p> : null}
-        {pending ? (
+        {pending && canOperate ? (
           <div className="decide">
             <Field label="Note (optional)">
               <input type="text" value={note} onChange={(event) => setNote(event.target.value)} />
