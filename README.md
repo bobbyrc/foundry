@@ -54,7 +54,11 @@ human, or when it has used up `max_attempts`. Retry it with a note, or cancel it
   `foundry.yaml` and manages users). The API token, which the CLI and the orchestrator hold, can
   read and act but can never edit the config or users, so an agent cannot rewrite its own policy
   or environment. The first visit to a new instance creates the owner account, so create it
-  before you make foundry reachable from other machines.
+  before you make foundry reachable from other machines. Behind an HTTPS proxy, set
+  `server.public_url` to the `https://` address so the session cookie is marked Secure. This
+  boundary is the API's: agents still run as your user, so one that can write `foundry.yaml` or
+  the database file directly is limited only by its harness until agents are isolated (see
+  [docs/proposals/agent-isolation.md](docs/proposals/agent-isolation.md)).
 - **Agents get a small environment.** An agent sees an allowlist (`PATH`, `HOME`, `USER`, `LANG`,
   ...), not foundry's own environment, so `GH_TOKEN` and provider tokens do not reach it. To pass
   one through, name it in the harness's `inherit_env` list. Agents still run as your user and can

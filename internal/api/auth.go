@@ -20,6 +20,41 @@ const (
 	signInWindow = 15 * time.Minute
 )
 
+// Password hashing is slow on purpose (see auth.passwordIterations), so the server runs only
+// hashSlotCount of them at once. A request that cannot get a slot within hashWait is answered 503
+// rather than queued without limit.
+const (
+	hashSlotCount = 4
+	hashWait      = 5 * time.Second
+)
+
+// hashSlots is the semaphore for hashing. It is process-wide, which is one server for the daemon.
+var hashSlots = make(chan struct{}, hashSlotCount)
+
+// takeHashSlot waits up to hashWait for a hashing slot. It returns the function that gives the
+// slot back. When no slot frees in time it answers 503 and returns false; when the client has
+// already gone it returns false without writing anything.
+func takeHashSlot(w http.ResponseWriter, r *http.Request) (func(), bool) {
+	timer := time.NewTimer(hashWait)
+	defer timer.Stop()
+	select {
+	case hashSlots <- struct{}{}:
+		return func() { <-hashSlots }, true
+	case <-timer.C:
+		writeErrorMsg(w, http.StatusServiceUnavailable, "busy; try again")
+		return nil, false
+	case <-r.Context().Done():
+		return nil, false
+	}
+}
+
+// passwordLimitKey is the limiter key for guesses at a signed-in user's current password. It is
+// kept apart from the sign-in key so that a changed-password guess and a sign-in guess do not
+// share a count.
+func passwordLimitKey(username string) string {
+	return "password:" + username
+}
+
 // crossOrigin refuses browser requests that come from another site (Sec-Fetch-Site and Origin
 // checks). Requests with neither header, such as the CLI's, pass.
 var crossOrigin = http.NewCrossOriginProtection()
@@ -247,7 +282,12 @@ func (s *server) authSetup(w http.ResponseWriter, r *http.Request) {
 		writeErrorMsg(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
+	release, ok := takeHashSlot(w, r)
+	if !ok {
+		return
+	}
 	hash, err := auth.HashPassword(in.Password)
+	release()
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -288,7 +328,20 @@ func (s *server) authLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	key := strings.ToLower(in.Username)
-	if s.limiter.Locked(key) {
+	if auth.ValidateUsername(key) != nil {
+		// No account can have this name, so there is nothing to guess at. Answer as a wrong
+		// password without counting the attempt or spending a hash.
+		signInRefused(w)
+		return
+	}
+	release, ok := takeHashSlot(w, r)
+	if !ok {
+		return
+	}
+	defer release()
+	// Acquire counts this attempt before the password is checked, so parallel requests cannot
+	// all pass the limit together. A successful sign-in clears the count below.
+	if !s.limiter.Acquire(key) {
 		writeErrorMsg(w, http.StatusTooManyRequests, "too many attempts; try again in a few minutes")
 		return
 	}
@@ -296,7 +349,7 @@ func (s *server) authLogin(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, store.ErrNotFound) {
 		// Spend the same time as a real check, so the response does not reveal which names exist.
 		auth.BurnPasswordCheck(in.Password)
-		s.signInFailed(w, key)
+		signInRefused(w)
 		return
 	}
 	if err != nil {
@@ -304,7 +357,7 @@ func (s *server) authLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.CheckPassword(u.PasswordHash, in.Password) {
-		s.signInFailed(w, key)
+		signInRefused(w)
 		return
 	}
 	s.limiter.Reset(key)
@@ -318,10 +371,9 @@ func (s *server) authLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
-// signInFailed counts a failed sign-in and answers 401. The message is the same whether the
-// username or the password was wrong.
-func (s *server) signInFailed(w http.ResponseWriter, key string) {
-	s.limiter.Fail(key)
+// signInRefused answers 401. The message is the same whether the username or the password was
+// wrong. The attempt was already counted by the limiter when it was acquired.
+func signInRefused(w http.ResponseWriter) {
 	writeErrorMsg(w, http.StatusUnauthorized, "wrong username or password")
 }
 
@@ -354,10 +406,24 @@ func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	if !auth.CheckPassword(p.user.PasswordHash, in.Current) {
-		writeErrorMsg(w, http.StatusUnauthorized, "the current password is wrong")
+	// Guesses at the current password are limited like sign-in guesses: a session that is
+	// stolen cannot be used to try passwords without end. The attempt is counted before the check.
+	release, ok := takeHashSlot(w, r)
+	if !ok {
 		return
 	}
+	defer release()
+	key := passwordLimitKey(p.user.Username)
+	if !s.limiter.Acquire(key) {
+		writeErrorMsg(w, http.StatusTooManyRequests, "too many attempts; try again in a few minutes")
+		return
+	}
+	if !auth.CheckPassword(p.user.PasswordHash, in.Current) {
+		// 403, not 401: the web client treats 401 as a lost session and signs the person out.
+		writeErrorMsg(w, http.StatusForbidden, "the current password is wrong")
+		return
+	}
+	s.limiter.Reset(key)
 	if err := auth.ValidatePassword(in.New); err != nil {
 		writeErrorMsg(w, http.StatusUnprocessableEntity, err.Error())
 		return

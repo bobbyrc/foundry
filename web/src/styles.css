@@ -2232,6 +2232,11 @@ a.board-window:hover .board-name {
   gap: 8px 14px;
 }
 
+/* The users table: centre each cell's contents so the name and date line up with the controls. */
+.users-table .table td {
+  vertical-align: middle;
+}
+
 /* ---- config editor ---- */
 
 .config-path {

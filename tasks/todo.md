@@ -205,9 +205,12 @@ prompts.
 - [x] U2 auth: password, session, limiter, roles + tests — `internal/auth/`
 - [x] U3 config: document tree, changes on the YAML tree, schema (9 types incl. `any` for options
       maps), atomic write — `internal/config/`
-- [ ] U5 web: sign-in/setup, session client, account panel, Users page, role-aware actions
-- [ ] U4 API (after U1-U3): middleware, routes, cmd/foundry switch to config.WriteFileAtomic,
+- [x] U5 web: sign-in/setup, session client, account panel, Users page, role-aware actions
+- [x] U4 API (after U1-U3): middleware, routes, cmd/foundry switch to config.WriteFileAtomic,
       `foundry user reset-password`, docs/api.md, openapi.yaml
-- [ ] U6 web (after U5): config page — visual editor + raw tab
-- [ ] Docs: invariants in AGENTS.md, README safety model, docs/design.md, getting-started
-- [ ] Verify on a throwaway daemon; defect review; PR
+- [x] U6 web (after U5): config page — visual editor + raw tab
+- [x] Docs: invariants in AGENTS.md, README safety model, docs/design.md, getting-started
+- [x] Verify on a throwaway daemon (setup, sign-in, viewer, users, visual save keeps comments,
+      token 403 on config/users); defect review: 7 of 10 fixed, 3 documented (setup page open by
+      decision, Secure cookie behind a proxy needs public_url, file access needs agent isolation)
+- [ ] PR, CI, owner decides merge (after merge the dogfood instance asks for an owner account)

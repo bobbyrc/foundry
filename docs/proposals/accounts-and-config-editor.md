@@ -118,6 +118,15 @@ Validation failures answer 422 `{"error": "...", "problems": [{"path","message"}
 `GET /health` stays open; every other existing route keeps working with the token and now also
 with a session (viewer: GET only; operator and owner: all of today's routes).
 
+## What stays open
+
+- The boundary is the API's. Agents run as the owner's OS user, so an agent that can write
+  `foundry.yaml` or `foundry.db` directly can still change them (then `POST /config/reload` is
+  an Operate action). Closing that needs agent isolation (`docs/proposals/agent-isolation.md`).
+- The first-run setup page is open until the owner account exists (accepted).
+- The session cookie is marked Secure from `public_url` or a direct TLS connection; behind an
+  HTTPS proxy, `public_url` must be set to the https address.
+
 ## What changes in the rules
 
 - AGENTS.md invariant 11 ("needs the bearer token") becomes "needs the bearer token or a signed-in

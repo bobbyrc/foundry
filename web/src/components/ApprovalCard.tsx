@@ -38,7 +38,8 @@ export function ApprovalCard({ approval, showTask = true }: { approval: Approval
         {pending ? null : <StatusPill kind="approval" status={approval.status} />}
       </div>
       <p className="call-meta">
-        {pending ? 'Waiting on you' : humanize(approval.status)} · {humanize(approval.kind)} · {approval.project}
+        {pending ? (canOperate ? 'Waiting on you' : 'Waiting on an operator') : humanize(approval.status)} ·{' '}
+        {humanize(approval.kind)} · {approval.project}
         {showTask ? (
           <>
             {' · task '}

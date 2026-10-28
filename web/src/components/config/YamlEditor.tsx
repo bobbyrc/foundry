@@ -1,12 +1,12 @@
 // The YAML tab: the raw text of foundry.yaml in a plain textarea. It is read from the server each
 // time the tab opens, so it never shows a copy older than the file on disk at that moment.
 import { useEffect, useState, type KeyboardEvent } from 'react';
-import { ConfigApiError } from '../../api';
 import { useConfigFile, useSaveConfigFile } from '../../queries';
 import type { ConfigProblem, ConfigText } from '../../types';
 import { Empty } from '../Empty';
 import { ErrorLine } from '../ErrorLine';
 import { ConfigNotes, SaveBar } from './SaveBar';
+import { classifySaveFailure } from './saveFailure';
 
 const SAVED_MS = 4_000;
 
@@ -20,6 +20,7 @@ export function YamlEditor({ onDirtyChange }: { onDirtyChange: (dirty: boolean) 
   const [conflict, setConflict] = useState(false);
   const [restart, setRestart] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [reloadFailed, setReloadFailed] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   const dirty = base !== null && text !== base.text;
@@ -48,6 +49,7 @@ export function YamlEditor({ onDirtyChange }: { onDirtyChange: (dirty: boolean) 
     setConflict(false);
     setProblems([]);
     setSaved(false);
+    setReloadFailed(null);
     try {
       const result = await save.mutateAsync({ version: base.version, text });
       const res = await file.refetch();
@@ -57,9 +59,30 @@ export function YamlEditor({ onDirtyChange }: { onDirtyChange: (dirty: boolean) 
       setRestart((prev) => [...new Set([...prev, ...(result.restart_required ?? [])])]);
       setSaved(true);
     } catch (err) {
-      if (err instanceof ConfigApiError && err.status === 409) setConflict(true);
-      else if (err instanceof ConfigApiError && err.status === 422) setProblems(err.problems);
-      else setError(err);
+      const failure = classifySaveFailure(err);
+      switch (failure.kind) {
+        case 'conflict':
+          setConflict(true);
+          break;
+        case 'problems':
+          setProblems(failure.problems);
+          break;
+        case 'written-not-reloaded': {
+          // The file may hold the new text now, so show it as it is rather than the typed copy.
+          const res = await file.refetch();
+          if (res.data) {
+            setBase(res.data);
+            setText(res.data.text);
+          } else {
+            setError(res.error);
+          }
+          setReloadFailed(failure.message);
+          break;
+        }
+        case 'error':
+          setError(failure.error);
+          break;
+      }
     }
   };
 
@@ -90,7 +113,7 @@ export function YamlEditor({ onDirtyChange }: { onDirtyChange: (dirty: boolean) 
   return (
     <div className="config-yaml">
       <ConfigNotes
-        state={{ saved, restart, problems, conflict, error }}
+        state={{ saved, restart, problems, conflict, reloadFailed, error }}
         onDismissRestart={() => setRestart([])}
         onLoadLatest={() => void loadLatest()}
       />

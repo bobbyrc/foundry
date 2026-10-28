@@ -2,7 +2,6 @@
 // fields on the right. Edits go into a change list; the draft shown is the file with those
 // changes applied. Save sends the list in one request; nothing is written before that.
 import { useEffect, useMemo, useState } from 'react';
-import { ConfigApiError } from '../../api';
 import { useSaveConfigDocument } from '../../queries';
 import type { ConfigChange, ConfigDocument, ConfigProblem } from '../../types';
 import { addChange, applyChanges, clearChange, humanizeKey, problemsByPath } from '../../lib/configDoc';
@@ -11,6 +10,7 @@ import { useParamState } from '../../useParamState';
 import { Empty } from '../Empty';
 import { ConfigNotes, SaveBar } from './SaveBar';
 import { NodeEditor, sectionHasProblems, type EditContext } from './ConfigSection';
+import { classifySaveFailure } from './saveFailure';
 
 const SAVED_MS = 4_000;
 
@@ -30,6 +30,7 @@ export function ConfigEditor({
   const [conflict, setConflict] = useState(false);
   const [restart, setRestart] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [reloadFailed, setReloadFailed] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [sectionKey, setSectionKey] = useParamState('section');
 
@@ -74,6 +75,7 @@ export function ConfigEditor({
     setConflict(false);
     setProblems([]);
     setSaved(false);
+    setReloadFailed(null);
     try {
       const result = await save.mutateAsync({ version: doc.version, changes });
       await refetch();
@@ -81,9 +83,24 @@ export function ConfigEditor({
       setRestart((prev) => [...new Set([...prev, ...(result.restart_required ?? [])])]);
       setSaved(true);
     } catch (err) {
-      if (err instanceof ConfigApiError && err.status === 409) setConflict(true);
-      else if (err instanceof ConfigApiError && err.status === 422) setProblems(err.problems);
-      else setError(err);
+      const failure = classifySaveFailure(err);
+      switch (failure.kind) {
+        case 'conflict':
+          setConflict(true);
+          break;
+        case 'problems':
+          setProblems(failure.problems);
+          break;
+        case 'written-not-reloaded':
+          // The file may hold the new text now, so the edits are no longer a draft of it.
+          await refetch();
+          setChanges([]);
+          setReloadFailed(failure.message);
+          break;
+        case 'error':
+          setError(failure.error);
+          break;
+      }
     }
   };
 
@@ -125,7 +142,7 @@ export function ConfigEditor({
 
         <div className="config-body">
           <ConfigNotes
-            state={{ saved, restart, problems, conflict, error }}
+            state={{ saved, restart, problems, conflict, reloadFailed, error }}
             onDismissRestart={() => setRestart([])}
             onLoadLatest={() => void loadLatest()}
           />

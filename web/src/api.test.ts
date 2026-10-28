@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getStats, login, logout, setUserRole } from './api';
+import { changePassword, getStats, login, logout, setUserRole } from './api';
 import { UNAUTHORIZED_EVENT } from './auth';
 
 // api.ts reads and dispatches on `window`, which Node does not have. A plain EventTarget is
@@ -46,6 +46,16 @@ describe('api requests', () => {
     });
   });
 
+  it('sends the password change inside the session, with the same JSON body', async () => {
+    fetchMock.mockResolvedValue(respond(204));
+    await changePassword('old password here', 'new password here');
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v1/auth/password');
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toEqual({
+      current: 'old password here',
+      new: 'new password here',
+    });
+  });
+
   it('sends the role change as JSON to the encoded user path', async () => {
     fetchMock.mockResolvedValue(respond(200, { username: 'a b', role: 'viewer', created_at: '', updated_at: '' }));
     await setUserRole('a b', 'viewer');
@@ -71,11 +81,30 @@ describe('api 401 handling', () => {
     expect(seen).not.toHaveBeenCalled();
   });
 
-  it('does not dispatch UNAUTHORIZED_EVENT for a 401 on sign-out', async () => {
+  it('dispatches UNAUTHORIZED_EVENT when a password change is refused with 401', async () => {
+    fetchMock.mockResolvedValue(respond(401, { error: 'unauthorized' }));
+    const seen = vi.fn();
+    target.addEventListener(UNAUTHORIZED_EVENT, seen);
+    await expect(changePassword('a', 'b')).rejects.toMatchObject({ status: 401 });
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not dispatch UNAUTHORIZED_EVENT for a wrong current password (403)', async () => {
+    fetchMock.mockResolvedValue(respond(403, { error: 'the current password is wrong' }));
+    const seen = vi.fn();
+    target.addEventListener(UNAUTHORIZED_EVENT, seen);
+    await expect(changePassword('wrong', 'b')).rejects.toMatchObject({
+      status: 403,
+      message: 'the current password is wrong',
+    });
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('dispatches UNAUTHORIZED_EVENT when sign-out finds the session gone', async () => {
     fetchMock.mockResolvedValue(respond(401, { error: 'unauthorized' }));
     const seen = vi.fn();
     target.addEventListener(UNAUTHORIZED_EVENT, seen);
     await expect(logout()).rejects.toMatchObject({ status: 401 });
-    expect(seen).not.toHaveBeenCalled();
+    expect(seen).toHaveBeenCalledTimes(1);
   });
 });

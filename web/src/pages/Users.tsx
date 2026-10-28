@@ -225,7 +225,11 @@ export function Users() {
       ) : null}
 
       <ErrorLine error={users.error} />
-      {users.isSuccess ? <Table columns={columns} rows={users.data} rowKey={(u) => u.username} empty="No users yet." /> : null}
+      {users.isSuccess ? (
+        <div className="users-table">
+          <Table columns={columns} rows={users.data} rowKey={(u) => u.username} empty="No users yet." />
+        </div>
+      ) : null}
       <ErrorLine error={failure} />
     </>
   );

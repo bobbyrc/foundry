@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -182,4 +183,35 @@ func TestRestartRequired(t *testing.T) {
 	changed, err := Parse([]byte("server:\n  addr: 127.0.0.1:8888\n  data_dir: /tmp/x\n  allowed_hosts: [box.local]\nnotify:\n  - type: ntfy\n"), "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"server.addr", "server.data_dir", "server.allowed_hosts", "notify"}, RestartRequired(base, changed))
+}
+
+// aliasBomb builds YAML with levels+1 lists (l0 to l<levels>), where each list after l0 is ten aliases
+// to the list below it. Expanded, l4 describes about 120,000 nodes from a few hundred bytes of text.
+func aliasBomb(levels int) string {
+	var b strings.Builder
+	b.WriteString("l0: &a0 [x, x, x, x, x, x, x, x, x, x]\n")
+	for i := 1; i <= levels; i++ {
+		b.WriteString("l" + strconv.Itoa(i) + ": &a" + strconv.Itoa(i) + " [")
+		for j := 0; j < 10; j++ {
+			if j > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString("*a" + strconv.Itoa(i-1))
+		}
+		b.WriteString("]\n")
+	}
+	return b.String()
+}
+
+func TestDocumentTreeRefusesAliasExpansionBomb(t *testing.T) {
+	_, err := DocumentTree([]byte(aliasBomb(4)))
+	require.Error(t, err)
+	assert.Equal(t, "config document is too large or has too many aliases", err.Error())
+}
+
+func TestDocumentTreeAcceptsModestAliasReuse(t *testing.T) {
+	// Three levels (l0 to l3) expand to about 12,000 nodes, well inside the limit.
+	v, err := DocumentTree([]byte(aliasBomb(3)))
+	require.NoError(t, err)
+	assert.Contains(t, v.(map[string]any), "l3")
 }

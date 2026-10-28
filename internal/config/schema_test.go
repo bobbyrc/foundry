@@ -89,3 +89,17 @@ func TestSchemaDeployOptionsIsAny(t *testing.T) {
 	assert.Empty(t, options.Fields)
 	assert.Nil(t, options.Item, "an any value is not descended into")
 }
+
+func TestSchemaHelpStartsWithYAMLKeyNotGoField(t *testing.T) {
+	server := schemaField(t, Schema().Fields, "server")
+	hosts := schemaField(t, server.Fields, "allowed_hosts")
+	assert.True(t, strings.HasPrefix(hosts.Help, "Allowed hosts are extra Host header values"), hosts.Help)
+	assert.NotContains(t, hosts.Help, "AllowedHosts")
+}
+
+func TestSchemaHelpNamesKeyWithUnderscoresAsSpaces(t *testing.T) {
+	limits := schemaField(t, Schema().Fields, "limits")
+	daily := schemaField(t, limits.Fields, "daily_budget_usd")
+	assert.True(t, strings.HasPrefix(daily.Help, "Daily budget usd stops new task runs"), daily.Help)
+	assert.NotContains(t, daily.Help, "DailyBudgetUSD")
+}

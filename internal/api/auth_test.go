@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -258,7 +260,7 @@ func TestPasswordChangeKeepsOnlyCurrentSession(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "other sessions end")
 
 	rec = x.authReq(t, http.MethodPost, "/api/v1/auth/password", `{"current":"wrong","new":"a brand new passphrase"}`, withCookie(current))
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Equal(t, http.StatusForbidden, rec.Code, "a wrong current password is 403; 401 means the session is gone")
 	assert.JSONEq(t, `{"error":"the current password is wrong"}`, rec.Body.String())
 }
 
@@ -309,4 +311,69 @@ func jsonTime(t *testing.T, rec *httptest.ResponseRecorder, path ...string) stri
 	s, ok := cur.(string)
 	require.True(t, ok, "path %v is not a string", path)
 	return `"` + s + `"`
+}
+
+// newProbeServer returns a server built directly from the harness's store and bus. Tests use it to
+// call one handler, or to see state (the limiter) that the harness's handler keeps private.
+func newProbeServer(x *harness) *server {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return &server{
+		opts:    Options{Store: x.st, Bus: x.bus, Token: testToken, Version: "test-version", Logger: logger},
+		log:     logger,
+		streams: make(chan struct{}, maxEventStreams),
+		limiter: auth.NewLimiter(signInLimit, signInWindow, time.Now),
+		now:     time.Now,
+	}
+}
+
+func TestLoginInvalidUsernameDoesNotTouchLimiter(t *testing.T) {
+	x := newHarness(t)
+	s := newProbeServer(x)
+	for i := 0; i < signInLimit+1; i++ {
+		rec := httptest.NewRecorder()
+		req := testRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"Bad Name!","password":"whatever"}`))
+		req.Header.Set("Content-Type", "application/json")
+		s.authLogin(rec, req)
+		require.Equal(t, http.StatusUnauthorized, rec.Code, "attempt %d", i+1)
+		assert.JSONEq(t, `{"error":"wrong username or password"}`, rec.Body.String())
+	}
+	assert.False(t, s.limiter.Locked("bad name!"), "a name no account can have must not fill the limiter")
+}
+
+func TestSignInAnswersBusyWhenNoHashingSlotFrees(t *testing.T) {
+	x := newHarness(t)
+	x.newUserSession(t, "alice", domain.RoleOperator)
+	s := newProbeServer(x)
+	// Hold every hashing slot for the whole test, and free them afterwards.
+	for i := 0; i < hashSlotCount; i++ {
+		hashSlots <- struct{}{}
+	}
+	t.Cleanup(func() {
+		for i := 0; i < hashSlotCount; i++ {
+			<-hashSlots
+		}
+	})
+
+	rec := httptest.NewRecorder()
+	req := testRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"alice","password":"`+testPassword+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	s.authLogin(rec, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.JSONEq(t, `{"error":"busy; try again"}`, rec.Body.String())
+	assert.False(t, s.limiter.Locked("alice"), "a busy answer does not count as a failed sign-in")
+}
+
+func TestPasswordChangeIsLockedAfterWrongGuesses(t *testing.T) {
+	x := newHarness(t)
+	c := x.newUserSession(t, "alice", domain.RoleOperator)
+	body := func(current string) string {
+		return `{"current":"` + current + `","new":"a brand new passphrase"}`
+	}
+	for i := 1; i <= signInLimit; i++ {
+		rec := x.authReq(t, http.MethodPost, "/api/v1/auth/password", body("wrong"), withCookie(c))
+		require.Equal(t, http.StatusForbidden, rec.Code, "guess %d", i)
+	}
+	rec := x.authReq(t, http.MethodPost, "/api/v1/auth/password", body(testPassword), withCookie(c))
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "the right password is refused once guesses are locked out")
+	assert.JSONEq(t, `{"error":"too many attempts; try again in a few minutes"}`, rec.Body.String())
 }

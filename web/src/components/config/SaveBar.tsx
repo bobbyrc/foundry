@@ -38,6 +38,8 @@ export interface ConfigNoticeState {
   restart: string[];
   problems: ConfigProblem[];
   conflict: boolean;
+  /** The server's message when a save wrote the file but could not reload it, else null. */
+  reloadFailed: string | null;
   error: unknown;
 }
 
@@ -54,10 +56,16 @@ export function ConfigNotes({
   onDismissRestart: () => void;
   onLoadLatest: () => void;
 }) {
-  const { saved, restart, problems, conflict, error } = state;
+  const { saved, restart, problems, conflict, reloadFailed, error } = state;
   return (
     <div className="config-notes">
       {saved ? <p className="muted config-saved">Saved and reloaded.</p> : null}
+      {reloadFailed !== null ? (
+        <Callout tone="danger">
+          Saved to the file, but foundry could not reload it: {reloadFailed}. Fix the problem and press Reload
+          from file.
+        </Callout>
+      ) : null}
       {restart.length > 0 ? (
         <Callout tone="info">
           These settings take effect after foundry restarts: {restart.join(', ')}.{' '}

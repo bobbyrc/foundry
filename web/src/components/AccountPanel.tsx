@@ -69,6 +69,17 @@ export function AccountPanel() {
   );
 }
 
+/**
+ * The words for a refused password change. 403 is a wrong current password, 429 is the lockout
+ * after too many tries, and 422 carries the server's own reason (for example, too short). A 401
+ * never gets here as a password problem: it means the session ended, and the app signs out.
+ */
+function passwordChangeMessage(err: unknown): string {
+  if (err instanceof ApiError && err.status === 403) return 'The current password is wrong.';
+  if (err instanceof ApiError && err.status === 429) return 'Too many attempts. Try again in a few minutes.';
+  return errorMessage(err);
+}
+
 function ChangePassword({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -87,8 +98,7 @@ function ChangePassword({ onClose, onSaved }: { onClose: () => void; onSaved: ()
       onSaved();
     } catch (err) {
       setBusy(false);
-      if (err instanceof ApiError && err.status === 401) setError('The current password is wrong.');
-      else setError(errorMessage(err));
+      setError(passwordChangeMessage(err));
     }
   };
 

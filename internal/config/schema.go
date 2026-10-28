@@ -78,7 +78,7 @@ func (b schemaBuilder) structNode(t reflect.Type, base string) SchemaNode {
 		helpKey := base + "." + sf.Name
 		node := b.typeNode(sf.Type, helpKey)
 		node.Key = name
-		node.Help = b.help[helpKey]
+		node.Help = leadWithYAMLKey(b.help[helpKey], sf.Name, name)
 		fields = append(fields, node)
 	}
 	return SchemaNode{Type: "section", Fields: fields}
@@ -120,6 +120,18 @@ func (b schemaBuilder) typeNode(t reflect.Type, helpKey string) SchemaNode {
 		return SchemaNode{Type: "bool"}
 	}
 	panic(fmt.Sprintf("config schema: %s has unsupported type %s", helpKey, t))
+}
+
+// leadWithYAMLKey rewrites help text that opens with the Go field name, such as "AllowedHosts are
+// extra ...", so that it opens with the setting as the user sees it in the file: "Allowed hosts are
+// extra ...". The key is humanized: underscores become spaces and the first letter is capitalised.
+func leadWithYAMLKey(help, goName, key string) string {
+	rest, ok := strings.CutPrefix(help, goName+" ")
+	if !ok {
+		return help
+	}
+	label := strings.ReplaceAll(key, "_", " ")
+	return strings.ToUpper(label[:1]) + label[1:] + " " + rest
 }
 
 // hasOption reports whether a yaml tag's options (the part after the first comma) include opt.

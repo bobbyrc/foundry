@@ -34,11 +34,15 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
   - 401 no valid token or session. A wrong username or password on sign-in also gets 401, with
     the same message for both.
   - 403 `"forbidden"`: signed in, or with the token, but the role or token may not do this. Also
-    `"cross-origin request refused"` for a cross-site browser write.
+    `"cross-origin request refused"` for a cross-site browser write, and `"the current password is
+    wrong"` from `POST /auth/password`. A 403 there does not sign the person out; only 401 does.
   - 404 not found; 409 conflict (including `"that username is taken"`, `"an owner account already
     exists"` and removing the last owner); 429 too many failed sign-ins for one username (five
-    within 15 minutes; the lock is in memory and a restart clears it); 500 internal (the message is
+    within 15 minutes; the lock is in memory and a restart clears it), or too many wrong current
+    passwords on `POST /auth/password`; 500 internal (the message is
     hidden and the error is logged).
+  - 503 `"busy; try again"`: the server is already running its maximum of four password checks
+    (sign-in, setup and password change) and none freed within five seconds. Retry after a moment.
   - 422 the input is well formed but not acceptable. Usually `{"error": "..."}`. A config that does
     not validate gets `{"error": "...", "problems": [{"path","message"}]}`, where `path` is the
     dotted setting (`""` when the message names none).
@@ -53,10 +57,10 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 |---|---|---|
 | `GET /health` | | `{"ok":true,"version":"…"}` |
 | `GET /auth/state` | | `{"setup_required":bool,"user":User\|null}` (never 401) |
-| `POST /auth/setup` | `{"username","password"}`; only while no user exists | `User` and sets the cookie (200); 409 once a user exists |
-| `POST /auth/login` | `{"username","password"}` | `User` and sets the cookie (200); 401 wrong credentials; 429 locked |
+| `POST /auth/setup` | `{"username","password"}`; only while no user exists | `User` and sets the cookie (200); 409 once a user exists; 503 busy |
+| `POST /auth/login` | `{"username","password"}` | `User` and sets the cookie (200); 401 wrong credentials; 429 locked; 503 busy |
 | `POST /auth/logout` | | 204, clears the cookie; session only (token gets 403) |
-| `POST /auth/password` | `{"current","new"}` | 204; 401 wrong current password; other sessions end; session only |
+| `POST /auth/password` | `{"current","new"}` | 204; 403 wrong current password; 429 too many wrong guesses (same count rules as sign-in, keyed to the user); 503 busy; other sessions end; session only |
 | `GET /users` | | `[]User` (owner) |
 | `POST /users` | `{"username","password","role"}` | `User` (201, owner); 409 taken |
 | `POST /users/{name}/role` | `{"role"}` | `User` (owner); 409 last owner |

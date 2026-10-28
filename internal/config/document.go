@@ -27,13 +27,21 @@ type Problem struct {
 	Message string `json:"message"`
 }
 
+// maxDocumentNodes caps how many YAML nodes DocumentTree visits. An alias ("*a") is expanded at
+// each use, so a few hundred bytes of YAML can describe billions of nodes. The cap stops that
+// before it exhausts memory. A real config is far below it.
+const maxDocumentNodes = 100_000
+
+var errDocumentTooLarge = errors.New("config document is too large or has too many aliases")
+
 // DocumentTree parses the file WITHOUT ${NAME} expansion (so references stay as written) into JSON-compatible values: map[string]any, []any, string, int64 or float64, bool, nil. An empty file gives map[string]any{}.
 func DocumentTree(text []byte) (any, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(text, &doc); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
-	v, err := treeValue(&doc)
+	b := &treeBuilder{}
+	v, err := b.value(&doc)
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +51,17 @@ func DocumentTree(text []byte) (any, error) {
 	return v, nil
 }
 
-// treeValue converts one YAML node into a JSON-compatible value.
-func treeValue(n *yaml.Node) (any, error) {
+// treeBuilder converts a YAML node tree into JSON-compatible values, counting the nodes it visits.
+type treeBuilder struct {
+	visited int
+}
+
+// value converts one YAML node into a JSON-compatible value.
+func (b *treeBuilder) value(n *yaml.Node) (any, error) {
+	b.visited++
+	if b.visited > maxDocumentNodes {
+		return nil, errDocumentTooLarge
+	}
 	switch n.Kind {
 	case 0:
 		return nil, nil
@@ -52,9 +69,9 @@ func treeValue(n *yaml.Node) (any, error) {
 		if len(n.Content) == 0 {
 			return nil, nil
 		}
-		return treeValue(n.Content[0])
+		return b.value(n.Content[0])
 	case yaml.AliasNode:
-		return treeValue(n.Alias)
+		return b.value(n.Alias)
 	case yaml.MappingNode:
 		m := make(map[string]any, len(n.Content)/2)
 		for i := 0; i+1 < len(n.Content); i += 2 {
@@ -62,7 +79,7 @@ func treeValue(n *yaml.Node) (any, error) {
 			if k.Kind != yaml.ScalarNode {
 				return nil, fmt.Errorf("line %d: mapping keys must be scalars", k.Line)
 			}
-			v, err := treeValue(n.Content[i+1])
+			v, err := b.value(n.Content[i+1])
 			if err != nil {
 				return nil, err
 			}
@@ -72,7 +89,7 @@ func treeValue(n *yaml.Node) (any, error) {
 	case yaml.SequenceNode:
 		list := make([]any, 0, len(n.Content))
 		for _, c := range n.Content {
-			v, err := treeValue(c)
+			v, err := b.value(c)
 			if err != nil {
 				return nil, err
 			}

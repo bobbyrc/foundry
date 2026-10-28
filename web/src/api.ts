@@ -1,7 +1,9 @@
 // One typed function per route in docs/api.md. Browser calls authenticate with the session
 // cookie that the server set at sign-in, which the browser sends by itself, so no call carries
 // a credential here. A 401 on a normal call dispatches UNAUTHORIZED_EVENT (the session ended).
-// The /auth/* calls pass auth:false, so a wrong password is not mistaken for an expired session.
+// Sign-in, setup and the state check pass auth:false: they run before there is a session, so a
+// 401 from them is a wrong password, not an expired session. Sign-out and password change run
+// inside a session, so a 401 from them means the session is gone and the app must sign in again.
 import { UNAUTHORIZED_EVENT } from './auth';
 import type {
   AgentView,
@@ -85,7 +87,7 @@ async function request<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-// ---- accounts and sessions (no session yet, so auth:false) ----
+// ---- accounts and sessions ----
 
 export const getAuthState = () => request<AuthStateResponse>('GET', '/auth/state', { auth: false });
 
@@ -95,10 +97,11 @@ export const setupOwner = (username: string, password: string) =>
 export const login = (username: string, password: string) =>
   request<User>('POST', '/auth/login', { body: { username, password }, auth: false });
 
-export const logout = () => request<void>('POST', '/auth/logout', { auth: false });
+export const logout = () => request<void>('POST', '/auth/logout');
 
+/** A wrong current password is 403 (not 401), so a 401 here still means the session ended. */
 export const changePassword = (current: string, next: string) =>
-  request<void>('POST', '/auth/password', { body: { current, new: next }, auth: false });
+  request<void>('POST', '/auth/password', { body: { current, new: next } });
 
 // ---- users (owner only) ----
 
