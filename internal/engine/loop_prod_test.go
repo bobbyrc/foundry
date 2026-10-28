@@ -149,7 +149,7 @@ func TestLoopProdIncidentIncludesServiceLogs(t *testing.T) {
 	if len(incidents) != 1 {
 		t.Fatalf("got %d incidents, want 1", len(incidents))
 	}
-	want := "\n## Evidence\n\n```\n== service logs (echo prod-log-line) ==\nprod-log-line\n```\n"
+	want := "\n## Evidence\n\n" + evidenceNote + "\n\n```\n== service logs (echo prod-log-line) ==\nprod-log-line\n```\n"
 	if !strings.Contains(incidents[0].Body, want) {
 		t.Fatalf("incident body lacks the evidence section:\n%s", incidents[0].Body)
 	}

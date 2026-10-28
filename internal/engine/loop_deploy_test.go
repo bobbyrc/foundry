@@ -297,7 +297,7 @@ func TestLoopDeployFailureIncidentHasOutputAndServiceLogs(t *testing.T) {
 		t.Fatalf("got %d incidents, want 1", len(incidents))
 	}
 	body := incidents[0].Body
-	if !strings.Contains(body, "\n## Evidence\n\n```\n== deploy output ==\ncompiling app\nlinking app\n") ||
+	if !strings.Contains(body, "\n## Evidence\n\n"+evidenceNote+"\n\n```\n== deploy output ==\ncompiling app\nlinking app\n") ||
 		!strings.Contains(body, "service-line-2\n```\n") {
 		t.Fatalf("incident body has no evidence section with both outputs:\n%s", body)
 	}
@@ -434,7 +434,7 @@ func TestLoopDeployNoLogsCommandAddsNoEvidence(t *testing.T) {
 func TestEvidenceSectionKeepsNewestOutput(t *testing.T) {
 	long := strings.Repeat("a", 20<<10) + "NEWEST"
 	section := evidenceSection(long)
-	if len(section) > evidenceCap+64 {
+	if len(section) > evidenceCap+64+len(evidenceNote) {
 		t.Fatalf("section is %d bytes, want about %d", len(section), evidenceCap)
 	}
 	if !strings.Contains(section, "earlier output truncated") || !strings.HasSuffix(strings.TrimSuffix(section, "```\n"), "NEWEST\n") {
