@@ -147,7 +147,9 @@ projects:
     deploy:
       type: command                    # runs the commands under options below
       options:
-        # Shell commands for the "command" deploy type.
+        # Shell commands for the "command" deploy type. When the command exits, foundry kills its
+        # whole process group, so a deploy that starts a long-running server must detach it into
+        # its own session (e.g. `setsid`, launchd, systemd); `nohup cmd &` is not enough.
         deploy: "vercel deploy --prod --yes"
         # $FOUNDRY_ROLLBACK_ID is set by foundry to the release to roll back to.
         rollback: "vercel rollback $FOUNDRY_ROLLBACK_ID --yes"
