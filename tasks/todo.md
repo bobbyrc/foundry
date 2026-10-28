@@ -35,7 +35,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 
 Overnight 2026-10-27/28. Branch `init` (pushed), mirrored to `dogfood`, which is where the factory's
 own PRs land. All verification is on the final tree: go vet, gofmt and `go test -race ./...`
-pass, as do the web typecheck, 57 vitest tests and the build.
+pass, as do the web typecheck, 56 vitest tests and the build.
 
 What exists: a Go daemon plus CLI and an installable web UI (PWA). It runs Claude Code and Codex
 (and any `exec` harness) as roles. It takes work from GitHub issues, exec intake sources, chat
@@ -45,7 +45,7 @@ auto-merge. Each merge is released and its health verified, with automatic rollb
 with evidence, and SRE triage. Production signals become incidents. Issues are closed on merge,
 and friction becomes issues.
 
-Proven live on this repo: about 25 factory PRs merged on their own, every release verified on a
+Proven live on this repo: 20 factory PRs merged on their own, every release verified on a
 local staging copy, a rollback drill, a prod_watch drill, a Codex smoke run, orchestrator chat
 (read-only questions and delegation), and the in-repo release pipeline (examples/dogfood).
 
