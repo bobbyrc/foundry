@@ -190,7 +190,8 @@ func TestWaitNonZeroExitWithBackgroundChildIsError(t *testing.T) {
 	require.NoError(t, readErr)
 	grandchild, convErr := strconv.Atoi(strings.TrimSpace(string(raw)))
 	require.NoError(t, convErr)
-	t.Cleanup(func() { _ = KillGroup(grandchild, syscall.SIGKILL) })
+	t.Cleanup(func() { _ = KillGroup(cmd.Process.Pid, syscall.SIGKILL) })
+	assert.True(t, waitGone(grandchild, 2*time.Second), "the leftover child must be killed after a non-zero exit")
 }
 
 func TestWaitTimeoutWithBackgroundChildIsError(t *testing.T) {
