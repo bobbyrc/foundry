@@ -2,6 +2,7 @@ package engine
 
 import (
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/bobbyrc/foundry/internal/domain"
@@ -48,6 +49,29 @@ func TestIssueReportDoneWithoutPRCommentsOnce(t *testing.T) {
 
 	// The same status again adds nothing.
 	lpSetStatus(t, env, task.ID, func(x *domain.Task) { x.Summary = "again" })
+	require.Len(t, env.fake.Comments[issue.Number], 1)
+}
+
+func TestIssueReportConcurrentSameStatusCommentsOnce(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	issue := env.fake.AddIssue("Racy report", "Two writes of the same status.")
+	task, err := env.st.CreateTask(env.ctx, domain.Task{
+		Project: "demo", Kind: domain.KindIssue, Title: issue.Title, Body: issue.Body,
+		Source: "github_issue", SourceRef: "github_issue:" + strconv.Itoa(issue.Number),
+		Status: domain.TaskDone, Summary: "Nothing to change.",
+	})
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			env.e.reportToIssue(env.ctx, task)
+		}()
+	}
+	wg.Wait()
+
 	require.Len(t, env.fake.Comments[issue.Number], 1)
 }
 

@@ -357,6 +357,64 @@ func TestLoopDeployServiceLogsRunInProjectDirWithProjectEnv(t *testing.T) {
 	}
 }
 
+func TestLoopDeployEvidenceRedactsProjectSecrets(t *testing.T) {
+	doc := lpDoc(t, t.TempDir(), "    env:\n      STAGING_API_TOKEN: tok-1234567890\n    deploy:\n      type: test\n      logs: echo \"token is $STAGING_API_TOKEN\"\n", "")
+	env := lpNewEngine(t, doc)
+	lpWithOutput(env, "deploying with tok-1234567890\n")
+
+	rel := lpFailReleaseWithOutput(t, env)
+
+	if !strings.Contains(rel.Log, "***") || strings.Contains(rel.Log, "tok-1234567890") {
+		t.Fatalf("release log %q, want the token redacted", rel.Log)
+	}
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 {
+		t.Fatalf("got %d incidents, want 1", len(incidents))
+	}
+	if body := incidents[0].Body; !strings.Contains(body, "***") || strings.Contains(body, "tok-1234567890") {
+		t.Fatalf("incident body, want the token redacted:\n%s", body)
+	}
+}
+
+func TestLoopDeployRollbackFailureRedactsSecrets(t *testing.T) {
+	health := lpNewHealth(t)
+	doc := lpDoc(t, lpPath(t), "    env:\n      STAGING_API_TOKEN: tok-1234567890\n    deploy:\n      type: test\n      verify_for: 10m\n      health_url: "+health.srv.URL+"\n", "")
+	env := lpNewEngine(t, doc)
+	if _, err := env.st.CreateDeployment(env.ctx, domain.Deployment{
+		Project: "demo", Ref: "prev-sha", ProviderID: "prov-old", State: domain.DeployHealthy,
+		StartedAt: env.now.Add(-time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lpMergedTask(t, env, "Break things", "sha-secret")
+	// The test deployer runs no commands, so the rollback error carries the secret directly, as
+	// a rollback command's output tail would. Only failed health checks roll back.
+	env.dep.rollbackErr = errors.New("rollback failed tok-1234567890")
+
+	env.run(loopDeployWatch)
+	env.dep.status = deploy.Status{State: deploy.StateReady}
+	env.run(loopDeployWatch)
+	health.code.Store(500)
+	env.run(loopDeployWatch)
+	env.run(loopDeployWatch)
+	env.run(loopDeployWatch) // third failure in a row: rollback is attempted and fails
+
+	rel := lpDeployments(t, env)[0]
+	if !strings.Contains(rel.Notes, "ROLLBACK FAILED") {
+		t.Fatalf("notes %q, want the rollback failure", rel.Notes)
+	}
+	if !strings.Contains(rel.Notes, "***") || strings.Contains(rel.Notes, "tok-1234567890") {
+		t.Fatalf("notes %q, want the token redacted", rel.Notes)
+	}
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 {
+		t.Fatalf("got %d incidents, want 1", len(incidents))
+	}
+	if body := incidents[0].Body; !strings.Contains(body, "***") || strings.Contains(body, "tok-1234567890") {
+		t.Fatalf("incident body, want the token redacted:\n%s", body)
+	}
+}
+
 func TestLoopDeployNoLogsCommandAddsNoEvidence(t *testing.T) {
 	env := lpNewEngine(t, lpDeployDoc(t, ""))
 	env.dep.status = deploy.Status{State: deploy.StateError, Message: "boom"}

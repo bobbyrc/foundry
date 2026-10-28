@@ -22,6 +22,10 @@ func (e *Engine) reportToIssue(ctx context.Context, t domain.Task) {
 	if !ok || !t.Status.Terminal() || t.PRNumber != 0 {
 		return
 	}
+	// Held from the re-read to the save, so a concurrent report of the same status sees the
+	// cursor this one saves and does not post again.
+	e.issueReportMu.Lock()
+	defer e.issueReportMu.Unlock()
 	// The status may have moved on since the write that started this goroutine.
 	cur, err := e.d.Store.GetTask(ctx, t.ID)
 	if err != nil {

@@ -24,6 +24,10 @@ const outputTail = 2 << 10
 // deployOutputTail is how many trailing bytes of a deploy command's output are kept on its Handle.
 const deployOutputTail = 4 << 10
 
+// deployStdoutTail is how many trailing bytes of a deploy command's stdout are kept. Only the end
+// of stdout is parsed (its last non-empty line), so more than this is never needed.
+const deployStdoutTail = 64 << 10
+
 func init() {
 	Register("command", newCommandDeployer)
 }
@@ -147,9 +151,10 @@ func (d *commandDeployer) run(ctx context.Context, label, command string, wait f
 // foundry reads each file once, up to its size when the command exits, so later writes by
 // leftover processes are never read. The files are removed before runFiles returns.
 //
-// It returns the command's stdout, which the caller parses (its last non-empty line is the
-// result), and the last deployOutputTail bytes of stdout followed by stderr. Unlike the pipe
-// version, the two streams are not interleaved in the order they were written.
+// It returns the last deployStdoutTail bytes of stdout, which the caller parses (its last
+// non-empty line is the result), and the last deployOutputTail bytes of stdout followed by
+// stderr. Unlike the pipe version, the two streams are not interleaved in the order they were
+// written.
 func (d *commandDeployer) runFiles(ctx context.Context, label, command string, wait func(*exec.Cmd) error, extra ...string) (stdout, output string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
@@ -173,9 +178,9 @@ func (d *commandDeployer) runFiles(ctx context.Context, label, command string, w
 		err = wait(cmd)
 	}
 
-	var outBuf bytes.Buffer
+	outTail := &tailWriter{max: deployStdoutTail}
 	combined := &tailWriter{max: deployOutputTail}
-	readErr := readBack(outFile, io.MultiWriter(&outBuf, combined))
+	readErr := readBack(outFile, io.MultiWriter(outTail, combined))
 	if errR := readBack(errFile, combined); readErr == nil {
 		readErr = errR
 	}
@@ -185,7 +190,7 @@ func (d *commandDeployer) runFiles(ctx context.Context, label, command string, w
 	if err != nil {
 		return "", "", fmt.Errorf("deploy: %s command failed: %w: output: %s", label, err, tail(strings.TrimSpace(combined.String())))
 	}
-	return outBuf.String(), combined.String(), nil
+	return outTail.String(), combined.String(), nil
 }
 
 // newCmd builds the sh -c command for command in the project directory. Its environment is the

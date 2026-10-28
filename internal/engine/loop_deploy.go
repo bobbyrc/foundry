@@ -150,7 +150,7 @@ func (e *Engine) startRelease(ctx context.Context, p *config.Project, dep deploy
 	if _, err := e.setDeployment(ctx, d.ID, func(x *domain.Deployment) error {
 		x.ProviderID = handle.ID
 		x.URL = handle.URL
-		x.Log = deployOutputEvidence(handle.Output)
+		x.Log = deployOutputEvidence(redactSecrets(handle.Output, evidenceEnv(p)))
 		x.State = domain.DeployDeploying
 		return nil
 	}); err != nil {
@@ -298,6 +298,12 @@ func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.
 		}
 	}
 
+	// One redaction point, before anything is stored or sent. The reason is deploy output, and the
+	// rollback error can carry the output tail of a failed rollback command, so both are covered.
+	env := evidenceEnv(p)
+	reason = redactSecrets(reason, env)
+	notes = redactSecrets(notes, env)
+
 	failed, err := e.setDeployment(ctx, d.ID, func(x *domain.Deployment) error {
 		x.State = state
 		x.Notes = notes
@@ -394,7 +400,8 @@ func deployOutputEvidence(output string) string {
 
 // serviceLogsEvidence runs the project's deploy.logs command and returns its section of the
 // evidence: the last 8KB of its output, plus the reason if it failed or timed out. It returns ""
-// when the project has no logs command. A failing logs command never fails the caller.
+// when the project has no logs command. A failing logs command never fails the caller. The whole
+// section is redacted, so the command line in its header is covered too.
 func serviceLogsEvidence(ctx context.Context, p *config.Project) string {
 	if p.Deploy == nil || p.Deploy.Logs == "" {
 		return ""
@@ -411,7 +418,7 @@ func serviceLogsEvidence(ctx context.Context, p *config.Project) string {
 	} else if out == "" {
 		b.WriteString("(no output)\n")
 	}
-	return b.String()
+	return redactSecrets(b.String(), evidenceEnv(p))
 }
 
 // runServiceLogs runs the project's deploy.logs command with sh -c in the project directory. The

@@ -183,7 +183,11 @@ background process keeps its output working after the command exits: it is not c
 pipe and does not hold foundry waiting. Redirecting its output (`> app.log 2>&1 &`) is still a good
 idea: without it, whatever the service prints after the command exits goes to a deleted temporary
 file that keeps growing until the service stops. The `deploy` result is read from the last non-empty line of stdout, and the incident
-evidence is the last 4 KB of stdout followed by stderr.
+evidence is the last 4 KB of stdout followed by stderr. Before evidence (deploy output, `logs` output,
+failure notes) is stored or handed to an agent, foundry replaces secret values with `***`: the value
+of every environment variable (foundry's own and the project's `env`) whose name has a segment such
+as `TOKEN`, `SECRET`, `PASSWORD`, `KEY` or `AUTH`, and any URL with credentials in it. Values shorter
+than 8 characters are left alone.
 
 | Option     | Required | Default | Meaning                                                              |
 |------------|----------|---------|----------------------------------------------------------------------|

@@ -111,6 +111,17 @@ func TestCommandDeployOutputKeepsLastFourKilobytes(t *testing.T) {
 	assert.NotContains(t, h.Output, "line 100\n")
 }
 
+func TestCommandDeployReadsReleaseFromEndOfLongStdout(t *testing.T) {
+	// About 280KB of filler on stdout, more than deployStdoutTail: the URL on the last line is
+	// still found.
+	d := newTestCommand(t, map[string]any{
+		"deploy": `i=0; while [ $i -lt 4000 ]; do echo "filler line $i ................................................"; i=$((i+1)); done; echo https://example.com/release-42`,
+	}, nil)
+	h, err := d.Deploy(context.Background(), "sha")
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/release-42", h.URL)
+}
+
 func TestCommandDeployNoOutputIsEmpty(t *testing.T) {
 	d := newTestCommand(t, map[string]any{"deploy": `true`}, nil)
 	h, err := d.Deploy(context.Background(), "sha")
