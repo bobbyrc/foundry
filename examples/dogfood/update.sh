@@ -6,10 +6,11 @@
 # that fails health is undone with the previous binary.
 #
 # Needs DOGFOOD (see README.md) and go/node on PATH (`mise exec -- examples/dogfood/update.sh`).
-# The config is FOUNDRY_CONFIG, else $DOGFOOD/foundry.yaml, else the example in the clone. The
-# daemon is started with $DOGFOOD/run-daemon.sh when that file exists (a machine's own launcher),
-# otherwise with `foundry serve`. Never run this from an agent that foundry runs: restarting the
-# daemon ends every run it supervises.
+# The config is FOUNDRY_CONFIG, else $DOGFOOD/foundry.yaml, else the example in the clone. When
+# the launchd service is installed (`foundry service install`), launchd restarts the daemon;
+# otherwise it is started with $DOGFOOD/run-daemon.sh when that file exists (a machine's own
+# launcher), or with `foundry serve`. Never run this from an agent that foundry runs: restarting
+# the daemon ends every run it supervises.
 set -euo pipefail
 
 DOGFOOD=${DOGFOOD:?set DOGFOOD to the dogfood directory}
@@ -25,7 +26,6 @@ fi
 export FOUNDRY_CONFIG
 
 bin=$DOGFOOD/foundry
-log=$DOGFOOD/serve.log
 repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 addr=$(sed -n 's/^  addr: *//p' "$FOUNDRY_CONFIG" | head -n 1)
 port=${addr##*:}
@@ -48,6 +48,29 @@ if [ "$new" = "$running" ]; then
   echo "update.sh: already running $new"
   exit 0
 fi
+
+# Under launchd (`foundry service install`) the service restarts the binary and config its plist
+# names, so they must be this script's. A service that is installed but not running cannot be
+# restarted with launchctl kickstart, so stop rather than guess.
+service=no
+log=$DOGFOOD/serve.log
+svc=$("$bin" service status 2>/dev/null || true)
+case "$(head -n 1 <<<"$svc")" in
+  running*)
+    service=yes
+    log=$(sed -n 's/^log: //p' <<<"$svc")
+    plist=$HOME/Library/LaunchAgents/io.foundry.serve.plist
+    if ! grep -qF "<string>$bin</string>" "$plist" || ! grep -qF "<string>$FOUNDRY_CONFIG</string>" "$plist"; then
+      echo "update.sh: the launchd service does not run $bin with $FOUNDRY_CONFIG (see $plist);" >&2
+      echo "  reinstall it: $bin service uninstall && $bin service install --config $FOUNDRY_CONFIG" >&2
+      exit 1
+    fi
+    ;;
+  installed*)
+    echo "update.sh: the launchd service is installed but not running; start it or reinstall it first" >&2
+    exit 1
+    ;;
+esac
 
 # The status probe must succeed: an erroring command prints nothing, which would look idle.
 status=$("$bin" status)
@@ -82,13 +105,21 @@ stop_daemon() {
   exit 1
 }
 
-start_daemon() {
-  if [ -x "$DOGFOOD/run-daemon.sh" ]; then
-    nohup "$DOGFOOD/run-daemon.sh" >>"$log" 2>&1 </dev/null &
+# restart_daemon restarts the daemon on the binary now at $bin and waits until it answers with
+# version $1. Under launchd, killing the daemon would only make launchd start it again, so the
+# service is restarted through launchd (`foundry service install` on an installed service).
+restart_daemon() {
+  if [ "$service" = yes ]; then
+    "$bin" service install >/dev/null || return 1
   else
-    nohup "$bin" serve --config "$FOUNDRY_CONFIG" >>"$log" 2>&1 </dev/null &
+    stop_daemon
+    if [ -x "$DOGFOOD/run-daemon.sh" ]; then
+      nohup "$DOGFOOD/run-daemon.sh" >>"$log" 2>&1 </dev/null &
+    else
+      nohup "$bin" serve --config "$FOUNDRY_CONFIG" >>"$log" 2>&1 </dev/null &
+    fi
+    disown
   fi
-  disown
   for _ in $(seq 1 60); do
     [ "$(curl -sf "http://$addr/api/v1/health" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')" = "$1" ] && return 0
     sleep 0.5
@@ -99,12 +130,10 @@ start_daemon() {
 old=$("$bin" version | awk '{print $2}')
 cp "$bin" "$bin.prev"
 cp "$tmp/foundry" "$bin.new" && mv "$bin.new" "$bin"
-stop_daemon
-if ! start_daemon "$new"; then
+if ! restart_daemon "$new"; then
   echo "update.sh: $new did not come up healthy; restoring $old (see $log)" >&2
-  stop_daemon
   cp "$bin.prev" "$bin.new" && mv "$bin.new" "$bin"
-  start_daemon "$old" || echo "update.sh: $old did not come up either" >&2
+  restart_daemon "$old" || echo "update.sh: $old did not come up either" >&2
   exit 1
 fi
 [ "$was_paused" = yes ] || "$bin" resume >/dev/null

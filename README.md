@@ -162,6 +162,12 @@ from `~/Library/LaunchAgents`. The daemon's log is `foundry.log` in the config's
 Run `service install` once, and do not also keep `foundry serve` running in a terminal: two daemons
 cannot both listen on the same address.
 
+launchd starts the daemon without your shell's environment. `service install` therefore records,
+in the plist, the `PATH` of the shell you run it from and every variable your config references
+as `${NAME}`. The plist is readable only by you, because those values can be secrets. Install
+from a shell where `foundry serve` works. To change a recorded value, run `service uninstall`
+and then `service install` again.
+
 ### Retro loop and friction
 
 Agents list anything that slowed them down as `friction`. Foundry files it as a GitHub issue and
