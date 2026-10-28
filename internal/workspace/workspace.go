@@ -427,6 +427,30 @@ func (m *Manager) Diff(ctx context.Context, r Repo, base, head string) ([]policy
 	return changes, nil
 }
 
+// IsAncestor reports whether commit ancestor is an ancestor of descendant, or the same commit, in
+// r's clone. It fetches origin first, so a commit pushed since the last fetch is found. A commit
+// the clone does not have is an error, not a false answer: a caller that treats "unknown" as "not
+// contained" would act on a guess.
+func (m *Manager) IsAncestor(ctx context.Context, r Repo, ancestor, descendant string) (bool, error) {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
+	if _, err := git(ctx, r.Path, "fetch", "origin", "--prune"); err != nil {
+		return false, fmt.Errorf("fetch %s: %w", r.Name, err)
+	}
+	code, err := gitExitCode(ctx, r.Path, "merge-base", "--is-ancestor", ancestor, descendant)
+	if err != nil {
+		return false, err
+	}
+	switch code {
+	case 0:
+		return true, nil
+	case 1:
+		return false, nil
+	default:
+		return false, fmt.Errorf("is-ancestor %s %s: git exit %d", ancestor, descendant, code)
+	}
+}
+
 // numstatCount reads one count column; git prints "-" for binary files, which count as zero.
 func numstatCount(s string) (int, error) {
 	if s == "-" {

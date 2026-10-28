@@ -37,6 +37,10 @@ const (
 	evidenceCap = 12 << 10
 )
 
+// releaseFailedPrefix starts the reason of a merged task that is blocked because its release
+// failed. resolveShippedTasks finds those tasks by it.
+const releaseFailedPrefix = "release failed: "
+
 // serviceLogsTimeout bounds one run of the project's deploy.logs command. It is a variable so
 // tests can shorten it.
 var serviceLogsTimeout = 30 * time.Second
@@ -273,8 +277,43 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 			}
 		}
 	}
+	e.resolveShippedTasks(ctx, p, d.Ref)
 	e.notify(ctx, notify.PriorityLow, "Deployed: "+label, healthy.URL, "/deploys")
 	return nil
+}
+
+// resolveShippedTasks marks a blocked task done when its own release failed but a later healthy
+// release contains its merge commit: the code shipped, so the failed release no longer holds the
+// task back. Errors are logged, never returned, because a healthy release must not be undone by
+// this bookkeeping.
+func (e *Engine) resolveShippedTasks(ctx context.Context, p *config.Project, ref string) {
+	blocked, err := e.d.Store.ListTasks(ctx, store.TaskFilter{
+		Project: p.Name, Statuses: []domain.TaskStatus{domain.TaskBlocked},
+	})
+	if err != nil {
+		e.d.Logger.Warn("deploy watch: list blocked tasks", "project", p.Name, "err", err)
+		return
+	}
+	for _, t := range blocked {
+		if !strings.HasPrefix(t.BlockedReason, releaseFailedPrefix) || t.MergeSHA == "" {
+			continue
+		}
+		shipped, err := e.d.Workspaces.IsAncestor(ctx, e.repoFor(p), t.MergeSHA, ref)
+		if err != nil {
+			e.d.Logger.Warn("deploy watch: check task commit", "task", t.ID, "err", err)
+			continue
+		}
+		if !shipped {
+			continue
+		}
+		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskBlocked}, "released in "+deployShortRef(ref), func(x *domain.Task) error {
+			x.Status = domain.TaskDone
+			x.BlockedReason = ""
+			return nil
+		}); err != nil {
+			e.d.Logger.Warn("deploy watch: mark shipped task done", "task", t.ID, "err", err)
+		}
+	}
 }
 
 // failRelease marks a release failed or rolled back, opens an incident task with the evidence,
@@ -355,7 +394,7 @@ func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.
 	}
 
 	if task != nil {
-		e.blockTask(ctx, task.ID, "release failed: "+notes+"; incident task "+incidentID)
+		e.blockTask(ctx, task.ID, releaseFailedPrefix+notes+"; incident task "+incidentID)
 	}
 	e.notify(ctx, notify.PriorityHigh, "Release failed: "+label, notes, "/deploys")
 	return errors.Join(errs...)
