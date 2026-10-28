@@ -60,7 +60,7 @@ export function Deploys() {
       {deployments.isSuccess ? (
         <Table columns={columns} rows={deployments.data} rowKey={(d) => d.id} empty="No deploys yet. Merged work is released here." />
       ) : null}
-      <Modal open={open !== null} title={open ? `Release ${shortSha(open.ref)} log` : ''} onClose={() => setOpen(null)}>
+      <Modal wide open={open !== null} title={open ? `Release ${shortSha(open.ref)} log` : ''} onClose={() => setOpen(null)}>
         <pre className="json">{open?.log}</pre>
       </Modal>
     </>
