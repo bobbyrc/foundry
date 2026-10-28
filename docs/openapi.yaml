@@ -1332,6 +1332,9 @@ components:
           $ref: '#/components/schemas/DeployState'
         notes:
           type: string
+        log:
+          type: string
+          description: 'Evidence gathered for this release: the deploy output tail and, on failure, the deploy.logs output. Secrets are redacted.'
         verifying_since:
           type: string
           format: date-time
