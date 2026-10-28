@@ -73,12 +73,19 @@ human, or when it has used up `max_attempts`. Retry it with a note, or cancel it
   Projects page; this survives restarts, but a `paused: true` in `foundry.yaml` can only be cleared
   in the file. While paused, the `deploy_watch` and `prod_watch` loops keep running, so a release
   already in flight is still health-checked and rolled back.
-- **Project checks.** A project's `checks` (name, `run` shell command, optional `timeout`, default
-  10m) run in the worktree after the agent finishes and before foundry commits and pushes. A failing
-  check re-queues the task with its output, like a CI failure, without spending a CI run.
+- **Project setup and checks.** A project's `setup` commands run in each fresh worktree before the
+  agent starts (install dependencies). Its `checks` (name, `run` shell command, optional `timeout`,
+  default 10m) run after the agent finishes and before foundry commits and pushes. A failing check
+  re-queues the task with its output, like a CI failure, without spending a CI run. Both run with
+  the agent's environment, not foundry's, because they execute code the agent may have written.
   A policy's `require_checks: true` makes a PR with no CI checks wait (then block after 30 minutes)
   instead of counting as "no CI"; use it for repositories that always run CI.
+- **Evidence is redacted, agent text cannot ping.** Deploy output, service logs, loop errors and
+  production signals have secret values (env vars named like `*_TOKEN`, `*_SECRET`, `*_KEY`, and
+  URLs with credentials) replaced with `***` before they are stored or shown to an agent. Agent text
+  posted to GitHub has its @mentions neutralised, so an agent cannot notify people.
 - **Local API.** It listens on `127.0.0.1:7777`. Every call needs the bearer token from `foundry token`.
+  Requests whose Host header is not local or configured are refused (DNS-rebinding guard).
 - **Known limit with Codex.** Claude Code reports refused tool calls in machine-readable form.
   Codex reports sandbox refusals only in prose. For Codex, "a denial stops the task" therefore relies
   on the agent prompt ("if denied, report blocked") and on the stall timeout.
