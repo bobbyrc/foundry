@@ -25,6 +25,10 @@ type Fake struct {
 	Issues   map[int]*scm.Issue
 	Comments map[int][]string
 	Merged   []int
+	// PRBodies holds the latest body given to UpdatePRBody for each PR, and BodyUpdates counts
+	// the calls per PR.
+	PRBodies    map[int]string
+	BodyUpdates map[int]int
 	// DefaultCI is the CI state given to new PRs. Its zero value means scm.CISuccess.
 	DefaultCI scm.CIState
 	// HeadSHA, when set, gives a PR's head commit for a branch; it runs on OpenPR and GetPR.
@@ -42,6 +46,9 @@ func New() *Fake {
 		PRs:      map[int]*scm.PR{},
 		Issues:   map[int]*scm.Issue{},
 		Comments: map[int][]string{},
+
+		PRBodies:    map[int]string{},
+		BodyUpdates: map[int]int{},
 	}
 }
 
@@ -142,6 +149,18 @@ func (f *Fake) FindPR(_ context.Context, head string) (scm.PR, bool, error) {
 	}
 	f.refreshHeadLocked(found)
 	return clonePR(*found), true, nil
+}
+
+// UpdatePRBody records body for PR number, or returns an error wrapping ErrNotFound.
+func (f *Fake) UpdatePRBody(_ context.Context, number int, body string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.PRs[number]; !ok {
+		return fmt.Errorf("fake: update body of PR #%d: %w", number, ErrNotFound)
+	}
+	f.PRBodies[number] = body
+	f.BodyUpdates[number]++
+	return nil
 }
 
 // MergePR merges an open PR. It returns MergeErr when set, and refuses when headSHA is non-empty

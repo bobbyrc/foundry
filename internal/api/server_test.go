@@ -705,6 +705,22 @@ func TestEventsHistory(t *testing.T) {
 	assert.EqualValues(t, 2, evs[0].ID)
 }
 
+func TestEventsHistoryAfterZeroIsNewest(t *testing.T) {
+	x := newHarness(t)
+	ctx := context.Background()
+	for i := 0; i < 5; i++ {
+		_, err := x.bus.Publish(ctx, domain.Event{Type: domain.EvTaskCreated, Message: "m"})
+		require.NoError(t, err)
+	}
+	rec := x.call(t, http.MethodGet, "/api/v1/events/history?after=0&limit=2", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	var evs []domain.Event
+	decode(t, rec, &evs)
+	require.Len(t, evs, 2)
+	assert.EqualValues(t, 4, evs[0].ID, "after=0 on history still means the newest page")
+	assert.EqualValues(t, 5, evs[1].ID)
+}
+
 func TestConversations(t *testing.T) {
 	x := newHarness(t)
 

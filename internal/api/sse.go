@@ -56,7 +56,7 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("after") != "" {
 		cursor := after
 		for {
-			page, err := s.opts.Store.ListEvents(ctx, store.EventFilter{AfterID: cursor, Limit: replayPage})
+			page, err := s.opts.Store.ListEvents(ctx, store.EventFilter{AfterID: cursor, FromStart: true, Limit: replayPage})
 			if err != nil {
 				s.log.Error("api: replay events", "err", err)
 				return

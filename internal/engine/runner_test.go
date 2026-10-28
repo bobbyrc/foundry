@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -289,13 +290,15 @@ func TestRunnerBlockedNotifies(t *testing.T) {
 	got := env.waitStatus(task.ID, domain.TaskBlocked)
 	assert.Equal(t, "agent needs a human: fake needs a human", got.BlockedReason)
 
-	var notified bool
-	for _, ev := range env.events() {
-		if ev.Type == domain.EvNotification && strings.Contains(ev.Message, "Blocked:") {
-			notified = true
+	// The status flips before the notification is emitted, so wait for the event.
+	rtWait(t, 5*time.Second, "a blocked notification event", func() bool {
+		for _, ev := range env.events() {
+			if ev.Type == domain.EvNotification && strings.Contains(ev.Message, "Blocked:") {
+				return true
+			}
 		}
-	}
-	assert.True(t, notified, "a notification event was emitted")
+		return false
+	})
 }
 
 func TestRunnerDeniedBlocksWithoutRetry(t *testing.T) {
@@ -719,4 +722,75 @@ func TestRunnerFrictionDedupesSimilarTitles(t *testing.T) {
 	}
 	assert.Equal(t, 2, counts["Worker sandbox prevents Go HTTP test listeners"])
 	assert.Equal(t, 1, counts["Missing docs for the deploy command"])
+}
+
+// rtBodyScript runs the fake's normal behaviour, then replaces the pr_body in its report with
+// the current value of *body.
+func rtBodyScript(body *atomic.Pointer[string]) hfake.Script {
+	return func(ctx context.Context, spec harness.Spec, emit func(harness.Event)) (harness.Result, error) {
+		res, err := hfake.DefaultScript(ctx, spec, emit)
+		if err != nil {
+			return res, err
+		}
+		path := filepath.Join(spec.Workdir, domain.OutboxDir, domain.ResultFile)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return res, err
+		}
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			return res, err
+		}
+		m["pr_body"] = *body.Load()
+		data, err = json.Marshal(m)
+		if err != nil {
+			return res, err
+		}
+		return res, os.WriteFile(path, data, 0o644)
+	}
+}
+
+// rerun queues a task that is in review again and returns once its second run has published.
+func (env *rtEnv) rerun(id string) domain.Task {
+	env.t.Helper()
+	_, err := env.st.UpdateTask(env.ctx, id, func(x *domain.Task) error {
+		x.Status = domain.TaskQueued
+		return nil
+	})
+	require.NoError(env.t, err)
+	require.Eventually(env.t, func() bool {
+		runs := env.runs(id)
+		return len(runs) == 2 && runs[1].Status == domain.RunSucceeded &&
+			env.task(id).Status == domain.TaskReview
+	}, 20*time.Second, 20*time.Millisecond)
+	return env.task(id)
+}
+
+func TestRunnerRerunRefreshesPRDescription(t *testing.T) {
+	var body atomic.Pointer[string]
+	first, second := "first body", "second body"
+	body.Store(&first)
+	env := rtNewEngine(t, rtOpts{script: rtBodyScript(&body)})
+	task := env.create(domain.Task{Title: "Add greeting", Body: "[fake:commit]"})
+	got := env.waitStatus(task.ID, domain.TaskReview)
+	assert.Zero(t, env.scm.BodyUpdates[got.PRNumber], "a first run opens the PR with its body, no edit")
+
+	body.Store(&second)
+	again := env.rerun(task.ID)
+	assert.Equal(t, got.PRNumber, again.PRNumber)
+	assert.Equal(t, 1, env.scm.BodyUpdates[got.PRNumber])
+	assert.Contains(t, env.scm.PRBodies[got.PRNumber], "second body")
+}
+
+func TestRunnerRerunWithEmptyPRBodyKeepsDescription(t *testing.T) {
+	var body atomic.Pointer[string]
+	first, empty := "first body", ""
+	body.Store(&first)
+	env := rtNewEngine(t, rtOpts{script: rtBodyScript(&body)})
+	task := env.create(domain.Task{Title: "Add greeting", Body: "[fake:commit]"})
+	got := env.waitStatus(task.ID, domain.TaskReview)
+
+	body.Store(&empty)
+	env.rerun(task.ID)
+	assert.Zero(t, env.scm.BodyUpdates[got.PRNumber])
 }

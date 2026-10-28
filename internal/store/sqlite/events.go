@@ -49,8 +49,8 @@ func scanEvent(r rowScanner) (domain.Event, error) {
 	return e, nil
 }
 
-// ListEvents returns events matching f. With AfterID > 0 it returns the next events in ascending
-// order; otherwise the newest Limit events, still ascending.
+// ListEvents returns events matching f. With AfterID > 0 (or FromStart) it returns the next events in
+// ascending order; otherwise the newest Limit events, still ascending.
 func (s *Store) ListEvents(ctx context.Context, f store.EventFilter) ([]domain.Event, error) {
 	var c cond
 	if f.Project != "" {
@@ -61,7 +61,7 @@ func (s *Store) ListEvents(ctx context.Context, f store.EventFilter) ([]domain.E
 	}
 	limit := limitOr(f.Limit, 500)
 	var query string
-	if f.AfterID > 0 {
+	if f.AfterID > 0 || f.FromStart {
 		c.add("id > ?", f.AfterID)
 		query = "SELECT " + eventColumns + " FROM events" + c.where() +
 			" ORDER BY id ASC LIMIT ?"

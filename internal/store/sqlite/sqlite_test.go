@@ -675,3 +675,37 @@ func TestCostSince(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0.0, none, "no runs since: zero, not an error")
 }
+
+func TestListEventsFromStartPages(t *testing.T) {
+	s, err := Open(":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	ctx := context.Background()
+	const total = 1200
+	for i := range total {
+		_, err := s.AppendEvent(ctx, domain.Event{Type: domain.EvSystem, Message: fmt.Sprint(i)})
+		require.NoError(t, err)
+	}
+
+	// Without FromStart, AfterID 0 is still the newest page.
+	newest, err := s.ListEvents(ctx, store.EventFilter{Limit: 500})
+	require.NoError(t, err)
+	require.Len(t, newest, 500)
+	assert.Equal(t, "700", newest[0].Message)
+
+	var got []domain.Event
+	var cursor int64
+	for {
+		page, err := s.ListEvents(ctx, store.EventFilter{AfterID: cursor, FromStart: true, Limit: 500})
+		require.NoError(t, err)
+		got = append(got, page...)
+		if len(page) < 500 {
+			break
+		}
+		cursor = page[len(page)-1].ID
+	}
+	require.Len(t, got, total)
+	for i, e := range got {
+		assert.Equal(t, fmt.Sprint(i), e.Message)
+	}
+}

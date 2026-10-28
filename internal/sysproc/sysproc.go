@@ -47,21 +47,21 @@ func KillGroup(pid int, sig syscall.Signal) error {
 	return err
 }
 
-// Wait waits for a cmd started with Start after Configure. It differs from cmd.Wait in one case: a
-// command that exits 0 but leaves a background child holding its stdout or stderr. Go reports
-// that as exec.ErrWaitDelay once WaitDelay passes, which would turn a successful command into a
-// failure. Wait treats it as success and kills the leftover process group, since the command has
-// finished and the child is no longer wanted. A non-zero exit, a signal or a timeout is still
-// returned as the error.
+// Wait waits for a cmd started with Start after Configure, then kills any process its group still
+// holds: once the command has finished, a background child it left behind is no longer wanted,
+// whatever the exit status. It differs from cmd.Wait in one more case: a command that exits 0 but
+// leaves a child holding its stdout or stderr. Go reports that as exec.ErrWaitDelay once WaitDelay
+// passes, which would turn a successful command into a failure, so Wait treats it as success. A
+// non-zero exit, a signal or a timeout is returned unchanged as the error; a failed group kill
+// never replaces it.
 func Wait(cmd *exec.Cmd) error {
 	err := cmd.Wait()
+	var kerr error
+	if cmd.Process != nil {
+		kerr = KillGroup(cmd.Process.Pid, syscall.SIGKILL)
+	}
 	if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
-		if cmd.Process != nil {
-			if kerr := KillGroup(cmd.Process.Pid, syscall.SIGKILL); kerr != nil {
-				return kerr
-			}
-		}
-		return nil
+		return kerr
 	}
 	return err
 }
