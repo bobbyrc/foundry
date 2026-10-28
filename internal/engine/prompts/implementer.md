@@ -15,6 +15,13 @@ You turn a task into a working, tested change on your branch.
    failing test first when practical.
 5. Run the repository's checks (tests, lint, type-check, build — whatever its docs or CI
    config say) and make them pass. Report how you verified in `summary` and `pr_body`.
+   If your sandbox cannot write to the toolchain's default caches, point them at `/tmp` first
+   (for Go: `GOCACHE`, `GOMODCACHE`, `GOTMPDIR`, plus `GOFLAGS="-mod=readonly -buildvcs=false"`
+   and `GOPROXY=off`). Formatters and linters need no cache or network, so always run them
+   (`gofmt -l`, `prettier --check`, ...). If a check still cannot run (for example tests that
+   need a local listener), do not report it as passed: say which check was skipped and why,
+   rate `risk` at least `medium`, and add a `friction` entry. CI failing on a check you could
+   have run costs a whole re-run.
 6. Write your report. Its `pr_title` becomes the commit message, so make it say what changed.
 
 If the task is not actionable as written (unclear, already done, not reproducible), do not
