@@ -41,6 +41,8 @@ type fakeCtl struct {
 	chatConvID  string
 	chatText    string
 	reloadCalls int
+	// projectPaused maps a project to its runtime pause owner ("owner") when set.
+	projectPaused map[string]string
 }
 
 func (f *fakeCtl) note(name string) error {
@@ -129,6 +131,38 @@ func (f *fakeCtl) SetPaused(_ context.Context, p bool) error {
 	defer f.mu.Unlock()
 	f.paused = p
 	return f.note(fmt.Sprintf("SetPaused:%t", p))
+}
+
+func (f *fakeCtl) ProjectPausedBy(project string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.cfg != nil && f.cfg.Projects[project] != nil && f.cfg.Projects[project].Paused {
+		return "config"
+	}
+	return f.projectPaused[project]
+}
+
+func (f *fakeCtl) SetProjectPaused(_ context.Context, project string, paused bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.note(fmt.Sprintf("SetProjectPaused:%s:%t", project, paused)); err != nil {
+		return err
+	}
+	if f.cfg.Projects[project] == nil {
+		return invalidf("unknown project %q", project)
+	}
+	if !paused && f.cfg.Projects[project].Paused {
+		return fmt.Errorf("%w: project %q is paused in config", ErrConflict, project)
+	}
+	if f.projectPaused == nil {
+		f.projectPaused = map[string]string{}
+	}
+	if paused {
+		f.projectPaused[project] = "owner"
+	} else {
+		delete(f.projectPaused, project)
+	}
+	return nil
 }
 
 func (f *fakeCtl) SendChat(_ context.Context, convID, text string) (domain.ChatMessage, error) {
@@ -433,6 +467,75 @@ func TestApprovals(t *testing.T) {
 	decode(t, rec, &dec)
 	assert.Equal(t, domain.ApprovalApproved, dec.Status)
 	assert.Equal(t, pending[0].ID+":true:ship it", x.ctl.decided)
+}
+
+func TestDecideApprovalRequiresApprove(t *testing.T) {
+	for _, body := range []string{`{}`, `{"note":"no decision"}`, `{"approve":null}`} {
+		x := newHarness(t)
+		rec := x.call(t, http.MethodPost, "/api/v1/approvals/a1/decide", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, body)
+		assert.JSONEq(t, `{"error":"approve is required"}`, rec.Body.String(), body)
+		assert.Empty(t, x.ctl.decided, "an omitted approve must not reach the controller: %s", body)
+	}
+
+	x := newHarness(t)
+	rec := x.call(t, http.MethodPost, "/api/v1/approvals/a1/decide", `{"approve":false}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "a1:false:", x.ctl.decided, "approve:false is a rejection, not a missing field")
+}
+
+func TestProjectPauseAndResume(t *testing.T) {
+	x := newHarness(t)
+
+	rec := x.call(t, http.MethodPost, "/api/v1/projects/foundry/pause", "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"paused":true,"paused_by":"owner"}`, rec.Body.String())
+
+	var projects []struct {
+		Name     string `json:"name"`
+		Paused   bool   `json:"paused"`
+		PausedBy string `json:"paused_by"`
+	}
+	rec = x.call(t, http.MethodGet, "/api/v1/projects", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	decode(t, rec, &projects)
+	require.Len(t, projects, 1)
+	assert.True(t, projects[0].Paused)
+	assert.Equal(t, "owner", projects[0].PausedBy)
+
+	rec = x.call(t, http.MethodPost, "/api/v1/projects/foundry/resume", "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"paused":false,"paused_by":""}`, rec.Body.String())
+	rec = x.call(t, http.MethodGet, "/api/v1/projects", "")
+	decode(t, rec, &projects)
+	assert.False(t, projects[0].Paused)
+	assert.Empty(t, projects[0].PausedBy)
+
+	assert.Equal(t, []string{
+		"SetProjectPaused:foundry:true", "SetProjectPaused:foundry:false",
+	}, x.ctl.calls)
+
+	rec = x.call(t, http.MethodPost, "/api/v1/projects/nope/pause", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "unknown project is ErrInvalid")
+}
+
+func TestProjectResumeConfigPausedConflicts(t *testing.T) {
+	x := newHarness(t)
+	x.ctl.cfg.Projects["foundry"].Paused = true
+
+	var projects []struct {
+		Paused   bool   `json:"paused"`
+		PausedBy string `json:"paused_by"`
+	}
+	rec := x.call(t, http.MethodGet, "/api/v1/projects", "")
+	decode(t, rec, &projects)
+	require.Len(t, projects, 1)
+	assert.True(t, projects[0].Paused, "a project paused in config is paused")
+	assert.Equal(t, "config", projects[0].PausedBy)
+
+	rec = x.call(t, http.MethodPost, "/api/v1/projects/foundry/resume", "")
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.JSONEq(t, `{"error":"conflict: project \"foundry\" is paused in config"}`, rec.Body.String())
 }
 
 func TestProjectsCountsAndRedaction(t *testing.T) {

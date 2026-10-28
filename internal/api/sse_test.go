@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -162,4 +163,33 @@ func TestSSEClientDisconnectEndsHandler(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("handler did not return after the client disconnected")
 	}
+}
+
+// TestSSEReplaysPagesInOrder replays more events than one store page holds and checks that every
+// event arrives once, in ID order, followed by a live event.
+func TestSSEReplaysPagesInOrder(t *testing.T) {
+	x := newHarness(t)
+	ctx := context.Background()
+	const stored = replayPage*2 + 37
+	for i := range stored {
+		_, err := x.bus.Publish(ctx, domain.Event{Type: domain.EvSystem, Message: fmt.Sprint(i)})
+		require.NoError(t, err)
+	}
+
+	// after=1 replays IDs 2..stored. (after=0 means "latest page" to the store, not "from the start".)
+	resp := openStream(t, x, "/api/v1/events?after=1", testToken)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	frames := readFrames(t, resp.Body)
+
+	for id := 2; id <= stored; id++ {
+		f := nextFrame(t, frames)
+		assert.Equal(t, fmt.Sprint(id), f.id)
+		assert.Equal(t, fmt.Sprint(id-1), f.data.Message)
+	}
+
+	_, err := x.bus.Publish(ctx, domain.Event{Type: domain.EvSystem, Message: "live"})
+	require.NoError(t, err)
+	live := nextFrame(t, frames)
+	assert.Equal(t, fmt.Sprint(stored+1), live.id)
+	assert.Equal(t, "live", live.data.Message)
 }

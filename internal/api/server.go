@@ -75,6 +75,8 @@ func (s *server) apiRoutes(r chi.Router) {
 	r.Post("/control/resume", s.setPaused(false))
 
 	r.Get("/projects", s.listProjects)
+	r.Post("/projects/{name}/pause", s.setProjectPaused(true))
+	r.Post("/projects/{name}/resume", s.setProjectPaused(false))
 	r.Get("/agents", s.listAgents)
 
 	r.Get("/tasks", s.listTasks)

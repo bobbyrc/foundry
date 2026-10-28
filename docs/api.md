@@ -27,6 +27,7 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 | `GET /control` | | `{"paused":bool}` |
 | `POST /control/pause`, `POST /control/resume` | | `{"paused":bool}` |
 | `GET /projects` | | `[]ProjectView` |
+| `POST /projects/{name}/pause`, `POST /projects/{name}/resume` | | `{"paused":bool,"paused_by":""\|"config"\|"owner"}` (409 resuming a project paused in config) |
 | `GET /tasks` | `?project=&status=queued,running&kind=&limit=` | `[]Task` |
 | `POST /tasks` | `NewTask` | `Task` (201) |
 | `GET /tasks/{id}` | | `TaskDetail` |
@@ -37,7 +38,7 @@ LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessag
 | `GET /runs/{id}/logs` | `?after=<seq>&limit=` (default 1000) | `[]LogLine` |
 | `POST /runs/{id}/cancel` | | 204 |
 | `GET /approvals` | `?status=pending` (default), `approved`, `rejected` or `all` | `[]Approval` |
-| `POST /approvals/{id}/decide` | `{"approve":bool,"note":"…"}` | `Approval` |
+| `POST /approvals/{id}/decide` | `{"approve":bool,"note":"…"}` (`approve` is required) | `Approval` |
 | `GET /deployments` | `?project=&limit=` | `[]Deployment` |
 | `GET /signals` | `?project=&limit=` | `[]Signal` |
 | `GET /friction` | `?project=&limit=` | `[]Friction` |
@@ -60,6 +61,14 @@ or non-numeric value is a 400. Most list routes default to 200. The exceptions a
 empty `kind` is stored as `feature`. A `risk` field is not part of `NewTask`, so it is rejected
 with 400 like any unknown field.
 
+`POST /approvals/{id}/decide` returns 400 `"approve is required"` when the body has no `approve`
+field. `approve: false` rejects the approval.
+
+`POST /projects/{name}/pause` and `/resume` change a project's runtime pause, which is saved and
+survives restarts. A project paused by `paused: true` in foundry.yaml shows `paused_by: "config"`.
+The API cannot resume it, so `/resume` returns 409 until the config changes. An unknown project is a
+400. While a project is paused, the scheduler starts none of its runs and its loops create no tasks.
+
 `POST /approvals/{id}/decide` returns 409 when the task is not awaiting approval. For a merge
 approval it also returns 409 when the PR head changed since the approval was requested. In that
 case the approval is recorded as rejected and the task goes back to review so foundry can re-check it.
@@ -74,9 +83,10 @@ case the approval is recorded as rejected and the task goes back to review so fo
 // TaskDetail
 {"task":Task,"runs":[]Run,"approvals":[]Approval,"children":[]Task}
 
-// ProjectView: the config.Project fields plus
-{"name":"…","repo":"…", "...": "...", "counts":{"queued":0,"running":0,"review":0,
- "awaiting_approval":0,"blocked":0}}
+// ProjectView: the config.Project fields plus. "paused" is the effective state (true whenever
+// "paused_by" is set), not the raw config value.
+{"name":"…","repo":"…", "...": "...", "paused":false, "paused_by":"", // "config" or "owner"
+ "counts":{"queued":0,"running":0,"review":0,"awaiting_approval":0,"blocked":0}}
 
 // Stats
 {"tasks_by_status":{"queued":3,...},"active_runs":1,"approvals_pending":0,

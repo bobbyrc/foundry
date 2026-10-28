@@ -250,6 +250,52 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /projects/{name}/pause:
+    post:
+      operationId: pauseProject
+      tags: [projects]
+      summary: Pause one project at runtime.
+      description: While the project is paused, the scheduler starts none of its runs and its loops create no tasks. The pause is saved and survives restarts. A project paused in foundry.yaml is already paused, and this call reports paused_by as config and leaves the state unchanged.
+      parameters:
+        - $ref: '#/components/parameters/ProjectName'
+      responses:
+        '200':
+          description: The project's pause state after the call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPauseState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects/{name}/resume:
+    post:
+      operationId: resumeProject
+      tags: [projects]
+      summary: Resume a project paused at runtime.
+      description: A project paused in foundry.yaml cannot be resumed through the API; edit the config instead and reload it.
+      parameters:
+        - $ref: '#/components/parameters/ProjectName'
+      responses:
+        '200':
+          description: The project's pause state after the call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPauseState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /agents:
     get:
       operationId: listAgents
@@ -902,6 +948,13 @@ components:
       description: Approval ID.
       schema:
         type: string
+    ProjectName:
+      name: name
+      in: path
+      required: true
+      description: Project name as it appears in foundry.yaml.
+      schema:
+        type: string
     ConversationId:
       name: id
       in: path
@@ -966,6 +1019,18 @@ components:
         paused:
           type: boolean
           description: While true, no run starts and no loop acts.
+
+    ProjectPauseState:
+      type: object
+      required: [paused, paused_by]
+      properties:
+        paused:
+          type: boolean
+          description: True when paused_by is set.
+        paused_by:
+          type: string
+          enum: ['', config, owner]
+          description: Why the project is paused. `config` means paused in foundry.yaml, which the API cannot change. `owner` means paused through the API. Empty when running.
 
     Stats:
       type: object
@@ -1442,12 +1507,19 @@ components:
             $ref: '#/components/schemas/Task'
 
     ProjectView:
-      description: A configured project plus its live task counts. Config values are redacted.
+      description: A configured project plus its live task counts. Config values are redacted. `paused` is the effective state (true whenever `paused_by` is set), not the raw config value.
       allOf:
         - $ref: '#/components/schemas/Project'
         - type: object
-          required: [counts]
+          required: [paused, paused_by, counts]
           properties:
+            paused:
+              type: boolean
+              description: Effective pause state. True when paused_by is set, whether in foundry.yaml or through the API.
+            paused_by:
+              type: string
+              enum: ['', config, owner]
+              description: Why the project is paused. `config` means paused in foundry.yaml. `owner` means paused through the API. Empty when running.
             counts:
               type: object
               description: Count of tasks in each live status.

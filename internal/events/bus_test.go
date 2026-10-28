@@ -196,6 +196,41 @@ func TestConcurrentPublish(t *testing.T) {
 	assert.Len(t, stored, goroutines*perGoroutine)
 }
 
+// TestConcurrentPublishDeliversInIDOrder checks that persisted events reach a subscriber in
+// strictly increasing ID order even when many publishers race. The SSE handler skips any ID at
+// or below the last one it sent, so an out-of-order delivery would drop an event.
+func TestConcurrentPublishDeliversInIDOrder(t *testing.T) {
+	b := newBus(t)
+	ctx := context.Background()
+
+	// 50 publishers x 4 events stays under subscriberBuffer, so a slow reader cannot overflow
+	// the subscriber and get it dropped.
+	const publishers, perPublisher = 50, 4
+	const total = publishers * perPublisher
+	ch, cancel := b.Subscribe()
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for g := range publishers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range perPublisher {
+				_, err := b.Publish(ctx, domain.Event{Type: domain.EvSystem, Message: fmt.Sprintf("%d-%d", g, i)})
+				assert.NoError(t, err)
+			}
+		}()
+	}
+
+	var last int64
+	for range total {
+		e := recv(t, ch)
+		require.Greater(t, e.ID, last, "event %q delivered out of ID order", e.Message)
+		last = e.ID
+	}
+	wg.Wait()
+}
+
 // storeFilterAll reads every stored event in one call.
 func storeFilterAll() store.EventFilter {
 	return store.EventFilter{Limit: 10000}

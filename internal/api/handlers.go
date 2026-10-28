@@ -51,9 +51,13 @@ type TaskDetail struct {
 }
 
 // ProjectView is a configured project plus its live task counts. Config values are redacted.
+// Paused is the effective state: true whenever PausedBy is set. It shadows the config's own
+// paused field, which is the same as PausedBy == "config".
 type ProjectView struct {
 	config.Project
-	Counts map[string]int `json:"counts"`
+	Paused   bool           `json:"paused"`
+	PausedBy string         `json:"paused_by"`
+	Counts   map[string]int `json:"counts"`
 }
 
 // Stats is the body of GET /stats.
@@ -283,14 +287,20 @@ func (s *server) listApprovals(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) decideApproval(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Approve bool   `json:"approve"`
+		// Approve is a pointer so that an omitted field is distinguishable from false. An omitted
+		// approve must not silently reject the approval.
+		Approve *bool  `json:"approve"`
 		Note    string `json:"note"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		s.fail(w, err)
 		return
 	}
-	a, err := s.opts.Controller.DecideApproval(r.Context(), chi.URLParam(r, "id"), body.Approve, body.Note)
+	if body.Approve == nil {
+		writeErrorMsg(w, http.StatusBadRequest, "approve is required")
+		return
+	}
+	a, err := s.opts.Controller.DecideApproval(r.Context(), chi.URLParam(r, "id"), *body.Approve, body.Note)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -373,9 +383,23 @@ func (s *server) listProjects(w http.ResponseWriter, r *http.Request) {
 		for _, t := range tasks {
 			counts[string(t.Status)]++
 		}
-		out = append(out, ProjectView{Project: *p, Counts: counts})
+		pausedBy := s.opts.Controller.ProjectPausedBy(name)
+		out = append(out, ProjectView{Project: *p, Paused: pausedBy != "", PausedBy: pausedBy, Counts: counts})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// setProjectPaused pauses or resumes one project. The response reports the state after the call.
+func (s *server) setProjectPaused(paused bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := chi.URLParam(r, "name")
+		if err := s.opts.Controller.SetProjectPaused(r.Context(), name, paused); err != nil {
+			s.fail(w, err)
+			return
+		}
+		by := s.opts.Controller.ProjectPausedBy(name)
+		writeJSON(w, http.StatusOK, map[string]any{"paused": by != "", "paused_by": by})
+	}
 }
 
 func (s *server) listAgents(w http.ResponseWriter, r *http.Request) {

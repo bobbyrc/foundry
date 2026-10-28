@@ -31,6 +31,12 @@ type Controller interface {
 	// Paused reports the global pause switch. While paused no run starts and no loop acts.
 	Paused() bool
 	SetPaused(ctx context.Context, paused bool) error
+	// ProjectPausedBy reports why a project is paused: "config" (paused: true in foundry.yaml,
+	// which the API cannot change), "owner" (paused at runtime through the API) or "".
+	ProjectPausedBy(project string) string
+	// SetProjectPaused pauses or resumes one project at runtime (persisted across restarts).
+	// ErrInvalid for an unknown project; resuming a project paused in config is ErrConflict.
+	SetProjectPaused(ctx context.Context, project string, paused bool) error
 
 	// SendChat appends a user message and starts the orchestrator's reply, which arrives as
 	// chat.delta events and a final chat.message event. ErrConflict while a reply is running.

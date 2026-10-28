@@ -42,10 +42,17 @@ func isLive(typ string) bool {
 
 // Publish persists e unless it is live-only, then delivers it to every subscriber. A subscriber
 // whose buffer is full is dropped: its channel is closed and it is removed.
+//
+// The mutex is held across the store append and the fan-out. Without that, two concurrent
+// publishes could be delivered out of ID order, and a subscriber that skips IDs at or below
+// the last one it sent (see the SSE handler) would silently drop the earlier event.
 func (b *MemBus) Publish(ctx context.Context, e domain.Event) (domain.Event, error) {
 	if e.Time.IsZero() {
 		e.Time = time.Now().UTC()
 	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if !isLive(e.Type) {
 		saved, err := b.st.AppendEvent(ctx, e)
 		if err != nil {
@@ -54,8 +61,6 @@ func (b *MemBus) Publish(ctx context.Context, e domain.Event) (domain.Event, err
 		e = saved
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	for ch := range b.subs {
 		select {
 		case ch <- e:
