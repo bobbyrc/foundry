@@ -5,3 +5,4 @@
 !/internal/api/webdist/.keep
 .foundry-run/
 *.db
+.playwright-mcp/

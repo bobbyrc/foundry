@@ -46,3 +46,23 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] web IdChip: UUIDv7 IDs share their first 8 chars (timestamp) — show the last 8
 - [ ] web: add web/public/.keep so every build recreates internal/api/webdist/.keep (embed needs it on fresh clones)
 - [ ] web: visual + runtime pass against a live backend (main agent, Playwright screenshots)
+- [ ] cli: events --follow without --after starts from now (no history replay)
+
+## Engine fix round (review findings, all confirmed by main agent) + live-test findings
+
+- [ ] R1 retries: Prepare removes any existing worktree holding the branch before `worktree add`
+- [ ] R2 guarded transitions: run outcomes only move tasks from `running`; applyReview only from `review`; re-check status before push/OpenPR; CancelTask cascades to children
+- [ ] R3 shepherd re-reads the task before merge/approval; DecideApproval requires `awaiting_approval`
+- [ ] R4 recover() re-queues every `running` task with no live run; startTask failure writes use WithoutCancel
+- [ ] R5 deploy timeout (config `deploy.timeout`, default 30m) fails a stuck release
+- [ ] R6 merges pinned to head SHA (`gh pr merge --match-head-commit`); Approval.HeadSHA; head changed since approval → back to review
+- [ ] R7 updateRun error must not zero the local run
+- [ ] R8 mergeable "unknown" → wait; merge read-back failure → leave in review (next pass sees merged)
+- [ ] R9 shepherd self-heals awaiting_approval without a pending approval
+- [ ] R10 blocked tasks can be cancelled; prod_watch treats blocked incidents as open
+- [ ] R11 API CreateTask rejects kind review and clears risk fields; worker agents get no FOUNDRY_TOKEN (orchestrator only)
+- [ ] R12 SendChat after shutdown returns an error instead of wg.Add after Wait
+- [ ] L1 codex default args: `--approve-for-me` alone (it conflicts with `--sandbox`) — every codex run currently fails
+- [ ] L2 agents never commit (codex sandboxes .git read-only even with --add-dir); before a re-run on an existing branch foundry merges origin/<default> and lists conflicted files in the prompt
+- [ ] L3 loop kick channels move from a package-level map into the Engine struct
+- [ ] L4 UI: closed mobile drawer renders through the page; "active" preset chip highlighting; search field alignment; show "project paused" on queued tasks

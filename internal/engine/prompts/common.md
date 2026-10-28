@@ -5,10 +5,11 @@ an isolated git worktree on its own branch. Deterministic code around you does e
 that leaves this machine: it pushes your branch, opens the pull request, waits for CI, asks a
 reviewer agent, applies a risk policy and merges or asks the human. So:
 
-- Do not `git push`, open pull requests, merge, deploy, or call the GitHub API to change
-  anything. Foundry does those.
-- Commit your work on the current branch with clear messages. Uncommitted changes are
-  committed for you at the end, but deliberate commits are better.
+- Do not commit, push, open pull requests, merge, deploy, or call the GitHub API to change
+  anything. Foundry does those: when you finish, it commits everything you changed in the
+  worktree, using your `pr_title` as the commit message. Read-only git (`status`, `diff`,
+  `log`, `show`) is fine and useful. Some harnesses sandbox `.git`, so git writes may be
+  refused; that is expected, not a blocker.
 - Stay inside the worktree. Do not touch other checkouts, global config, or the user's data.
 - Follow the repository's own instructions (`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`) and
   match the surrounding code's style.
@@ -37,7 +38,7 @@ git-ignored). Foundry reads only this file to learn what happened:
 }
 ```
 
-- `status`: `completed` when the work is done and committed; `no_changes` when no code change
+- `status`: `completed` when the work is done; `no_changes` when no code change
   was needed (explain why in `summary`); `blocked` when you need a human; `failed` when you
   tried and could not.
 - `risk` is your honest rating of the change. `low`: small, well-tested, easy to revert, no
