@@ -284,16 +284,19 @@ type Signal struct {
 
 // Friction is something that slowed an agent down, deduplicated by fingerprint.
 type Friction struct {
-	ID          string    `json:"id"`
-	Project     string    `json:"project"` // the project whose repo should get the issue
-	RunID       string    `json:"run_id,omitempty"`
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	Fingerprint string    `json:"fingerprint"`
-	Count       int       `json:"count"`
-	IssueURL    string    `json:"issue_url,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          string `json:"id"`
+	Project     string `json:"project"` // the project whose repo should get the issue
+	RunID       string `json:"run_id,omitempty"`
+	Title       string `json:"title"`
+	Body        string `json:"body"`
+	Fingerprint string `json:"fingerprint"`
+	Count       int    `json:"count"`
+	IssueURL    string `json:"issue_url,omitempty"`
+	// IssueState is the filed issue's state as the friction loop last saw it: "open" or
+	// "closed"; empty until known.
+	IssueState string    `json:"issue_state,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Conversation is one chat thread with the orchestrator agent.
