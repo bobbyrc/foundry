@@ -79,7 +79,7 @@ func TestExecInvalidOutput(t *testing.T) {
 }
 
 func TestExecTimeout(t *testing.T) {
-	o := newTestExec(t, map[string]any{"command": `sleep 10`, "timeout": "200ms"}, nil)
+	o := newTestExec(t, map[string]any{"command": `exec sleep 10`, "timeout": "200ms"}, nil)
 	start := time.Now()
 	_, err := o.Poll(context.Background(), time.Now())
 	require.Error(t, err)

@@ -160,7 +160,7 @@ func TestCommandRollbackNonZeroExit(t *testing.T) {
 }
 
 func TestCommandTimeoutKillsCommand(t *testing.T) {
-	d := newTestCommand(t, map[string]any{"deploy": `sleep 10`, "timeout": "200ms"}, nil)
+	d := newTestCommand(t, map[string]any{"deploy": `exec sleep 10`, "timeout": "200ms"}, nil)
 	start := time.Now()
 	_, err := d.Deploy(context.Background(), "sha")
 	require.Error(t, err)
