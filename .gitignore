@@ -1,0 +1,7 @@
+/foundry
+/web/node_modules
+/web/dist
+/internal/api/webdist/*
+!/internal/api/webdist/.keep
+.foundry-run/
+*.db
