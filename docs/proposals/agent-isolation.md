@@ -12,6 +12,14 @@ process can still read anything your user can read, including:
 - `<data_dir>/token` (the foundry API token): with it, an agent could approve its own PR or
   resume a paused project;
 - `gh`'s stored login (`~/.config/gh`), cloud CLIs' credentials, SSH keys, your other repos.
+- the git config of the clone it shares with foundry (found by a defect review, 2026-10-28).
+  An agent that can run `git config` in its worktree can set `core.fsmonitor`, a
+  `filter.<name>.clean` driver plus a `.gitattributes` entry, or `core.sshCommand`. Foundry's
+  next `git status`, `git add`, `git diff` or `git fetch` then runs that command with foundry's
+  own environment, `GH_TOKEN` included. `core.hooksPath=/dev/null` blocks hooks but not these.
+  Overriding each known key with `-c` on every git call is a patch, not a boundary, because new
+  keys can execute commands too. Option A (or B) fixes it: the agent's user cannot write the
+  clone's config, and foundry can give each run its own clone or a read-only `.git`.
 
 Today the only barriers are each harness's own safety layer — Claude Code's auto mode reviews
 risky actions, and Codex's sandbox blocks writes outside the worktree (and all network) but not
