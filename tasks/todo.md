@@ -140,4 +140,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
   - setup failure output went into the next agent's task body (it might "fix" an outage by editing package.json) → output goes on the run instead
   - issue-report lock was global across a gh call → per task
   - NOT FIXED (owner decision): an agent that can run `git config` in its worktree can set core.fsmonitor or filters, which foundry's own git commands then run with foundry's environment (GH_TOKEN). Recorded in docs/proposals/agent-isolation.md; the fix is isolation (separate user or containers)
+- [x] Codex smoke (local throwaway repo, separate daemon :7801): the Codex harness ran, setup and checks passed with the agent environment, and the agent edited the file
+- [x] BUG found by the smoke: a task whose earlier attempt pushed commits but failed to open the PR was later marked done when the next attempt reported no changes — work stranded on an unmerged branch. Fixed: a no-change attempt publishes when the branch is not contained in the base (test fails without the fix)
+- [x] `foundry project add NAME --repo OWNER/NAME`: adds a project to an existing config by inserting text (every other byte kept), validated before writing
 

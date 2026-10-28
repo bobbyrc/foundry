@@ -334,7 +334,20 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.requeueOrBlock(bg, t.ID, "could not read HEAD", err.Error())
 		return
 	}
-	if head == ws.StartSHA {
+	// Work to publish is either a commit this run made, or, for a task with no pull request yet, a
+	// commit an earlier attempt left on the branch. An earlier attempt can push its commits and then
+	// fail to open the pull request; the next attempt starts from that branch, sees the work done,
+	// and reports no changes. Finishing that as done would strand the work on an unmerged branch.
+	hasWork := head != ws.StartSHA
+	if !hasWork && t.PRNumber == 0 {
+		contained, err := e.d.Workspaces.IsAncestor(bg, e.repoFor(p), head, ws.BaseRef)
+		if err != nil {
+			e.requeueOrBlock(bg, t.ID, "could not compare the branch with "+ws.BaseRef, err.Error())
+			return
+		}
+		hasWork = !contained
+	}
+	if !hasWork {
 		var moved bool
 		if t.PRNumber != 0 {
 			moved = e.finishRunning(bg, t.ID, "no new changes; back to review", func(x *domain.Task) error {
