@@ -428,13 +428,19 @@ type issueJSON struct {
 	Author    *loginJSON `json:"author"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
+	Comments  []struct {
+		Author            *loginJSON `json:"author"`
+		AuthorAssociation string     `json:"authorAssociation"`
+		Body              string     `json:"body"`
+		CreatedAt         time.Time  `json:"createdAt"`
+	} `json:"comments"`
 }
 
 type loginJSON struct {
 	Login string `json:"login"`
 }
 
-const issueFields = "number,url,title,body,state,labels,author,createdAt,updatedAt"
+const issueFields = "number,url,title,body,state,labels,author,createdAt,updatedAt,comments"
 
 // ListIssues lists issues with the given label (all labels when empty) in state, which is
 // passed to gh as-is ("open", "closed" or "all"; empty means open).
@@ -485,6 +491,13 @@ func decodeIssues(out []byte) ([]scm.Issue, error) {
 		}
 		if r.Author != nil {
 			is.Author = r.Author.Login
+		}
+		for _, c := range r.Comments {
+			ic := scm.IssueComment{Association: c.AuthorAssociation, Body: c.Body, CreatedAt: c.CreatedAt}
+			if c.Author != nil {
+				ic.Author = c.Author.Login
+			}
+			is.Comments = append(is.Comments, ic)
 		}
 		issues = append(issues, is)
 	}

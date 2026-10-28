@@ -381,7 +381,7 @@ func TestListIssues(t *testing.T) {
 		UpdatedAt: time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC),
 	}, issues[0])
 	assert.Equal(t, []string{"issue", "list", "--repo", repo, "--state", "open", "--limit", "100",
-		"--json", "number,url,title,body,state,labels,author,createdAt,updatedAt",
+		"--json", "number,url,title,body,state,labels,author,createdAt,updatedAt,comments",
 		"--label", "friction"}, f.calls[0].args)
 
 	_, err = g.ListIssues(context.Background(), "", "closed")
@@ -399,7 +399,7 @@ func TestSearchIssues(t *testing.T) {
 	assert.NotNil(t, issues)
 	assert.Empty(t, issues)
 	assert.Equal(t, []string{"issue", "list", "--repo", repo, "--state", "all", "--search", "flaky test",
-		"--limit", "20", "--json", "number,url,title,body,state,labels,author,createdAt,updatedAt"},
+		"--limit", "20", "--json", "number,url,title,body,state,labels,author,createdAt,updatedAt,comments"},
 		f.calls[0].args)
 }
 
@@ -560,4 +560,22 @@ func TestUpdatePRBodyWrapsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "update body of PR #12")
 	assert.ErrorContains(t, err, "boom")
+}
+
+func TestListIssuesDecodesComments(t *testing.T) {
+	f := newFake()
+	f.on["issue list"] = `[{"number":3,"url":"u","title":"t","body":"b","state":"OPEN","labels":[],
+		"author":{"login":"bob"},"createdAt":"2026-10-01T10:00:00Z","updatedAt":"2026-10-01T10:00:00Z",
+		"comments":[
+		{"author":{"login":"owner"},"authorAssociation":"OWNER","body":"spec","createdAt":"2026-10-02T10:00:00Z"},
+		{"author":{"login":"rando"},"authorAssociation":"NONE","body":"spam","createdAt":"2026-10-03T10:00:00Z"}]}]`
+	g := NewWithRunner(repo, f.runner())
+
+	issues, err := g.ListIssues(context.Background(), "", "open")
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, []scm.IssueComment{
+		{Author: "owner", Association: "OWNER", Body: "spec", CreatedAt: time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC)},
+		{Author: "rando", Association: "NONE", Body: "spam", CreatedAt: time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)},
+	}, issues[0].Comments)
 }
