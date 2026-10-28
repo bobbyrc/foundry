@@ -2,9 +2,12 @@ package deploy
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -187,4 +190,66 @@ func TestOptHelpers(t *testing.T) {
 	d, err := optDuration(map[string]any{}, "k", time.Minute)
 	require.NoError(t, err)
 	assert.Equal(t, time.Minute, d)
+}
+
+// killLeftoverChildOnCleanup kills the background child whose PID a command wrote to pidFile. A
+// failed command leaves its child running (sysproc.Wait kills only after success), so the test
+// does the cleanup.
+func killLeftoverChildOnCleanup(t *testing.T, pidFile string) {
+	t.Helper()
+	t.Cleanup(func() {
+		raw, err := os.ReadFile(pidFile)
+		if err != nil {
+			return
+		}
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	})
+}
+
+// assertLeftoverChildGone reads the PID that a command wrote to pidFile and waits for that process
+// to be killed.
+func assertLeftoverChildGone(t *testing.T, pidFile string) {
+	t.Helper()
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		err := syscall.Kill(pid, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("leftover background child %d still alive", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestCommandDeploySucceedsWithBackgroundChild(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	d := newTestCommand(t, map[string]any{
+		"deploy": "sleep 30 & echo $! > " + pidFile + "; echo https://ok.example",
+	}, nil)
+	start := time.Now()
+	h, err := d.Deploy(context.Background(), "sha")
+	require.NoError(t, err, "a 0 exit with a leftover child must not be a failed deploy")
+	assert.Less(t, time.Since(start), 3*time.Second)
+	assert.Equal(t, "https://ok.example", h.URL)
+	assertLeftoverChildGone(t, pidFile)
+}
+
+func TestCommandDeployNonZeroExitWithBackgroundChildIsError(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	d := newTestCommand(t, map[string]any{
+		"deploy": "sleep 30 & echo $! > " + pidFile + "; echo ok; exit 3",
+	}, nil)
+	_, err := d.Deploy(context.Background(), "sha")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit status 3")
+	assert.Contains(t, err.Error(), "ok")
+	killLeftoverChildOnCleanup(t, pidFile)
 }

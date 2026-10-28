@@ -79,4 +79,5 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] re-runs on an existing PR should refresh its description (`gh pr edit --body`) with the latest summary — PR #1's body omitted the CI-fix test changes
 - [ ] after unit P lands: merge `dogfood` (PR #1: loop wake interval) back into `init`, keeping init's root-cause timeout fix over the loosened test timings
 - [ ] SSE ?after=0 should replay from the start (store treats AfterID 0 as 'newest 500')
-- [ ] deploy/observe/notify: exit 0 with a lingering background child must stay a success (kill the group), not ErrWaitDelay → a good release failed/rolled back
+- [x] deploy/observe/notify: exit 0 with a lingering background child must stay a success (kill the group), not ErrWaitDelay → a good release failed/rolled back
+- [ ] sysproc.Wait: also kill the leftover process group after a non-zero exit (no orphans either way)

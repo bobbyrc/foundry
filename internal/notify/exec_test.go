@@ -2,8 +2,12 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -79,4 +83,63 @@ func TestExecOptionValidation(t *testing.T) {
 
 	_, err = New(Config{Type: "exec", Options: map[string]any{"command": ""}})
 	require.Error(t, err)
+}
+
+// killLeftoverChildOnCleanup kills the background child whose PID a command wrote to pidFile. A
+// failed command leaves its child running (sysproc.Wait kills only after success), so the test
+// does the cleanup.
+func killLeftoverChildOnCleanup(t *testing.T, pidFile string) {
+	t.Helper()
+	t.Cleanup(func() {
+		raw, err := os.ReadFile(pidFile)
+		if err != nil {
+			return
+		}
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	})
+}
+
+// assertLeftoverChildGone reads the PID that a command wrote to pidFile and waits for that process
+// to be killed.
+func assertLeftoverChildGone(t *testing.T, pidFile string) {
+	t.Helper()
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		err := syscall.Kill(pid, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("leftover background child %d still alive", pid)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestExecNotifySucceedsWithBackgroundChild(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	n, err := newExec(map[string]any{"command": "sleep 30 & echo $! > " + pidFile + "; echo ok"})
+	require.NoError(t, err)
+	start := time.Now()
+	err = n.Notify(context.Background(), Notification{Title: "t"})
+	require.NoError(t, err, "a 0 exit with a leftover child must not be a failed notification")
+	assert.Less(t, time.Since(start), 3*time.Second)
+	assertLeftoverChildGone(t, pidFile)
+}
+
+func TestExecNotifyNonZeroExitWithBackgroundChildIsError(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	n, err := newExec(map[string]any{"command": "sleep 30 & echo $! > " + pidFile + "; echo ok; exit 3"})
+	require.NoError(t, err)
+	err = n.Notify(context.Background(), Notification{Title: "t"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit status 3")
+	assert.Contains(t, err.Error(), "ok")
+	killLeftoverChildOnCleanup(t, pidFile)
 }

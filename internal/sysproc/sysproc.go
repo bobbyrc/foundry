@@ -47,6 +47,25 @@ func KillGroup(pid int, sig syscall.Signal) error {
 	return err
 }
 
+// Wait waits for a cmd started with Start after Configure. It differs from cmd.Wait in one case: a
+// command that exits 0 but leaves a background child holding its stdout or stderr. Go reports
+// that as exec.ErrWaitDelay once WaitDelay passes, which would turn a successful command into a
+// failure. Wait treats it as success and kills the leftover process group, since the command has
+// finished and the child is no longer wanted. A non-zero exit, a signal or a timeout is still
+// returned as the error.
+func Wait(cmd *exec.Cmd) error {
+	err := cmd.Wait()
+	if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+		if cmd.Process != nil {
+			if kerr := KillGroup(cmd.Process.Pid, syscall.SIGKILL); kerr != nil {
+				return kerr
+			}
+		}
+		return nil
+	}
+	return err
+}
+
 // baseEnv is the allowlist of foundry's environment that agent processes receive. Everything
 // else is withheld, so credentials foundry holds for itself (GH_TOKEN, GITHUB_TOKEN,
 // SENTRY_AUTH_TOKEN, ...) never reach an agent that runs arbitrary commands.

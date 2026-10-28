@@ -41,6 +41,7 @@ func (e *execNotifier) Notify(ctx context.Context, n Notification) error {
 	cmd := exec.CommandContext(ctx, "sh", "-c", e.command)
 	// On timeout the whole process group is killed, and Wait does not block on pipes a background
 	// child still holds open. Without this a single backgrounded child blocked every notification.
+	// A command that exits 0 but leaves such a child behind still succeeds (see sysproc.Wait).
 	sysproc.Configure(cmd)
 	cmd.Env = append(os.Environ(),
 		"FOUNDRY_NOTIFY_TITLE="+n.Title,
@@ -52,7 +53,11 @@ func (e *execNotifier) Notify(ctx context.Context, n Notification) error {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
-	if err := cmd.Run(); err != nil {
+	err := cmd.Start()
+	if err == nil {
+		err = sysproc.Wait(cmd)
+	}
+	if err != nil {
 		return fmt.Errorf("notify exec: %w: %s", err, strings.TrimSpace(out.String()))
 	}
 	return nil

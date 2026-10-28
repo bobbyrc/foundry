@@ -63,9 +63,14 @@ func (o *execObserver) Poll(ctx context.Context, since time.Time) ([]domain.Sign
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	// On timeout the whole process group is killed, not just sh, and Wait does not block on pipes a
-	// grandchild still holds open.
+	// grandchild still holds open. A command that exits 0 but leaves a background child behind still
+	// succeeds (see sysproc.Wait).
 	sysproc.Configure(cmd)
-	if err := cmd.Run(); err != nil {
+	err := cmd.Start()
+	if err == nil {
+		err = sysproc.Wait(cmd)
+	}
+	if err != nil {
 		output := strings.TrimSpace(stdout.String() + stderr.String())
 		return nil, fmt.Errorf("observer %q: command failed: %w: output: %s", o.name, err, tail(output))
 	}

@@ -1,9 +1,12 @@
 package sysproc
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -152,4 +155,51 @@ func TestAgentEnvIsSorted(t *testing.T) {
 	for i := 1; i < len(env); i++ {
 		assert.LessOrEqual(t, env[i-1], env[i])
 	}
+}
+
+func TestWaitSucceedsWhenBackgroundChildHoldsOutput(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "sleep 30 & echo $! > "+pidFile+"; echo ok")
+	Configure(cmd)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	start := time.Now()
+	require.NoError(t, cmd.Start())
+	require.NoError(t, Wait(cmd), "a 0 exit must succeed even though a child holds stdout")
+	assert.Less(t, time.Since(start), 3*time.Second)
+	assert.Equal(t, "ok", strings.TrimSpace(out.String()))
+
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	grandchild, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	assert.True(t, waitGone(grandchild, 2*time.Second), "the leftover child must be killed")
+}
+
+func TestWaitNonZeroExitWithBackgroundChildIsError(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "sleep 30 & echo $! > "+pidFile+"; exit 3")
+	Configure(cmd)
+	require.NoError(t, cmd.Start())
+	err := Wait(cmd)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit status 3")
+
+	raw, readErr := os.ReadFile(pidFile)
+	require.NoError(t, readErr)
+	grandchild, convErr := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, convErr)
+	t.Cleanup(func() { _ = KillGroup(grandchild, syscall.SIGKILL) })
+}
+
+func TestWaitTimeoutWithBackgroundChildIsError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", "sleep 30 & sleep 30")
+	Configure(cmd)
+	require.NoError(t, cmd.Start())
+	start := time.Now()
+	require.Error(t, Wait(cmd), "a timed-out command must stay an error")
+	assert.Less(t, time.Since(start), 4*time.Second)
 }
