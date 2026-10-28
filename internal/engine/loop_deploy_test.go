@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -129,7 +130,7 @@ func TestLoopDeployHealthFailuresRollBack(t *testing.T) {
 	if rel.State != domain.DeployRolledBack {
 		t.Fatalf("release = %s, want rolled_back", rel.State)
 	}
-	if !strings.Contains(rel.Notes, "health check failing") || !strings.Contains(rel.Notes, "rolled back to prev-sh") {
+	if !strings.Contains(rel.Notes, "health check failing at "+health.srv.URL+": 3 consecutive failed checks") || !strings.Contains(rel.Notes, "rolled back to prev-sh") {
 		t.Fatalf("notes = %q, want the health reason and the rollback", rel.Notes)
 	}
 	if len(env.dep.rolledBack) != 1 || env.dep.rolledBack[0] != [2]string{previous.ProviderID, previous.Ref} {
@@ -396,4 +397,27 @@ func lpDeployTaskID(t *testing.T, env *lpEnv) string {
 		t.Fatalf("release %s has no task", rel.ID)
 	}
 	return rel.TaskID
+}
+
+func TestLoopDeployHealthFailureReasonNamesURLCountAndElapsed(t *testing.T) {
+	health := lpNewHealth(t)
+	env := lpNewEngine(t, lpDeployDoc(t, health.srv.URL))
+	lpMergedTask(t, env, "Break things", "sha-2")
+
+	env.run(loopDeployWatch)
+	env.dep.status = deploy.Status{State: deploy.StateReady}
+	env.run(loopDeployWatch) // verifying from env.now
+	health.code.Store(500)
+
+	for range deployHealthAttempts {
+		env.now = env.now.Add(30 * time.Second)
+		env.run(loopDeployWatch)
+	}
+
+	rel := lpDeployments(t, env)[0]
+	want := fmt.Sprintf("health check failing at %s: %d consecutive failed checks, 1m30s after verification started: ",
+		health.srv.URL, deployHealthAttempts)
+	if !strings.Contains(rel.Notes, want) {
+		t.Fatalf("release = %s, notes = %q, want notes containing %q", rel.State, rel.Notes, want)
+	}
 }
