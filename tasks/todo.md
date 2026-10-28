@@ -169,4 +169,5 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] retention: events older than 30 days and run logs older than 90 days are pruned daily (server.retain_events / retain_run_logs). The dogfood DB was 3.4 MB after one busy night, about 1 GB a year without it
 - [x] stray test daemon from early in the night (scratchpad/run, random port) stopped by verified pid
 - [x] factory budget: today's dogfood spend is about $21 of the $25 daily cap, and the day lasts until midnight, so I stopped queueing factory work at 04:25 to leave headroom for the owner
+- [x] docs audit (CLI help and config vs every doc): 11 mismatches fixed, including two small CLI bugs (`task -h` and `run -h` errored; `project pause -h` treated "-h" as a project name)
 
