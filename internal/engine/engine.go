@@ -151,6 +151,11 @@ func (e *Engine) Run(ctx context.Context) error {
 	if err := e.recover(ctx); err != nil {
 		return fmt.Errorf("engine recover: %w", err)
 	}
+	// Worktrees from runs that ended in an earlier process are swept in the background, so a
+	// large project's cleanup does not delay the scheduler.
+	for _, p := range e.Config().Projects {
+		e.goTracked(func() { e.sweepWorktrees(ctx, p) })
+	}
 	e.wg.Add(1)
 	go func() {
 		defer e.wg.Done()

@@ -130,6 +130,10 @@ func (e *Engine) stillRunning(ctx context.Context, id string) bool {
 func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar *activeRun,
 	p *config.Project, h harness.Harness, agent config.Agent, parent *domain.Task) {
 	bg := context.WithoutCancel(ctx)
+	// Deferred calls run last in, first out, so this sweep runs after the defer below and after
+	// every outcome path has recorded the run's end. Every exit path therefore sweeps. The run
+	// itself is still registered as live, so the sweep never removes its own worktree.
+	defer e.sweepWorktrees(bg, p)
 	cancelled := false
 	defer func() {
 		if cancelled {
