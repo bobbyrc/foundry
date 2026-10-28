@@ -287,3 +287,15 @@ func numbers(issues []scm.Issue) []int {
 	}
 	return out
 }
+
+func TestUpdatePRBodyRecordsBody(t *testing.T) {
+	f := New()
+	ctx := context.Background()
+	pr, err := f.OpenPR(ctx, scm.PRSpec{Head: "h"})
+	require.NoError(t, err)
+
+	require.NoError(t, f.UpdatePRBody(ctx, pr.Number, "new"))
+	assert.Equal(t, "new", f.PRBodies[pr.Number])
+	assert.Equal(t, 1, f.BodyUpdates[pr.Number])
+	assert.ErrorIs(t, f.UpdatePRBody(ctx, 999, "x"), ErrNotFound)
+}

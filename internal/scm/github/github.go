@@ -255,6 +255,15 @@ func (g *GitHub) FindPR(ctx context.Context, head string) (scm.PR, bool, error) 
 	return pr, true, nil
 }
 
+// UpdatePRBody replaces the description of a pull request. The body goes in on stdin.
+func (g *GitHub) UpdatePRBody(ctx context.Context, number int, body string) error {
+	if _, err := g.run(ctx, body, "pr", "edit", strconv.Itoa(number), "--repo", g.Repo,
+		"--body-file", "-"); err != nil {
+		return fmt.Errorf("update body of PR #%d: %w", number, err)
+	}
+	return nil
+}
+
 // MergePR squash-merges a pull request and deletes its branch.
 func (g *GitHub) MergePR(ctx context.Context, number int, headSHA string) error {
 	args := []string{"pr", "merge", strconv.Itoa(number), "--repo", g.Repo,

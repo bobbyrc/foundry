@@ -338,6 +338,7 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 	}
 
 	var pr scm.PR
+	reused := true // the pull request existed before this run
 	if t.PRNumber != 0 {
 		pr, err = s.GetPR(ctx, t.PRNumber)
 		if err != nil {
@@ -372,8 +373,16 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 				return false
 			}
 			pr = opened
+			reused = false
 			e.d.Bus.Emit(ctx, domain.EvPROpened, t.Project, t.ID, "",
 				fmt.Sprintf("opened PR #%d", pr.Number), pr)
+		}
+	}
+
+	if reused && result.PRBody != "" {
+		// A failed refresh leaves a stale description, which is not worth failing the run.
+		if err := s.UpdatePRBody(ctx, pr.Number, prBody(t, result)); err != nil {
+			e.d.Logger.Warn("update PR description", "task", t.ID, "pr", pr.Number, "err", err)
 		}
 	}
 
