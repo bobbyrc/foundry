@@ -63,6 +63,8 @@ func commandList() []command {
 		{"pause", "stop starting runs and loops", cmdPause},
 		{"resume", "resume a paused factory", cmdResume},
 		{"chat", "message the orchestrator and print its reply", cmdChat},
+		{"service", "install, uninstall or check the launchd service that keeps serve running", cmdService},
+		{"doctor", "check the setup: config, git, gh, harness CLIs, projects and the daemon", cmdDoctor},
 		{"version", "print the foundry version", cmdVersion},
 	}
 }
