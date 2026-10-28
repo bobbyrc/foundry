@@ -28,6 +28,16 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// noStore tells browsers never to keep an API response. Answers carry task data and sign-in
+// state; a browser restoring tabs after a restart could otherwise replay a stored GET /auth/state
+// from before the owner account existed and show the setup page again.
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // hostOnly returns the lower-case host name of a Host header value or an allowlist entry: the
 // port, IPv6 brackets and a trailing dot are removed.
 func hostOnly(hostport string) string {

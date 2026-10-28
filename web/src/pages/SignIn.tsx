@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError } from '../api';
 import { setUp, signIn } from '../auth';
 import { Button } from '../components/Button';
@@ -13,6 +13,8 @@ const MIN_PASSWORD = 12;
  */
 export function SignIn({ setup, expired }: { setup: boolean; expired: boolean }) {
   const [mode, setMode] = useState<'setup' | 'signin'>(setup ? 'setup' : 'signin');
+  // Follow the server's answer when it changes (for example after a reload of the sign-in state).
+  useEffect(() => setMode(setup ? 'setup' : 'signin'), [setup]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');

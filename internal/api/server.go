@@ -73,6 +73,7 @@ func NewServer(o Options) http.Handler {
 	r.Use(s.requestLog)
 	r.Use(hostGuard(allowedHostSet(o.AllowedHosts)))
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(noStore)
 		r.NotFound(notFound)
 		r.MethodNotAllowed(methodNotAllowed)
 		// Outside the principal middleware: health, and the routes that sign a person in.
@@ -88,7 +89,7 @@ func NewServer(o Options) http.Handler {
 		})
 	})
 	// Any other /api/ path is a JSON 404 rather than the web UI.
-	r.HandleFunc("/api/*", notFound)
+	r.With(noStore).HandleFunc("/api/*", notFound)
 	r.Handle("/*", http.HandlerFunc(s.serveWeb))
 	return r
 }
