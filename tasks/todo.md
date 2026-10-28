@@ -76,14 +76,14 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] docs: toolchains under Codex's sandbox — GOCACHE in /tmp, GOFLAGS=-mod=readonly -buildvcs=false, GOPROXY=off. Codex's sandbox blocks all network incl. binding localhost (httptest); options: use the Claude implementer for such repos, or the OWNER opts in to `-c sandbox_workspace_write.network_access=true` (the agent-side enable was refused as weakening the sandbox — owner decision)
 - [x] CI grace: right after a push GitHub may report no checks yet (looks like "no CI" → passes). Treat CI "none" as pending until `policy.ci_grace` (default 3m) after foundry's last push (Task.PushedAt)
 - [x] cosmetic: policy.decision message "risk low: " with no reasons → "risk low"
-- [ ] re-runs on an existing PR should refresh its description (`gh pr edit --body`) with the latest summary — PR #1's body omitted the CI-fix test changes
+- [x] re-runs on an existing PR should refresh its description (`gh pr edit --body`) with the latest summary — PR #1's body omitted the CI-fix test changes
 - [x] after unit P lands: merge `dogfood` (PR #1: loop wake interval) back into `init`, keeping init's root-cause timeout fix over the loosened test timings
-- [ ] SSE ?after=0 should replay from the start (store treats AfterID 0 as 'newest 500')
+- [x] SSE ?after=0 should replay from the start (store treats AfterID 0 as 'newest 500') — already done (EventFilter.FromStart)
 - [x] deploy/observe/notify: exit 0 with a lingering background child must stay a success (kill the group), not ErrWaitDelay → a good release failed/rolled back
-- [ ] sysproc.Wait: also kill the leftover process group after a non-zero exit (no orphans either way)
+- [x] sysproc.Wait: also kill the leftover process group after a non-zero exit (no orphans either way)
 - [x] EnsureClone leaves the clone checked out on the remote HEAD (main), not the project's default_branch — the orchestrator reading project.path saw only main's README. Keep the clone's checkout at origin/<default_branch> (detached) after each fetch
 - [ ] friction: semantic duplicates need judgment — periodically queue a triager task "consolidate duplicate friction issues" (close dupes with a link)
-- [ ] openapi.yaml + web/src/types.ts: add 'retro' to the loop names / loops config shape
+- [x] openapi.yaml + web/src/types.ts: add 'retro' to the loop names / loops config shape
 - [ ] OWNER: approve or reject dogfood PR #14 (retro's implementer-prompt change; high risk = foundry's own instructions). My approval attempt was refused as self-approval — correctly; it is yours. My read: safe and useful; one hint (GOMODCACHE→/tmp with GOPROXY=off) is slightly off.
 - [ ] OWNER: close duplicate friction issues #3 (dup of #5) and #6 (dup of #4), as the retro agent recommended
 - [x] per-project `checks:` — commands foundry runs in the worktree after the agent and before commit/push (generic replacement for the cancelled Go-specific follow-ups); failure re-queues with the output
@@ -104,5 +104,12 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] issue-sourced tasks must report back: when a github_issue task ends without a PR (no_changes / blocked / failed / cancelled) comment the outcome on the issue (the intake comment promises it); once per outcome
 - [ ] later: comments/PRs post as the owner's gh account — consider a bot account or GitHub App for clear provenance
 - [x] pause messages (CLI, engine event, UI pause button text, docs/api.md) still say 'no loops act' — pause stops new work, but deploy_watch/prod_watch keep running
-- [ ] incidents need evidence: attach the deploy command's output tail and an optional `deploy.logs` (path or command) tail to "Release failed" incidents and to prod_watch incidents (the first real staging incident had only the health error)
-- [ ] REAL BUG (found by the first real staging deploy): sysproc.Wait kills the command's whole process group unconditionally (dogfood #7), so a deploy script that starts a long-running service has it killed on return. Deployers must leave processes started by a SUCCESSFUL deploy running; notifiers/observers keep killing leftovers. Outcome: the factory's SRE agent concluded 'config/port issue, not a regression' — wrong, because the incident had no logs (it couldn't see the service start then vanish). Fixing on init after the evidence change lands.
+- [x] incidents need evidence: attach the deploy command's output tail and an optional `deploy.logs` (path or command) tail to "Release failed" incidents and to prod_watch incidents (the first real staging incident had only the health error)
+- [x] REAL BUG (found by the first real staging deploy): sysproc.Wait kills the command's whole process group unconditionally (dogfood #7), so a deploy script that starts a long-running service has it killed on return. Deployers must leave processes started by a SUCCESSFUL deploy running; notifiers/observers keep killing leftovers. Outcome: the factory's SRE agent concluded 'config/port issue, not a regression' — wrong, because the incident had no logs (it couldn't see the service start then vanish). Fixing on init after the evidence change lands.
+- [x] deploy/rollback output to temp files, not pipes (b167957): a service that keeps printing after the deploy returned died of SIGPIPE
+- [x] ROLLBACK TEST (real): killed staging during PR #30's verify window → release e697fd5 rolled_back, staging back on healthy 8f8fefa within ~1.5 min, incident opened. The SRE's diagnosis was stale (no logs: daemon predated the evidence change); induced incident cancelled, its PR #31 closed. Dogfood daemon now runs 3f1ecbd with `deploy.logs` set
+- [x] closed fixed friction issues #25 (CI/web build) and #27 (nohup service killed)
+- [ ] factory queue: #28 (health-failure reason names URL, count, elapsed; spec in the body) and #33 (intake includes OWNER/MEMBER/COLLABORATOR comments; public repo, so others are ignored)
+- [ ] OWNER: PR #19 now conflicts with dogfood (foundry.example.yaml); approve → the factory must rebase it first, or reject
+- [ ] OWNER: friction #32 — the dogfood release scripts live outside the repo (scratchpad), so agents can't fix them by PR; decide whether a staging setup belongs in the repo
+
