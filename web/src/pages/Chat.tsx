@@ -93,7 +93,7 @@ function Thread({ conversationId }: { conversationId: string }) {
       subscribe((ev) => {
         if (ev.type === 'chat.delta') {
           const data = ev.data as ChatDeltaData | undefined;
-          if (data?.conversation_id !== conversationId) return;
+          if (!data || data.conversation_id !== conversationId) return;
           setDelta((prev) => ({
             text: (prev?.text ?? '') + (data.text ?? ''),
             runId: data.run_id ?? prev?.runId,

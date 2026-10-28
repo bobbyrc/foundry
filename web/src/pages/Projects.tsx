@@ -43,7 +43,7 @@ export function Projects() {
 
 function ProjectCard({ project, loops }: { project: ProjectView; loops: LoopView[] }) {
   const url = repoUrl(project.repo);
-  const observers = project.observe.map((o) => o.name);
+  const observers = (project.observe ?? []).map((o) => o.name);
 
   return (
     <article className="card project-card">
@@ -65,7 +65,7 @@ function ProjectCard({ project, loops }: { project: ProjectView; loops: LoopView
 
       <div className="project-counts">
         {COUNTS.map((count) => {
-          const n = project.counts[count.key];
+          const n = project.counts?.[count.key] ?? 0;
           const to = `/tasks?${new URLSearchParams({ project: project.name, status: count.status })}`;
           return (
             <Link key={count.key} to={to} className={cx('project-count', n === 0 && 'is-zero')}>

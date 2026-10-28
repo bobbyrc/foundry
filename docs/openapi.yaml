@@ -1511,7 +1511,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/Project'
         - type: object
-          required: [paused, paused_by, counts]
+          required: [observe, deploy, paused, paused_by, counts]
           properties:
             paused:
               type: boolean
@@ -1824,9 +1824,13 @@ components:
           additionalProperties:
             type: string
         deploy:
-          $ref: '#/components/schemas/Deploy'
+          description: Deploy settings, or null when the project has no deployer.
+          oneOf:
+            - $ref: '#/components/schemas/Deploy'
+            - type: 'null'
         observe:
           type: array
+          description: Observers. Empty when the project has none.
           items:
             $ref: '#/components/schemas/Observer'
         loops:

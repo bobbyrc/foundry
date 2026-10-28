@@ -28,8 +28,8 @@ export function Agents() {
               <dd className="mono">{agent.prompt}</dd>
               <dt>Task kinds</dt>
               <dd>
-                {agent.kinds.length > 0
-                  ? agent.kinds.map((kind) => (
+                {(agent.kinds ?? []).length > 0
+                  ? (agent.kinds ?? []).map((kind) => (
                       <span key={kind} className="tag">
                         {kind}
                       </span>

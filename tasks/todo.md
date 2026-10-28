@@ -77,7 +77,8 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] CI grace: right after a push GitHub may report no checks yet (looks like "no CI" → passes). Treat CI "none" as pending until `policy.ci_grace` (default 3m) after foundry's last push (Task.PushedAt)
 - [x] cosmetic: policy.decision message "risk low: " with no reasons → "risk low"
 - [ ] re-runs on an existing PR should refresh its description (`gh pr edit --body`) with the latest summary — PR #1's body omitted the CI-fix test changes
-- [ ] after unit P lands: merge `dogfood` (PR #1: loop wake interval) back into `init`, keeping init's root-cause timeout fix over the loosened test timings
+- [x] after unit P lands: merge `dogfood` (PR #1: loop wake interval) back into `init`, keeping init's root-cause timeout fix over the loosened test timings
 - [ ] SSE ?after=0 should replay from the start (store treats AfterID 0 as 'newest 500')
 - [x] deploy/observe/notify: exit 0 with a lingering background child must stay a success (kill the group), not ErrWaitDelay → a good release failed/rolled back
 - [ ] sysproc.Wait: also kill the leftover process group after a non-zero exit (no orphans either way)
+- [ ] EnsureClone leaves the clone checked out on the remote HEAD (main), not the project's default_branch — the orchestrator reading project.path saw only main's README. Keep the clone's checkout at origin/<default_branch> (detached) after each fetch

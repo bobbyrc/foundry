@@ -5,6 +5,7 @@ import * as api from './api';
 import { ApiError } from './api';
 import type { NewTask, Stats, TaskDetail } from './types';
 import { keys } from './keys';
+import { normaliseProject } from './lib/projects';
 
 export const LIST_REFRESH_MS = 30_000;
 
@@ -49,7 +50,7 @@ export function useControl() {
 export function useProjects() {
   return useQuery({
     queryKey: keys.projectsAll,
-    queryFn: () => api.listProjects(),
+    queryFn: async () => (await api.listProjects()).map(normaliseProject),
     refetchInterval: LIST_REFRESH_MS,
   });
 }

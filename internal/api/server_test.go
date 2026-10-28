@@ -769,3 +769,16 @@ func TestSPAFallbackAndNotBuilt(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "The web UI is not built")
 }
+
+func TestProjectViewShapeWithoutObserversOrDeployer(t *testing.T) {
+	x := newHarness(t)
+	rec := x.call(t, http.MethodGet, "/api/v1/projects", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	var projects []map[string]json.RawMessage
+	decode(t, rec, &projects)
+	require.Len(t, projects, 1)
+	assert.JSONEq(t, `[]`, string(projects[0]["observe"]), "observe is an array even when empty")
+	assert.JSONEq(t, `null`, string(projects[0]["deploy"]), "deploy is null when unset")
+	assert.Contains(t, rec.Body.String(), `"observe":[]`)
+	assert.Contains(t, rec.Body.String(), `"deploy":null`)
+}

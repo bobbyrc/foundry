@@ -53,11 +53,15 @@ type TaskDetail struct {
 // ProjectView is a configured project plus its live task counts. Config values are redacted.
 // Paused is the effective state: true whenever PausedBy is set. It shadows the config's own
 // paused field, which is the same as PausedBy == "config".
+// Observe and Deploy shadow the config's omitempty tags so the shape is stable: observe is
+// always an array ([] when none) and deploy is an object or null.
 type ProjectView struct {
 	config.Project
-	Paused   bool           `json:"paused"`
-	PausedBy string         `json:"paused_by"`
-	Counts   map[string]int `json:"counts"`
+	Observe  []config.Observer `json:"observe"`
+	Deploy   *config.Deploy    `json:"deploy"`
+	Paused   bool              `json:"paused"`
+	PausedBy string            `json:"paused_by"`
+	Counts   map[string]int    `json:"counts"`
 }
 
 // Stats is the body of GET /stats.
@@ -384,7 +388,18 @@ func (s *server) listProjects(w http.ResponseWriter, r *http.Request) {
 			counts[string(t.Status)]++
 		}
 		pausedBy := s.opts.Controller.ProjectPausedBy(name)
-		out = append(out, ProjectView{Project: *p, Paused: pausedBy != "", PausedBy: pausedBy, Counts: counts})
+		observe := p.Observe
+		if observe == nil {
+			observe = []config.Observer{}
+		}
+		out = append(out, ProjectView{
+			Project:  *p,
+			Observe:  observe,
+			Deploy:   p.Deploy,
+			Paused:   pausedBy != "",
+			PausedBy: pausedBy,
+			Counts:   counts,
+		})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

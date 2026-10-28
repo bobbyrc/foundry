@@ -1,5 +1,5 @@
 // Derived values for the Projects page. Kept apart from the component so the rules are testable.
-import type { LoopView } from '../types';
+import type { Deploy, LoopView, Observer, ProjectCounts, ProjectView } from '../types';
 import { parseTime } from './time';
 
 /** owner/name as GitHub writes it. Anything else (a URL, a bare name) gets no link. */
@@ -31,4 +31,29 @@ const HEALTH_LABEL: Record<LoopHealth, string> = {
 /** Screen-reader text for the pill's dot, so health is not carried by colour alone. */
 export function loopHealthLabel(loop: LoopView): string {
   return HEALTH_LABEL[loopHealth(loop)];
+}
+
+/**
+ * A project as the API may send it. The Go side omits observe when a project has none, and a
+ * stale or partial response may omit counts, so those fields are optional here.
+ */
+export interface RawProjectView extends Omit<ProjectView, 'observe' | 'deploy' | 'counts'> {
+  observe?: Observer[] | null;
+  deploy?: Deploy | null;
+  counts?: Partial<ProjectCounts> | null;
+}
+
+const NO_COUNTS: ProjectCounts = { queued: 0, running: 0, review: 0, awaiting_approval: 0, blocked: 0 };
+
+/**
+ * Gives a project the stable shape the Projects page reads: observe is always an array, deploy is
+ * a deployer or null, and counts has every key.
+ */
+export function normaliseProject(raw: RawProjectView): ProjectView {
+  return {
+    ...raw,
+    observe: raw.observe ?? [],
+    deploy: raw.deploy ?? null,
+    counts: { ...NO_COUNTS, ...raw.counts },
+  };
 }

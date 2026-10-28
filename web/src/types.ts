@@ -61,6 +61,7 @@ export interface Task {
   pr_url?: string;
   merge_sha?: string;
   approved_sha?: string;
+  pushed_at?: string;
   summary?: string;
   blocked_reason?: string;
   attempts: number;
@@ -125,6 +126,7 @@ export interface Approval {
   title: string;
   reason: string;
   status: ApprovalStatus;
+  head_sha?: string;
   note?: string;
   created_at: string;
   decided_at?: string;
@@ -260,7 +262,9 @@ export interface Project {
   policy: string;
   instructions?: string;
   env?: Record<string, string>;
-  deploy?: Deploy;
+  agents?: Record<string, Agent>;
+  routing?: Record<string, string>;
+  deploy?: Deploy | null;
   observe?: Observer[];
   loops?: Loops;
   paused: boolean;
@@ -299,6 +303,7 @@ export interface Harness {
   command?: string[];
   args?: string[];
   env?: Record<string, string>;
+  inherit_env?: string[];
 }
 
 export interface Agent {
@@ -326,8 +331,9 @@ export interface Gate {
 export interface Policy {
   max_lines: number;
   max_files: number;
+  /** Go nil slices and maps marshal as null, so these may be null. */
   rules: Rule[] | null;
-  gates: Record<string, Gate>;
+  gates: Record<string, Gate> | null;
 }
 
 export interface Deploy {
