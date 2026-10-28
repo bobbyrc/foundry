@@ -179,7 +179,7 @@ function RunsTable({ runs }: { runs: Run[] }) {
         return formatDuration(elapsedMs(start, parseTime(r.ended_at), now));
       },
     },
-    { key: 'cost', header: 'Cost', cell: (r) => formatCost(r.cost_usd) },
+    { key: 'cost', header: 'Cost', cell: (r) => formatCost(r.cost_usd, r.cost_estimated) },
     { key: 'link', header: 'Run', cell: (r) => <Link to={`/runs/${r.id}`}><IdChip id={r.id} /></Link> },
   ];
   return <Table columns={columns} rows={runs} rowKey={(r) => r.id} empty="No runs yet. A run starts when the task is picked up." />;

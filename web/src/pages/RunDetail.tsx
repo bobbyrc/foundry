@@ -60,7 +60,7 @@ export function RunDetail() {
         </MetaItem>
         <MetaItem label="Session">{r.session_id ? <span className="mono">{r.session_id}</span> : '—'}</MetaItem>
         <MetaItem label="Exit code">{r.exit_code}</MetaItem>
-        <MetaItem label="Cost">{formatCost(r.cost_usd)}</MetaItem>
+        <MetaItem label="Cost">{formatCost(r.cost_usd, r.cost_estimated)}</MetaItem>
         <MetaItem label="Tokens">{`in ${formatTokens(r.input_tokens)} · out ${formatTokens(r.output_tokens)}`}</MetaItem>
         <MetaItem label="Started">
           <RelTime value={r.started_at} />

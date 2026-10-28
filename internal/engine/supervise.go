@@ -168,6 +168,12 @@ func (e *Engine) supervise(ctx context.Context, run domain.Run, sess harness.Ses
 		r.EndedAt = &endedAt
 		r.ExitCode = res.ExitCode
 		r.CostUSD = res.CostUSD
+		r.CostEstimated = false
+		if p := e.Config().Harness[run.Harness].Price; res.CostUSD == 0 && p != nil {
+			if est := p.Estimate(res.InputTokens, res.CachedInputTokens, res.OutputTokens); est > 0 {
+				r.CostUSD, r.CostEstimated = est, true
+			}
+		}
 		r.InputTokens = res.InputTokens
 		r.OutputTokens = res.OutputTokens
 		if res.SessionID != "" {

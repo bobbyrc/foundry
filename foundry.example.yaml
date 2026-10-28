@@ -32,6 +32,13 @@ harnesses:
     type: claude-code                  # built-in harness type; default for "claude"
   codex:
     type: codex                        # built-in harness type; default for "codex"
+    # Codex reports tokens but no dollar cost. With a price, foundry estimates each run's cost
+    # (shown as ~$0.42) so limits.daily_budget_usd counts it. USD per million tokens; 0 = unknown.
+    # These are PLACEHOLDERS: fill in the real prices for your plan or model.
+    price:
+      input_per_mtok: 1.25
+      output_per_mtok: 10.00
+      cached_input_per_mtok: 0.125
   # A harness of type "exec" runs any command that speaks foundry's protocol.
   my-agent:
     type: exec

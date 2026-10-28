@@ -60,3 +60,12 @@ func TestCleanStreamIsNotAnError(t *testing.T) {
 	_, isError := feed(t, lineCompleted)
 	assert.False(t, isError)
 }
+
+func TestCachedInputTokensAreSummed(t *testing.T) {
+	p := newParser()
+	p.parseLine(`{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":5}}`)
+	p.parseLine(`{"type":"turn.completed","usage":{"input_tokens":50,"cached_input_tokens":10,"output_tokens":5}}`)
+	res := p.result(0, nil)
+	assert.Equal(t, int64(150), res.InputTokens)
+	assert.Equal(t, int64(50), res.CachedInputTokens)
+}
