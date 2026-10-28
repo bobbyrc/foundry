@@ -100,3 +100,4 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] chat replies tied to shutdown; crash recovery respects max attempts
 - [x] cancelled incidents stay dismissed; retro excludes its own work; review findings deduped
 - [ ] known limit: budget counts a run's cost only when it ends (in-flight runs count $0)
+- [ ] idea: herdr gram intake — pick up owner-queued work posted from the Herdr phone app (herdr gram grab) as foundry tasks

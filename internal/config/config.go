@@ -127,9 +127,12 @@ type Project struct {
 	// Checks run in the worktree after the agent finishes and before foundry commits and
 	// pushes (formatters, linters, fast tests). A failing check fails the attempt: the task is
 	// re-queued with the check's output, like a CI failure, without spending a CI run.
-	Checks  []Check    `yaml:"checks" json:"checks,omitempty"`
-	Deploy  *Deploy    `yaml:"deploy" json:"deploy,omitempty"`
-	Observe []Observer `yaml:"observe" json:"observe,omitempty"`
+	Checks []Check `yaml:"checks" json:"checks,omitempty"`
+	// Intake sources turn external work queues into tasks: each command prints tasks as JSON
+	// lines (see docs/plugins.md, "Intake sources"). Run by the exec_intake loop.
+	Intake  []IntakeSource `yaml:"intake" json:"intake,omitempty"`
+	Deploy  *Deploy        `yaml:"deploy" json:"deploy,omitempty"`
+	Observe []Observer     `yaml:"observe" json:"observe,omitempty"`
 	// Loops overrides the global loop settings for this project.
 	Loops *Loops `yaml:"loops" json:"loops,omitempty"`
 	// Paused stops the scheduler from starting runs and the loops from creating tasks.
@@ -193,6 +196,8 @@ type Loops struct {
 		Loop     `yaml:",inline"`
 		Lookback Duration `yaml:"lookback" json:"lookback"` // evidence window; default = Every
 	} `yaml:"retro" json:"retro"`
+	// ExecIntake runs each project's intake sources. Default every 1m.
+	ExecIntake Loop `yaml:"exec_intake" json:"exec_intake"`
 	// Friction files GitHub issues for reported friction.
 	Friction struct {
 		Loop      `yaml:",inline"`
@@ -209,5 +214,17 @@ type Check struct {
 	// Run is a shell command (sh -c) run in the worktree with the project's env.
 	Run string `yaml:"run" json:"run"`
 	// Timeout defaults to 10m.
+	Timeout Duration `yaml:"timeout" json:"timeout"`
+}
+
+// IntakeSource is an external queue of work, read by running a command.
+type IntakeSource struct {
+	Name string `yaml:"name" json:"name"`
+	// Command is a shell command (sh -c) that prints zero or more tasks, one JSON object per
+	// line: {"id","title","body","kind","priority","role"}. id is required and dedupes.
+	Command string `yaml:"command" json:"command"`
+	// Kind is the default task kind when a line has none (default "feature").
+	Kind string `yaml:"kind" json:"kind,omitempty"`
+	// Timeout for one run of Command (default 60s).
 	Timeout Duration `yaml:"timeout" json:"timeout"`
 }
