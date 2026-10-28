@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -231,7 +232,7 @@ func cmdVersion(e *env, args []string) error {
 	if err := requireArgs(args, 0, "version"); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.out, "foundry %s\n", version)
+	fmt.Fprintf(e.out, "foundry %s (%s %s/%s)\n", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	return nil
 }
 
