@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"runtime"
 	"runtime/debug"
 	"testing"
 )
@@ -33,5 +35,16 @@ func TestResolveVersion(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestVersionCommandShowsToolchain(t *testing.T) {
+	code, out, errOut := runCLI("version")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	want := fmt.Sprintf("foundry %s (%s %s/%s)\n", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	if out != want {
+		t.Errorf("got %q, want %q", out, want)
 	}
 }
