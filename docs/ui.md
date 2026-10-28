@@ -57,7 +57,7 @@ Radius 8px on cards, 6px on controls, 999px on pills. Spacing scale 4/8/12/16/24
   Approvals (accent count badge when > 0), Runs, Deploys, Signals, Friction, Loops, Agents,
   Config. Active item: `--panel-2` background and a 2px accent bar on the left.
 - Sidebar footer: the **pause switch** — a full-width button. Running: secondary
-  "Pause factory". Paused: danger fill "Paused — nothing starts. Resume". Below it the live
+  "Pause factory". Paused: danger fill "Paused — no new runs. Resume". Below it the live
   indicator: green dot "live" when the event stream is connected, amber "reconnecting…".
 - Main area: page header (title left, page actions right) then content, max width 1280px,
   24px padding.
@@ -71,6 +71,17 @@ If no token is stored or any call returns 401, show a centred card: "Connect to 
 one password field "Token", help text "Run `foundry token` or read `<data_dir>/token`.", and
 a Connect button. A `#token=<value>` URL fragment on load is stored in localStorage and
 removed from the URL.
+
+## Install on a phone
+
+The UI is an installable web app (it has a web app manifest, `/manifest.webmanifest`, and an
+amber-square icon, `/icon.svg`), so it can sit on a phone home screen and open without browser
+chrome. Open foundry's URL on the phone first. From another network that needs remote access,
+such as Tailscale, and the name you use must be in `server.allowed_hosts`, or the server answers
+421. Then:
+
+- iOS (Safari): Share → Add to Home Screen.
+- Android (Chrome): menu → Install app (or Add to Home screen).
 
 ## Live data
 

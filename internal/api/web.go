@@ -4,6 +4,7 @@ import (
 	"embed"
 	"errors"
 	"io/fs"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -11,6 +12,14 @@ import (
 
 //go:embed all:webdist
 var webFS embed.FS
+
+func init() {
+	// Go's built-in MIME table has no entry for .webmanifest, so http.FileServer would send it
+	// as text/plain. The browser still reads it, but install prompts expect the manifest type.
+	if err := mime.AddExtensionType(".webmanifest", "application/manifest+json"); err != nil {
+		panic("api: mime: " + err.Error())
+	}
+}
 
 // DefaultWeb returns the web UI embedded from webdist, the build output of web/.
 func DefaultWeb() fs.FS {

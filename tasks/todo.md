@@ -103,4 +103,4 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] idea: herdr gram intake — pick up owner-queued work posted from the Herdr phone app (herdr gram grab) as foundry tasks
 - [x] issue-sourced tasks must report back: when a github_issue task ends without a PR (no_changes / blocked / failed / cancelled) comment the outcome on the issue (the intake comment promises it); once per outcome
 - [ ] later: comments/PRs post as the owner's gh account — consider a bot account or GitHub App for clear provenance
-- [ ] pause messages (CLI, engine event, UI pause button text, docs/api.md) still say 'no loops act' — pause stops new work, but deploy_watch/prod_watch keep running
+- [x] pause messages (CLI, engine event, UI pause button text, docs/api.md) still say 'no loops act' — pause stops new work, but deploy_watch/prod_watch keep running

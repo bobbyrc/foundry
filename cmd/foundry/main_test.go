@@ -167,6 +167,32 @@ func TestStatusNeedsYou(t *testing.T) {
 	assert.Contains(t, out, "run run-1")
 }
 
+func TestStatusPausedWording(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"paused": true})
+	})
+	mux.HandleFunc("GET /api/v1/control", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"paused": true})
+	})
+	mux.HandleFunc("GET /api/v1/approvals", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, []any{})
+	})
+	mux.HandleFunc("GET /api/v1/tasks", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, []any{})
+	})
+	mux.HandleFunc("GET /api/v1/runs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, []any{})
+	})
+	fakeAPI(t, mux)
+
+	code, out, errOut := runCLI("status")
+	require.Equal(t, 0, code, errOut)
+	assert.Contains(t, out, "Factory: PAUSED. No new runs start and no new work is picked up; "+
+		"release verification/rollback and production watching continue. `foundry resume` to continue.")
+	assert.NotContains(t, out, "no loops act")
+}
+
 func TestStatusJSON(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {

@@ -92,7 +92,7 @@ func cmdStatus(e *env, args []string) error {
 
 func writeStatus(w io.Writer, s statusSnapshot) error {
 	if s.Control.Paused {
-		fmt.Fprintln(w, "Factory: PAUSED. No runs start and no loops act until `foundry resume`.")
+		fmt.Fprintln(w, "Factory: PAUSED. No new runs start and no new work is picked up; release verification/rollback and production watching continue. `foundry resume` to continue.")
 	} else {
 		fmt.Fprintln(w, "Factory: running.")
 	}
@@ -939,7 +939,7 @@ func setPaused(e *env, args []string, pause bool) error {
 	ctx := context.Background()
 	if pause {
 		_, err = c.Pause(ctx)
-		fmt.Fprintln(e.out, "paused: no runs start and no loops act until `foundry resume`")
+		fmt.Fprintln(e.out, "paused: no new runs start; release verification/rollback and production watching continue (`foundry resume` to continue)")
 	} else {
 		_, err = c.Resume(ctx)
 		fmt.Fprintln(e.out, "resumed")
