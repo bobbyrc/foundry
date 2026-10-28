@@ -23,3 +23,7 @@
   left mentions bare. And when the guard's own parsing can be wrong, make its errors cosmetic,
   not unsafe.
 
+- Exercise the real flow after changing the runner: a throwaway local repo plus a second daemon
+  on a spare port takes minutes, and it found the stranded-branch bug (a retry after a failed PR
+  open marked the task done) that every unit test passed. Live drills (kill staging during
+  verification, inject a log error) found more than the reviews did for the deploy path.
