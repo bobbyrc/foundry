@@ -199,9 +199,11 @@ notify:
     min_priority: normal               # low, normal or high; empty sends everything
 
   # An exec notifier runs a command with the message. Uncomment to use it.
+  # Push to your phone through the Herdr app. The exec notifier runs a shell command with the
+  # notification in FOUNDRY_NOTIFY_TITLE, _BODY, _PRIORITY and _URL.
   # - type: exec
   #   options:
-  #     command: ["herdr", "gram", "send", "--text"]
+  #     command: herdr gram send --from foundry "$FOUNDRY_NOTIFY_TITLE — $FOUNDRY_NOTIFY_BODY $FOUNDRY_NOTIFY_URL"
   #   min_priority: high
 
 # self_project: the project that is foundry itself. Friction reports are filed there.
