@@ -1,0 +1,246 @@
+# foundry.example.yaml: every section of foundry.yaml, annotated.
+# Copy it to foundry.yaml and edit. Every key is optional; unset keys take the defaults
+# noted below. Unknown keys are errors, so a typo fails at startup.
+#
+# A dollar sign followed by NAME in braces is replaced with the environment variable NAME before
+# parsing. A variable that is not set is an error that names it, so the daemon will not start.
+# A bare $NAME is left alone, so shell snippets such as "vercel rollback $FOUNDRY_ROLLBACK_ID"
+# pass through unchanged.
+
+# Server: where foundry listens and where it keeps its state.
+server:
+  addr: 127.0.0.1:7777                 # address the HTTP API and UI listen on (default 127.0.0.1:7777)
+  data_dir: ~/.local/share/foundry     # database, logs and default clones live here (default shown)
+  public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>, with 0.0.0.0 or :: shown as loopback)
+  retain_events: 720h                  # event history kept this long; older events are deleted daily (default 720h = 30 days)
+  retain_run_logs: 2160h               # agent run logs kept this long (default 2160h = 90 days)
+  # allowed_hosts: [foundry.tailnet.ts.net]   # extra Host names the API accepts (e.g. a Tailscale name); needed for remote access (default none)
+
+# Limits: caps on how much runs at once and how long a run may go.
+limits:
+  max_concurrent_runs: 3               # agent runs across all projects (default 3)
+  max_runs_per_project: 1              # agent runs in one project at a time (default 1)
+  stall_timeout: 15m                   # a run with no output for this long is stalled (default 15m)
+  run_timeout: 2h                      # a run longer than this is stopped (default 2h)
+  max_attempts: 3                      # tries per task before it is blocked until a human retries it (default 3)
+  daily_budget_usd: 20                 # task-run cost per local day (USD) before new runs stop; 0 = no limit. Codex reports no cost, so it is not counted
+
+# Harnesses: the agent CLIs foundry can drive. "claude" and "codex" are always present; you
+# only list one here to change its settings or to add another.
+harnesses:
+  claude:
+    type: claude-code                  # built-in harness type; default for "claude"
+  codex:
+    type: codex                        # built-in harness type; default for "codex"
+    # Codex reports tokens but no dollar cost. With a price, foundry estimates each run's cost
+    # (shown as ~$0.42) so limits.daily_budget_usd counts it. USD per million tokens; 0 = unknown.
+    # These are PLACEHOLDERS: fill in the real prices for your plan or model.
+    price:
+      input_per_mtok: 1.25
+      output_per_mtok: 10.00
+      cached_input_per_mtok: 0.125
+  # A harness of type "exec" runs any command that speaks foundry's protocol.
+  my-agent:
+    type: exec
+    command: ["/usr/local/bin/my-agent", "--json"]   # argv to run; required for exec
+    args: ["--model", "fast"]                        # extra arguments appended to command
+    env:                                             # added to the environment of each run
+      MY_AGENT_MODE: "headless"
+    # Agents get only an allowlist of foundry's environment (PATH, HOME, LANG, ...), so tokens
+    # foundry holds (GH_TOKEN and the like) never reach them. inherit_env passes named variables
+    # through; give an agent only what it needs, and never foundry's own GitHub token.
+    inherit_env: ["MY_AGENT_API_KEY"]
+
+# Agents: roles. Each role runs on one harness with one model and one set of instructions.
+# The six built-in roles (orchestrator, implementer, reviewer, triager, sre, improver) are
+# always present with the defaults shown in the comments below. Redefine any of them here.
+agents:
+  orchestrator:
+    harness: claude                    # default: claude, model opus
+    model: opus
+    prompt: builtin:orchestrator       # "builtin:<name>" or a Markdown file path
+    description: The agent you chat with. Plans work and delegates it to other roles.
+
+  # Override the implementer to run on Claude instead of Codex.
+  implementer:
+    harness: claude                    # default: codex
+    model: sonnet                      # the model name the harness understands; empty = harness default
+    prompt: builtin:implementer
+    description: Writes code for features, bug fixes, issues and chores, with tests.
+
+  # A custom role. Its prompt is a Markdown file; a relative path is relative to this file.
+  security:
+    harness: claude
+    model: sonnet
+    prompt: prompts/security.md        # must not be empty; appended to every run of this role
+    args: ["--max-turns", "40"]        # extra harness arguments for this role only
+    description: Audits changes that touch auth, secrets or network boundaries.
+
+# Routing: which role handles each kind of task. Kinds: feature, bugfix, issue, incident,
+# review, chore, improve, question. Defaults shown; a role name here must exist above.
+routing:
+  feature: implementer                 # default: implementer
+  bugfix: implementer                  # default: implementer
+  issue: implementer                   # default: implementer
+  chore: implementer                   # default: implementer
+  incident: sre                        # default: sre
+  review: reviewer                     # default: reviewer
+  improve: improver                    # default: improver
+  question: triager                    # default: triager
+
+# Policies: deterministic rules that decide how risky a change is and whether it can merge
+# on its own. A project refers to one by name; the one named "default" applies otherwise.
+policies:
+  # Setting "default" here would replace the built-in one. Left out, it is added for you.
+  strict:
+    max_lines: 200                     # a diff above this many changed lines is at least medium risk (default 400)
+    max_files: 10                      # a diff touching more files than this is at least medium risk (default 20)
+    require_checks: false              # true: a PR with no CI checks waits (then blocks after 30m) instead of counting as "no CI"; use for repos that always run CI
+    ci_grace: 3m                       # after a push, a PR with no checks yet counts as CI pending this long (default 3m)
+    # "rules" REPLACES the built-in rules (migrations, CI/deploy, auth, dependency manifests,
+    # foundry's own gates) with the list you give. Setting it drops all of those protections
+    # unless you copy them. "extra_rules" is usually what you want: it adds to the built-in rules.
+    extra_rules:
+      # An extra rule: changes to public API definitions need a human.
+      - risk: high
+        reason: public API contract
+        paths: ["api/**", "**/*.proto", "**/openapi.yaml"]
+      # A rule can match on labels or task kinds instead of paths.
+      - risk: medium
+        reason: labelled as risky
+        labels: ["risky"]
+      # A rule can match on the task's source ("followup", "retro", "github_issue", "signal", ...),
+      # and a source rule with no paths is valid. Foundry's built-in default already rates
+      # follow-up and retro work medium, so it waits for you; uncomment to do the same for signals:
+      #   - risk: medium
+      #     reason: production signal fix
+      #     sources: ["signal"]
+    gates:                             # per risk level; a missing level takes the default
+      low:
+        auto_merge: true               # merge without a human once checks pass (default true)
+        require_review: true           # a reviewer run must approve first (default true)
+        require_ci: true               # CI must be green first (default true)
+      medium:
+        auto_merge: false              # medium and high wait for you by default
+        require_review: true
+        require_ci: true
+      high:
+        auto_merge: false
+        require_review: true
+        require_ci: true
+
+# Projects: the repositories foundry works on. The key is the project name.
+projects:
+  foundry:
+    repo: bobbyrc/foundry              # GitHub owner/name, or an absolute local path
+    path: ~/code/foundry               # local clone; default <data_dir>/repos/<name>
+    default_branch: main               # default main
+    policy: default                    # a name from policies; default "default"
+    instructions: |                    # appended to every agent prompt for this project
+      Run `mise exec -- go test -race ./...` before you report done.
+    env:                               # added to each agent session for this project
+      FOUNDRY_PROJECT: foundry
+    # Setup and checks run with the agent's environment (the allowlist, the harness's inherit_env
+    # and this project's env), not foundry's, because they run code the agent may have written.
+    # setup:                           # run in each fresh worktree before the agent starts
+    #   - name: web deps
+    #     run: cd web && npm ci --prefer-offline --no-audit
+    #     timeout: 5m
+    # checks:                          # run after the agent, before foundry commits and pushes
+    #   - name: test                   # a failing check re-queues the task with its output
+    #     run: mise exec -- go test -race ./...
+    #     timeout: 10m                 # default 10m
+    # intake:                          # external queues that become tasks; see docs/plugins.md, "Intake sources"
+    #   - name: inbox                  # lowercase letters, digits, - and _; unique per project
+    #     command: cat ~/foundry-inbox.jsonl   # prints one JSON item per line: {"id","title","body","kind","priority","role"}
+    #     kind: feature                # default kind for items that name none (default feature)
+    #     timeout: 60s                 # for one run of the command (default 60s)
+    # No deploy block: merged work is not released by foundry.
+    paused: false                      # true stops new runs and loop-created tasks (default false)
+
+  myapp:
+    repo: bobbyrc/myapp
+    path: ~/code/myapp
+    default_branch: main
+    policy: strict                     # uses the "strict" policy defined above
+    instructions: Keep the mobile API backward compatible.
+    agents:                            # this project's overrides of the global agent roles
+      implementer:                     # set fields replace the global role's fields
+        harness: claude                # this project's implementer runs on Claude Code
+        model: sonnet                  # and uses this model; its prompt and other fields stay global
+    routing:                           # task kind -> role, for this project only
+      bugfix: implementer              # bugfix tasks here go to the implementer above
+    deploy:
+      type: command                    # runs the commands under options below
+      options:
+        # Shell commands for the "command" deploy type. A deploy may start a long-running service in
+        # the background: it keeps running after a successful deploy, and foundry kills it if the
+        # deploy fails or times out. Redirect its output (e.g. "> app.log 2>&1 &").
+        deploy: "vercel deploy --prod --yes"
+        # $FOUNDRY_ROLLBACK_ID is set by foundry to the release to roll back to.
+        rollback: "vercel rollback $FOUNDRY_ROLLBACK_ID --yes"
+      health_url: https://myapp.example.com/healthz   # must answer 2xx during verify_for; empty skips it
+      logs: tail -n 200 /path/to/app.log   # prints recent service logs; attached to failed releases and incidents
+      verify_for: 10m                  # watch a release this long before calling it healthy (default 10m)
+      timeout: 30m                     # fail a release still building after this long (default 30m)
+      auto_rollback: true              # roll back on a failed verify window (default true)
+    observe:
+      # Observers feed production problems into prod_watch. Name defaults to type.
+      - name: sentry-prod              # unique within the project
+        type: sentry
+        options:                       # observer-specific; keys with token/secret/key are redacted in the UI
+          org: acme
+          project: myapp
+    loops:
+      # Per-project overrides. Each field you set replaces the global loop setting for this
+      # project only; fields you leave out keep the global value.
+      prod_watch:
+        every: 2m                      # poll Sentry more often than the global 10m
+        min_level: fatal               # only open incidents for fatal errors (global default: error)
+      pr_shepherd:
+        every: 30s                     # move PRs along faster for this project
+
+# Loops: recurring background jobs. Each one can be turned off with enabled: false.
+loops:
+  issue_intake:
+    enabled: true                      # default true
+    every: 5m                          # default 5m
+    label: foundry                     # open issues with this label become tasks (default "foundry")
+  pr_shepherd:
+    every: 1m                          # moves tasks in review through CI, review, policy and merge (default 1m)
+  deploy_watch:
+    every: 30s                         # releases merged work and verifies it (default 30s)
+  prod_watch:
+    every: 10m                         # polls observers and opens incident tasks (default 10m)
+    min_level: error                   # error, warning or fatal (default error)
+    min_count: 1                       # occurrences before an incident is opened (default 1)
+  friction:
+    every: 10m                         # collects friction reports into GitHub issues (default 10m)
+    label: friction                    # label on filed issues (default "friction")
+    min_count: 1                       # reports before an issue is filed (default 1)
+    auto_file: true                    # file issues automatically; false only records them (default true)
+    auto_queue: false                  # also label the filed issue so issue_intake picks it up (default false)
+  exec_intake:
+    every: 1m                          # runs each project's intake sources and creates tasks for new items (default 1m)
+  retro:
+    every: 24h                         # files a retrospective improve task with recent failures and friction (default 24h)
+    lookback: 24h                      # evidence window; default is every
+    # enabled: true                    # unset, retro runs for self_project only; true or false overrides that
+
+# Notify: where to send notifications. Empty means a log line only.
+notify:
+  - type: ntfy                         # push notifications via ntfy.sh
+    options:
+      topic: foundry-bcraig-example    # pick a hard-to-guess topic; anyone who knows it can read it
+    min_priority: normal               # low, normal or high; empty means normal (low-priority messages are not sent)
+
+  # An exec notifier runs a command with the message. Uncomment to use it.
+  # Push to your phone through the Herdr app. The exec notifier runs a shell command with the
+  # notification in FOUNDRY_NOTIFY_TITLE, _BODY, _PRIORITY and _URL.
+  # - type: exec
+  #   options:
+  #     command: herdr gram send --from foundry "$FOUNDRY_NOTIFY_TITLE — $FOUNDRY_NOTIFY_BODY $FOUNDRY_NOTIFY_URL"
+  #   min_priority: high
+
+# self_project: the project that is foundry itself. Friction reports are filed there.
+self_project: foundry

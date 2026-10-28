@@ -1,0 +1,1984 @@
+openapi: 3.1.0
+info:
+  title: foundry
+  version: v1
+  summary: HTTP API of the foundry agent factory.
+  description: |
+    Every client (the web UI, the `foundry` CLI, the orchestrator agent, and native or mobile
+    apps) uses this API. It is the source for client code generation. The prose contract is in
+    docs/api.md. `internal/api/openapi_test.go` fails when a route is added, removed or renamed
+    without a matching change here.
+
+    Times are RFC 3339 strings. Fields marked optional are omitted by the server when they are
+    empty (Go `omitempty`), so clients must treat a missing key and a zero value the same way.
+
+    Errors use the `Error` schema: `{"error": "<message>"}`. The status codes are 400 (invalid
+    request), 401 (missing or wrong token), 404 (not found), 409 (conflict with current state)
+    and 500 (internal error; the message is hidden).
+
+    Requests that contain unknown JSON fields are rejected with 400.
+  license:
+    name: Proprietary
+servers:
+  - url: http://127.0.0.1:7777/api/v1
+    description: Local foundry daemon (default listen address)
+security:
+  - bearer: []
+tags:
+  - name: health
+  - name: events
+    description: Server-Sent Event stream and stored event history.
+  - name: stats
+  - name: control
+    description: The global pause switch.
+  - name: projects
+  - name: agents
+  - name: tasks
+  - name: runs
+  - name: approvals
+  - name: deployments
+  - name: signals
+  - name: friction
+  - name: loops
+  - name: config
+  - name: conversations
+    description: Chat threads with the orchestrator agent.
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [health]
+      summary: Liveness check.
+      description: Does not require a token.
+      security: []
+      responses:
+        '200':
+          description: The daemon is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /events:
+    get:
+      operationId: streamEvents
+      tags: [events]
+      summary: Subscribe to the live event stream (Server-Sent Events).
+      description: |
+        Opens a `text/event-stream` response. With `after`, the server first replays stored events
+        whose ID is greater than `after`, then streams live events.
+
+        Frame format. Each event is written as:
+
+        ```text
+        id: 1234
+        event: task.updated
+        data: {"id":1234,"time":"…","type":"task.updated", …}
+
+        ```
+
+        - `id:` is the stored event ID. Clients resume with the last ID they saw. Live-only
+          events have no `id:` line, and their `id` inside `data` is `0`.
+        - `event:` is the event type. Clients must ignore types they do not know.
+        - `data:` is one `Event` JSON object on a single line.
+        - A frame ends with a blank line.
+        - The server sends the comment line `: ping` every 15 seconds to keep the connection
+          open. Clients ignore comment lines.
+        - Live-only types are `run.log` and `chat.delta`. They are not stored, so they never
+          appear in replay.
+        - If a client falls too far behind, the server closes the stream. The client reconnects
+          with its last `id`.
+
+        Authentication: browsers' `EventSource` cannot set headers, so this route also accepts
+        the token in the `token` query parameter (`/events?token=…`). Use either the bearer
+        header or `token`.
+      security:
+        - bearer: []
+        - queryToken: []
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Replay stored events with an ID greater than this. Absent means live only.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+      responses:
+        '200':
+          description: An open event stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Frames as described in the operation description.
+              x-data-schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /events/history:
+    get:
+      operationId: listEventHistory
+      tags: [events]
+      summary: List stored events.
+      description: Returns up to `limit` events in ascending ID order. The default limit is 500.
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Return events with an ID greater than this.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: task_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Stored events.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [stats]
+      summary: Counts and cost summary for the dashboard.
+      responses:
+        '200':
+          description: Current statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /control:
+    get:
+      operationId: getControl
+      tags: [control]
+      summary: Read the global pause switch.
+      responses:
+        '200':
+          description: Current pause state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Control'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /control/pause:
+    post:
+      operationId: pauseControl
+      tags: [control]
+      summary: Pause all work.
+      description: While paused, no run starts and no loop acts.
+      responses:
+        '200':
+          description: The new pause state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Control'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /control/resume:
+    post:
+      operationId: resumeControl
+      tags: [control]
+      summary: Resume work after a pause.
+      responses:
+        '200':
+          description: The new pause state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Control'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List configured projects with live task counts.
+      responses:
+        '200':
+          description: Projects sorted by name. Config values are redacted.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects/{name}/pause:
+    post:
+      operationId: pauseProject
+      tags: [projects]
+      summary: Pause one project at runtime.
+      description: While the project is paused, the scheduler starts none of its runs and its loops create no tasks. The pause is saved and survives restarts. A project paused in foundry.yaml is already paused, and this call reports paused_by as config and leaves the state unchanged.
+      parameters:
+        - $ref: '#/components/parameters/ProjectName'
+      responses:
+        '200':
+          description: The project's pause state after the call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPauseState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects/{name}/resume:
+    post:
+      operationId: resumeProject
+      tags: [projects]
+      summary: Resume a project paused at runtime.
+      description: A project paused in foundry.yaml cannot be resumed through the API; edit the config instead and reload it.
+      parameters:
+        - $ref: '#/components/parameters/ProjectName'
+      responses:
+        '200':
+          description: The project's pause state after the call.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPauseState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      summary: List configured agent roles.
+      responses:
+        '200':
+          description: Agents sorted by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks.
+      description: Newest first. The default limit is 200.
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Comma-separated list of statuses, such as `queued,running`.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/TaskStatus'
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TaskKind'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Matching tasks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task.
+      description: |
+        The task is queued and the scheduler is woken. The `review` kind is rejected, because
+        foundry creates review tasks itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewTask'
+      responses:
+        '201':
+          description: The created task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get a task with its runs, approvals and child tasks.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: The task and its related records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tasks/{id}/cancel:
+    post:
+      operationId: cancelTask
+      tags: [tasks]
+      summary: Cancel a task.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '204':
+          description: Cancelled.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tasks/{id}/retry:
+    post:
+      operationId: retryTask
+      tags: [tasks]
+      summary: Re-queue a blocked, failed or cancelled task.
+      description: Resets the attempt count to 0. A non-empty `note` is appended to the task body as guidance for the next run.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryTaskRequest'
+      responses:
+        '204':
+          description: Re-queued.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /runs:
+    get:
+      operationId: listRuns
+      tags: [runs]
+      summary: List runs.
+      description: Newest first. The default limit is 200.
+      parameters:
+        - name: task_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Comma-separated list of run statuses.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/RunStatus'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Matching runs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Run'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /runs/{id}:
+    get:
+      operationId: getRun
+      tags: [runs]
+      summary: Get one run.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: The run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /runs/{id}/logs:
+    get:
+      operationId: listRunLogs
+      tags: [runs]
+      summary: Read a run's log lines.
+      description: Lines are in ascending `seq` order. Use the last `seq` you saw as `after` to page forward. The default limit is 1000.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - name: after
+          in: query
+          required: false
+          description: Return lines with a `seq` greater than this.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: limit
+          in: query
+          required: false
+          description: Maximum lines to return. Absent or 0 means 1000.
+          schema:
+            type: integer
+            minimum: 0
+            default: 1000
+      responses:
+        '200':
+          description: Log lines.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LogLine'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /runs/{id}/cancel:
+    post:
+      operationId: cancelRun
+      tags: [runs]
+      summary: Stop a running run.
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '204':
+          description: Cancellation requested.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /approvals:
+    get:
+      operationId: listApprovals
+      tags: [approvals]
+      summary: List approvals.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by approval status. `all` returns every approval. The server accepts `approved` and `rejected` too, which the web UI does not use.
+          schema:
+            type: string
+            enum: [pending, approved, rejected, all]
+            default: pending
+      responses:
+        '200':
+          description: Matching approvals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Approval'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /approvals/{id}/decide:
+    post:
+      operationId: decideApproval
+      tags: [approvals]
+      summary: Approve or reject a pending approval.
+      description: An approval that is no longer pending returns 409.
+      parameters:
+        - $ref: '#/components/parameters/ApprovalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideApprovalRequest'
+      responses:
+        '200':
+          description: The decided approval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /deployments:
+    get:
+      operationId: listDeployments
+      tags: [deployments]
+      summary: List deployments.
+      description: Newest first. The default limit is 200.
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Deployments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Deployment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /signals:
+    get:
+      operationId: listSignals
+      tags: [signals]
+      summary: List production problems observed by the observers.
+      description: The default limit is 200.
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Signals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Signal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /friction:
+    get:
+      operationId: listFriction
+      tags: [friction]
+      summary: List reports of friction that slowed agents down.
+      description: The default limit is 200.
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Friction reports.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Friction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /loops:
+    get:
+      operationId: listLoops
+      tags: [loops]
+      summary: List recurring loops and their last run.
+      responses:
+        '200':
+          description: Loops.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoopView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /loops/{name}/run:
+    post:
+      operationId: runLoop
+      tags: [loops]
+      summary: Run one loop now.
+      description: |
+        `name` is one of `issue_intake`, `exec_intake`, `pr_shepherd`, `deploy_watch`,
+        `prod_watch`, `friction` or `retro`. An unknown name, or an unknown project, returns 400. The run is
+        asynchronous, so the response carries no body.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: project
+          in: query
+          required: false
+          description: Run the loop for this project only. Absent runs it for every project.
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /config:
+    get:
+      operationId: getConfig
+      tags: [config]
+      summary: Read the loaded configuration.
+      description: Env values, and the option values of deploy and observer entries, are replaced by `"***"`.
+      responses:
+        '200':
+          description: The redacted configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /config/reload:
+    post:
+      operationId: reloadConfig
+      tags: [config]
+      summary: Reload the configuration file.
+      description: If the file fails to load or validate, the request returns 400 and the current configuration stays in use.
+      responses:
+        '204':
+          description: Reloaded.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List chat conversations.
+      description: Returns up to 200 conversations, newest first.
+      responses:
+        '200':
+          description: Conversations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Start a conversation.
+      description: If `project` is set, it must name a configured project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '201':
+          description: The new conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a conversation with its messages.
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200':
+          description: The conversation and its messages in order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /conversations/{id}/messages:
+    post:
+      operationId: sendMessage
+      tags: [conversations]
+      summary: Send a message and start the orchestrator's reply.
+      description: |
+        The reply is not in the response. It arrives on the event stream as `chat.delta` events
+        (live, text chunks) and a final `chat.message` event. Returns 409 while a reply to an
+        earlier message is still running.
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '202':
+          description: The stored user message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: The token in `<data_dir>/token`, created on first start with mode 600.
+    queryToken:
+      type: apiKey
+      in: query
+      name: token
+      description: Accepted only by `GET /events`, because browsers' EventSource cannot set headers.
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum rows to return. Absent or 0 uses the endpoint's default, which is stated in its description.
+      schema:
+        type: integer
+        minimum: 0
+    TaskId:
+      name: id
+      in: path
+      required: true
+      description: Task ID.
+      schema:
+        type: string
+    RunId:
+      name: id
+      in: path
+      required: true
+      description: Run ID.
+      schema:
+        type: string
+    ApprovalId:
+      name: id
+      in: path
+      required: true
+      description: Approval ID.
+      schema:
+        type: string
+    ProjectName:
+      name: name
+      in: path
+      required: true
+      description: Project name as it appears in foundry.yaml.
+      schema:
+        type: string
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      description: Conversation ID.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: The request is invalid. The `error` message says what to fix.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: The bearer token is missing or wrong.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: No record has that ID.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The request clashes with the current state, for example a task that is already terminal.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: An unexpected server error. The message is hidden and the server logs it.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    Health:
+      type: object
+      required: [ok, version]
+      properties:
+        ok:
+          type: boolean
+        version:
+          type: string
+
+    Control:
+      type: object
+      required: [paused]
+      properties:
+        paused:
+          type: boolean
+          description: While true, no run starts and no loop acts.
+
+    ProjectPauseState:
+      type: object
+      required: [paused, paused_by]
+      properties:
+        paused:
+          type: boolean
+          description: True when paused_by is set.
+        paused_by:
+          type: string
+          enum: ['', config, owner]
+          description: Why the project is paused. `config` means paused in foundry.yaml, which the API cannot change. `owner` means paused through the API. Empty when running.
+
+    Stats:
+      type: object
+      required: [tasks_by_status, active_runs, approvals_pending, cost_today_usd, daily_budget_usd, paused]
+      properties:
+        tasks_by_status:
+          type: object
+          description: Task count per status. Every status key is present, with 0 when there are none.
+          additionalProperties:
+            type: integer
+        active_runs:
+          type: integer
+          description: Runs in `starting` or `running`.
+        approvals_pending:
+          type: integer
+        cost_today_usd:
+          type: number
+          description: Reported agent cost of runs that started since local midnight.
+        daily_budget_usd:
+          type: number
+          description: "`limits.daily_budget_usd`; 0 when unlimited. New runs stop once `cost_today_usd` reaches it."
+        paused:
+          type: boolean
+
+    Duration:
+      type: string
+      description: A Go duration such as `15m` or `2h`.
+      examples: ['15m', '2h']
+
+    # --- domain types (internal/domain) ---
+
+    TaskKind:
+      type: string
+      enum: [feature, bugfix, issue, incident, review, chore, improve, question]
+
+    TaskStatus:
+      type: string
+      enum: [queued, running, review, awaiting_approval, merged, deploying, done, blocked, failed, cancelled]
+
+    Risk:
+      type: string
+      description: How dangerous a change is. Omitted when unrated.
+      enum: [low, medium, high]
+
+    RunStatus:
+      type: string
+      enum: [starting, running, succeeded, failed, stalled, timed_out, denied, cancelled]
+
+    LogKind:
+      type: string
+      enum: [text, tool_use, tool_result, denial, system, stderr, error]
+
+    EventType:
+      type: string
+      description: |
+        The event type, which is the SSE `event:` name. The server may add types later, so
+        clients must map unknown values to a fallback instead of failing.
+      enum:
+        - task.created
+        - task.updated
+        - run.updated
+        - run.log
+        - pr.opened
+        - pr.merged
+        - policy.decision
+        - approval.requested
+        - approval.decided
+        - deploy.updated
+        - signal.new
+        - friction.reported
+        - issue.filed
+        - chat.message
+        - chat.delta
+        - loop.error
+        - notification
+        - system
+
+    ApprovalStatus:
+      type: string
+      enum: [pending, approved, rejected]
+
+    DeployState:
+      type: string
+      enum: [pending, deploying, verifying, healthy, failed, rolled_back]
+
+    Task:
+      type: object
+      description: One unit of work for one agent role in one project.
+      required: [id, project, kind, title, body, role, status, priority, source, attempts, max_attempts, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        project:
+          type: string
+        parent_id:
+          type: string
+        kind:
+          $ref: '#/components/schemas/TaskKind'
+        title:
+          type: string
+        body:
+          type: string
+        role:
+          type: string
+          description: The agent role that works the task.
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        priority:
+          type: integer
+          description: Higher runs first.
+        risk:
+          $ref: '#/components/schemas/Risk'
+        risk_reasons:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          description: "Where the task came from: chat, api, github_issue, signal, friction, followup or shepherd."
+        source_ref:
+          type: string
+          description: Dedupe key per project, such as `github_issue:42`.
+        branch:
+          type: string
+        pr_number:
+          type: integer
+        pr_url:
+          type: string
+        merge_sha:
+          type: string
+        approved_sha:
+          type: string
+          description: The PR head commit a reviewer approved. A new push invalidates it.
+        summary:
+          type: string
+          description: The latest agent summary.
+        blocked_reason:
+          type: string
+        attempts:
+          type: integer
+        max_attempts:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Run:
+      type: object
+      description: One harness session working on a task.
+      required: [id, task_id, project, role, harness, status, started_at, last_output_at, exit_code, cost_usd, input_tokens, output_tokens]
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        project:
+          type: string
+        role:
+          type: string
+        harness:
+          type: string
+        model:
+          type: string
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        session_id:
+          type: string
+          description: The harness session ID, used to resume.
+        workdir:
+          type: string
+        branch:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        last_output_at:
+          type: string
+          format: date-time
+        exit_code:
+          type: integer
+        cost_usd:
+          type: number
+        cost_estimated:
+          type: boolean
+          description: cost_usd was estimated from tokens and the harness price, not reported.
+        input_tokens:
+          type: integer
+          format: int64
+        output_tokens:
+          type: integer
+          format: int64
+        summary:
+          type: string
+        error:
+          type: string
+
+    LogLine:
+      type: object
+      description: One line of a run's streamed output.
+      required: [run_id, seq, time, kind, text]
+      properties:
+        run_id:
+          type: string
+        seq:
+          type: integer
+          format: int64
+          description: Assigned by the store, starting at 1 per run.
+        time:
+          type: string
+          format: date-time
+        kind:
+          $ref: '#/components/schemas/LogKind'
+        text:
+          type: string
+
+    Event:
+      type: object
+      description: |
+        An append-only record of something that happened. In the SSE stream this object is the
+        `data:` of each frame. Live-only events have `id` 0.
+      required: [id, time, type, message]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Store-assigned, increasing. 0 for live-only events.
+        time:
+          type: string
+          format: date-time
+        type:
+          $ref: '#/components/schemas/EventType'
+        project:
+          type: string
+        task_id:
+          type: string
+        run_id:
+          type: string
+        message:
+          type: string
+          description: One human-readable line.
+        data:
+          description: Type-specific payload. Task for task.*, Run for run.updated, Approval for approval.*, Deployment for deploy.updated, Signal for signal.new, Friction for friction.reported, ChatMessage for chat.message, `[]LogLine` for run.log and `{conversation_id, text}` for chat.delta. Omitted when the event has no payload.
+
+    Approval:
+      type: object
+      description: A decision foundry is waiting for a human to make.
+      required: [id, task_id, project, kind, title, reason, status, created_at]
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        project:
+          type: string
+        kind:
+          type: string
+          description: "`merge` or `unblock`."
+        title:
+          type: string
+        reason:
+          type: string
+        head_sha:
+          type: string
+          description: The PR head this approval is for. A different head needs a new approval.
+        status:
+          $ref: '#/components/schemas/ApprovalStatus'
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          type: string
+          format: date-time
+
+    Deployment:
+      type: object
+      description: foundry's record of one release of a project.
+      required: [id, project, ref, provider_id, state, started_at, updated_at]
+      properties:
+        id:
+          type: string
+        project:
+          type: string
+        task_id:
+          type: string
+        ref:
+          type: string
+          description: Commit SHA.
+        provider_id:
+          type: string
+          description: The deployer's own ID for the release.
+        url:
+          type: string
+        state:
+          $ref: '#/components/schemas/DeployState'
+        notes:
+          type: string
+        log:
+          type: string
+          description: 'Evidence gathered for this release: the deploy output tail and, on failure, the deploy.logs output. Secrets are redacted.'
+        verifying_since:
+          type: string
+          format: date-time
+          description: When the release became ready and its health window started.
+        started_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Signal:
+      type: object
+      description: A deduplicated production problem, keyed by project, source and fingerprint.
+      required: [id, project, source, fingerprint, title, level, count, first_seen, last_seen, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        project:
+          type: string
+        source:
+          type: string
+          description: The observer that reported it.
+        fingerprint:
+          type: string
+        title:
+          type: string
+        level:
+          type: string
+          description: "`error`, `warning` or `fatal`."
+        count:
+          type: integer
+          format: int64
+        url:
+          type: string
+        culprit:
+          type: string
+        release:
+          type: string
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        task_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Friction:
+      type: object
+      description: Something that slowed an agent down, deduplicated by fingerprint.
+      required: [id, project, title, body, fingerprint, count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        project:
+          type: string
+          description: The project whose repository should get the issue.
+        run_id:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        fingerprint:
+          type: string
+        count:
+          type: integer
+        issue_url:
+          type: string
+        issue_state:
+          type: string
+          enum: [open, closed]
+          description: State of the filed issue as last seen; absent until known.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Conversation:
+      type: object
+      description: One chat thread with the orchestrator agent.
+      required: [id, title, busy, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        project:
+          type: string
+          description: Default project for delegated work.
+        session_id:
+          type: string
+        busy:
+          type: boolean
+          description: True while the orchestrator is replying.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ChatMessage:
+      type: object
+      required: [id, conversation_id, role, text, created_at]
+      properties:
+        id:
+          type: string
+        conversation_id:
+          type: string
+        role:
+          type: string
+          description: "`user`, `assistant` or `system`."
+        text:
+          type: string
+        run_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # --- view types (internal/api and internal/api/controller.go) ---
+
+    NewTask:
+      type: object
+      description: Body of `POST /tasks`. Only the fields listed as required must be sent.
+      additionalProperties: false
+      required: [project, kind, title]
+      properties:
+        project:
+          type: string
+          description: A configured project name.
+        kind:
+          type: string
+          description: The `review` kind is rejected.
+          enum: [feature, bugfix, issue, incident, chore, improve, question]
+        title:
+          type: string
+        body:
+          type: string
+        role:
+          type: string
+          description: Agent role. Empty uses the routing default for the kind.
+        priority:
+          type: integer
+          default: 0
+        parent_id:
+          type: string
+        source:
+          type: string
+          default: api
+
+    TaskDetail:
+      type: object
+      required: [task, runs, approvals, children]
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+        runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Run'
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Approval'
+        children:
+          type: array
+          description: Tasks whose parent_id is this task.
+          items:
+            $ref: '#/components/schemas/Task'
+
+    ProjectView:
+      description: A configured project plus its live task counts. Config values are redacted. `paused` is the effective state (true whenever `paused_by` is set), not the raw config value.
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          required: [observe, deploy, paused, paused_by, counts]
+          properties:
+            paused:
+              type: boolean
+              description: Effective pause state. True when paused_by is set, whether in foundry.yaml or through the API.
+            paused_by:
+              type: string
+              enum: ['', config, owner]
+              description: Why the project is paused. `config` means paused in foundry.yaml. `owner` means paused through the API. Empty when running.
+            counts:
+              type: object
+              description: Count of tasks in each live status.
+              required: [queued, running, review, awaiting_approval, blocked]
+              properties:
+                queued:
+                  type: integer
+                running:
+                  type: integer
+                review:
+                  type: integer
+                awaiting_approval:
+                  type: integer
+                blocked:
+                  type: integer
+
+    AgentView:
+      type: object
+      description: One configured agent role.
+      required: [name, harness, harness_type, model, prompt, description, kinds]
+      properties:
+        name:
+          type: string
+        harness:
+          type: string
+          description: Name of the harness entry in the config.
+        harness_type:
+          type: string
+          description: The harness type, such as `codex` or `claude-code`.
+        model:
+          type: string
+        prompt:
+          type: string
+          description: "`builtin:<name>` or a path to a Markdown file."
+        description:
+          type: string
+        kinds:
+          type: array
+          description: Task kinds routed to this agent.
+          items:
+            type: string
+
+    LoopView:
+      type: object
+      required: [name, project, enabled, every, last_run_at]
+      properties:
+        name:
+          type: string
+        project:
+          type: string
+          description: Empty for the global loop.
+        enabled:
+          type: boolean
+        every:
+          type: string
+          description: The interval, such as `1m`.
+        last_run_at:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+
+    ConversationDetail:
+      type: object
+      required: [conversation, messages]
+      properties:
+        conversation:
+          $ref: '#/components/schemas/Conversation'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+
+    DecideApprovalRequest:
+      type: object
+      additionalProperties: false
+      required: [approve]
+      properties:
+        approve:
+          type: boolean
+          description: True approves; false rejects.
+        note:
+          type: string
+
+    RetryTaskRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        note:
+          type: string
+          description: Guidance appended to the task body for the next run.
+
+    CreateConversationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+        project:
+          type: string
+          description: Must name a configured project when set.
+
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+
+    # --- configuration (internal/config). GET /config returns Config with env values redacted. ---
+
+    Config:
+      type: object
+      description: The loaded foundry.yaml, redacted as in GET /config. Env values and deploy and observer option values are `"***"`.
+      required: [server, limits, harnesses, agents, routing, policies, projects, loops, notify, self_project, path]
+      properties:
+        server:
+          $ref: '#/components/schemas/ServerConfig'
+        limits:
+          $ref: '#/components/schemas/Limits'
+        harnesses:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Harness'
+        agents:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Agent'
+        routing:
+          type: object
+          description: Task kind to agent name.
+          additionalProperties:
+            type: string
+        policies:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Policy'
+        projects:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Project'
+        loops:
+          $ref: '#/components/schemas/Loops'
+        notify:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notifier'
+        self_project:
+          type: string
+          description: The project that is foundry itself. Factory friction is filed there.
+        path:
+          type: string
+          description: The file the configuration was loaded from.
+
+    ServerConfig:
+      type: object
+      required: [addr, data_dir, public_url]
+      properties:
+        addr:
+          type: string
+          description: Listen address, default 127.0.0.1:7777.
+        data_dir:
+          type: string
+        public_url:
+          type: string
+        retain_events:
+          $ref: '#/components/schemas/Duration'
+          description: Event history kept this long, default 720h.
+        retain_run_logs:
+          $ref: '#/components/schemas/Duration'
+          description: Agent run logs kept this long, default 2160h.
+
+    Limits:
+      type: object
+      required: [max_concurrent_runs, max_runs_per_project, stall_timeout, run_timeout, max_attempts, daily_budget_usd]
+      properties:
+        max_concurrent_runs:
+          type: integer
+        max_runs_per_project:
+          type: integer
+        stall_timeout:
+          $ref: '#/components/schemas/Duration'
+        run_timeout:
+          $ref: '#/components/schemas/Duration'
+        max_attempts:
+          type: integer
+        daily_budget_usd:
+          type: number
+          description: New task runs stop once today's reported cost reaches this. 0 means no limit.
+
+    Harness:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          description: "A registered harness type: claude-code, codex, exec or fake."
+        command:
+          type: array
+          items:
+            type: string
+        args:
+          type: array
+          items:
+            type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+
+    Agent:
+      type: object
+      required: [harness, prompt]
+      properties:
+        harness:
+          type: string
+        model:
+          type: string
+        prompt:
+          type: string
+        args:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+
+    Rule:
+      type: object
+      required: [risk, reason]
+      properties:
+        paths:
+          type: array
+          description: Doublestar globs matched against changed file paths.
+          items:
+            type: string
+        labels:
+          type: array
+          description: Any label matches.
+          items:
+            type: string
+        kinds:
+          type: array
+          description: Any task kind matches.
+          items:
+            type: string
+        risk:
+          $ref: '#/components/schemas/Risk'
+        reason:
+          type: string
+
+    Gate:
+      type: object
+      required: [auto_merge, require_review, require_ci]
+      properties:
+        auto_merge:
+          type: boolean
+        require_review:
+          type: boolean
+        require_ci:
+          type: boolean
+
+    Policy:
+      type: object
+      required: [max_lines, max_files, rules, gates]
+      properties:
+        max_lines:
+          type: integer
+          description: A diff with more added and deleted lines is at least medium risk.
+        max_files:
+          type: integer
+          description: A diff touching more files is at least medium risk.
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        gates:
+          type: object
+          description: Gates keyed by risk level (`low`, `medium`, `high`).
+          additionalProperties:
+            $ref: '#/components/schemas/Gate'
+
+    Project:
+      type: object
+      description: A configured project. Also the base of ProjectView.
+      required: [name, repo, path, default_branch, policy, paused]
+      properties:
+        name:
+          type: string
+        repo:
+          type: string
+          description: owner/name on GitHub.
+        path:
+          type: string
+          description: Local clone path.
+        default_branch:
+          type: string
+        policy:
+          type: string
+        instructions:
+          type: string
+          description: Appended to every agent prompt for this project.
+        env:
+          type: object
+          description: Added to agent sessions. Values are redacted.
+          additionalProperties:
+            type: string
+        deploy:
+          description: Deploy settings, or null when the project has no deployer.
+          oneOf:
+            - $ref: '#/components/schemas/Deploy'
+            - type: 'null'
+        observe:
+          type: array
+          description: Observers. Empty when the project has none.
+          items:
+            $ref: '#/components/schemas/Observer'
+        loops:
+          $ref: '#/components/schemas/Loops'
+        paused:
+          type: boolean
+
+    Deploy:
+      type: object
+      required: [type, verify_for, timeout]
+      properties:
+        type:
+          type: string
+        options:
+          type: object
+          additionalProperties: true
+        health_url:
+          type: string
+          description: Must answer 2xx during the verify window. Empty skips the HTTP check.
+        verify_for:
+          $ref: '#/components/schemas/Duration'
+        timeout:
+          $ref: '#/components/schemas/Duration'
+        auto_rollback:
+          type: boolean
+
+    Observer:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        options:
+          type: object
+          additionalProperties: true
+
+    Notifier:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+        options:
+          type: object
+          additionalProperties: true
+        min_priority:
+          type: string
+
+    Loop:
+      type: object
+      required: [every]
+      properties:
+        enabled:
+          type: boolean
+          description: Default true.
+        every:
+          $ref: '#/components/schemas/Duration'
+
+    Loops:
+      type: object
+      required: [issue_intake, exec_intake, pr_shepherd, deploy_watch, prod_watch, friction, retro]
+      properties:
+        issue_intake:
+          description: Turns open issues carrying `label` into tasks.
+          allOf:
+            - $ref: '#/components/schemas/Loop'
+            - type: object
+              required: [label]
+              properties:
+                label:
+                  type: string
+                  description: Default `foundry`.
+        exec_intake:
+          description: >-
+            Runs each project's intake sources (their commands print tasks as JSON lines) and
+            creates a task for each new id. Default every `1m`.
+          $ref: '#/components/schemas/Loop'
+        pr_shepherd:
+          description: Moves tasks in review through CI, review, policy and merge.
+          $ref: '#/components/schemas/Loop'
+        deploy_watch:
+          description: Releases merged work and verifies it.
+          $ref: '#/components/schemas/Loop'
+        prod_watch:
+          description: Polls observers and opens incident tasks.
+          allOf:
+            - $ref: '#/components/schemas/Loop'
+            - type: object
+              required: [min_level, min_count]
+              properties:
+                min_level:
+                  type: string
+                  description: Default `error`.
+                min_count:
+                  type: integer
+                  format: int64
+                  description: Default 1.
+        friction:
+          description: Files GitHub issues for reported friction.
+          allOf:
+            - $ref: '#/components/schemas/Loop'
+            - type: object
+              required: [auto_queue, label, min_count]
+              properties:
+                auto_file:
+                  type: boolean
+                  description: Default true. Omitted when unset.
+                auto_queue:
+                  type: boolean
+                  description: Also label the issue for intake.
+                label:
+                  type: string
+                  description: Default `friction`.
+                min_count:
+                  type: integer
+                  description: Reports needed before filing. Default 1.
+        retro:
+          description: >-
+            Gives an improver agent the recent evidence of what went wrong (blocked and failed
+            tasks, friction, incidents, review findings). Enabled by default only for the
+            self project.
+          allOf:
+            - $ref: '#/components/schemas/Loop'
+            - type: object
+              required: [lookback]
+              properties:
+                lookback:
+                  allOf:
+                    - $ref: '#/components/schemas/Duration'
+                  description: Evidence window. Defaults to `every`.

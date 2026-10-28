@@ -1,0 +1,27 @@
+// React Query keys. List keys are prefixes so invalidating ['tasks'] also refreshes every
+// filtered task list. Events invalidate through these same keys (see events.ts).
+export const keys = {
+  stats: ['stats'] as const,
+  control: ['control'] as const,
+  projectsAll: ['projects'] as const,
+  tasksAll: ['tasks'] as const,
+  taskList: (filters: object) => ['tasks', filters] as const,
+  task: (id: string) => ['task', id] as const,
+  runsAll: ['runs'] as const,
+  runList: (filters: object) => ['runs', filters] as const,
+  run: (id: string) => ['run', id] as const,
+  approvalsAll: ['approvals'] as const,
+  approvalList: (status: string) => ['approvals', status] as const,
+  deploymentsAll: ['deployments'] as const,
+  deploymentList: (filters: object) => ['deployments', filters] as const,
+  signalsAll: ['signals'] as const,
+  signalList: (filters: object) => ['signals', filters] as const,
+  frictionAll: ['friction'] as const,
+  frictionList: (filters: object) => ['friction', filters] as const,
+  loopsAll: ['loops'] as const,
+  agentsAll: ['agents'] as const,
+  configAll: ['config'] as const,
+  conversationsAll: ['conversations'] as const,
+  conversation: (id: string) => ['conversation', id] as const,
+  eventsHistory: ['events', 'history'] as const,
+};
