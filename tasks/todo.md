@@ -7,33 +7,49 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 
 ## Phase 1 (parallel, disjoint files)
 
-- [ ] U1 store/sqlite + events bus — `internal/store/sqlite/`, `internal/events/bus*.go`
-- [ ] U2 config loading/defaults/validation + `foundry.example.yaml` — `internal/config/` (not config.go)
-- [ ] U3 harness adapters claude-code, codex, exec, fake — `internal/harness/{proc.go,claude,codex,exec,fake}`
-- [ ] U4 git worktrees + GitHub SCM (gh) + fake SCM — `internal/workspace/`, `internal/scm/{github,fake}/`
-- [ ] U5 policy evaluation + notifiers — `internal/policy/evaluate*.go`, `internal/notify/*` (not notify.go)
-- [ ] U6 command/noop deployer, health check, exec/sentry observers — `internal/deploy/`, `internal/observe/`
+- [x] U1 store/sqlite + events bus — `internal/store/sqlite/`, `internal/events/bus*.go`
+- [x] U2 config loading/defaults/validation + `foundry.example.yaml` — `internal/config/` (not config.go)
+- [x] U3 harness adapters claude-code, codex, exec, fake — `internal/harness/{proc.go,claude,codex,exec,fake}`
+- [x] U4 git worktrees + GitHub SCM (gh) + fake SCM — `internal/workspace/`, `internal/scm/{github,fake}/`
+- [x] U5 policy evaluation + notifiers — `internal/policy/evaluate*.go`, `internal/notify/*` (not notify.go)
+- [x] U6 command/noop deployer, health check, exec/sentry observers — `internal/deploy/`, `internal/observe/`
 
 ## Phase 2 (after phase 1 contracts land)
 
-- [ ] Role prompts — `internal/engine/prompts/` (main agent: behaviour design)
-- [ ] U7 web UI — `web/` (main agent writes the design spec)
-- [ ] U8 API server — `internal/api/` (needs U1)
-- [ ] U9 engine: scheduler, runner, supervisor — `internal/engine/{scheduler,runner,supervise,prompt}.go`
-- [ ] U10 engine: loops — `internal/engine/loop_*.go`
-- [ ] U11 engine: controller + chat — `internal/engine/controller.go`, `internal/engine/chat.go`
+- [x] Role prompts — `internal/engine/prompts/` (main agent: behaviour design)
+- [x] U7 web UI — `web/` (main agent writes the design spec)
+- [x] U8 API server — `internal/api/` (needs U1)
+- [x] U9 engine: scheduler, runner, supervisor — `internal/engine/{scheduler,runner,supervise,prompt}.go`
+- [x] U10 engine: loops — `internal/engine/loop_*.go`
+- [x] U11 engine: controller + chat — `internal/engine/controller.go`, `internal/engine/chat.go`
 
 ## Phase 3
 
-- [ ] U12 `cmd/foundry`: serve wiring + CLI client
-- [ ] End-to-end test: fake harness + local bare repo + fake SCM through queued → merged → deployed
-- [ ] Real smoke: claude-code and codex harness on a throwaway local repo
-- [ ] Defect review (fresh agent), fix, final verification
-- [ ] README, docs/configuration.md, docs/plugins.md
+- [x] U12 `cmd/foundry`: serve wiring + CLI client
+- [x] End-to-end test: fake harness + local bare repo + fake SCM through queued → merged → deployed
+- [x] Real smoke: claude-code and codex harness on a throwaway local repo
+- [x] Defect review (fresh agent), fix, final verification
+- [x] README, docs/configuration.md, docs/plugins.md
 
 ## Review
 
-(filled in at the end)
+Overnight 2026-10-27/28. Branch `init` (pushed), mirrored to `dogfood`, which is where the factory's
+own PRs land. All verification is on the final tree: go vet, gofmt and `go test -race ./...`
+pass, as do the web typecheck, 57 vitest tests and the build.
+
+What exists: a Go daemon plus CLI and an installable web UI (PWA). It runs Claude Code and Codex
+(and any `exec` harness) as roles. It takes work from GitHub issues, exec intake sources, chat
+and the retro and friction loops. Agents work in worktrees and foundry opens the PRs. A
+deterministic policy rates risk. A reviewer agent and CI gate every PR, and low-risk PRs
+auto-merge. Each merge is released and its health verified, with automatic rollback, an incident
+with evidence, and SRE triage. Production signals become incidents. Issues are closed on merge,
+and friction becomes issues.
+
+Proven live on this repo: about 25 factory PRs merged on their own, every release verified on a
+local staging copy, a rollback drill, a prod_watch drill, a Codex smoke run, orchestrator chat
+(read-only questions and delegation), and the in-repo release pipeline (examples/dogfood).
+
+Owner decisions and open items are the unchecked `OWNER:` lines below.
 
 ## Fix batch (from accepted units)
 
@@ -45,7 +61,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] scm/github OpenPR: add labels with `gh pr edit`, not `gh issue edit`
 - [x] web IdChip: UUIDv7 IDs share their first 8 chars (timestamp) — show the last 8
 - [x] web: add web/public/.keep so every build recreates internal/api/webdist/.keep (embed needs it on fresh clones)
-- [ ] web: visual + runtime pass against a live backend (main agent, Playwright screenshots)
+- [x] web: visual + runtime pass against a live backend (main agent, Playwright screenshots) — desktop and 390px phone width, on live dogfood data
 - [x] cli: events --follow without --after starts from now (no history replay)
 
 ## Engine fix round (review findings, all confirmed by main agent) + live-test findings
@@ -71,9 +87,9 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] (unblocked by owner) `foundry service` (launchd KeepAlive) + `foundry doctor` — written but its test run was denied by the auto-mode classifier ("Unauthorized Persistence"); parked UNTESTED on local branch `service-doctor` for the owner
 - [x] UI polish: tool_use ▸ marker inline with its text; "—" for empty Task/Project on chat runs; workdir gets a full-width row
 - [x] CI workflow for foundry itself (.github/workflows/ci.yml): go vet/test -race, gofmt, web typecheck/test/build
-- [ ] cleanup: budget once-per-day state and any other package-level maps keyed by *Engine move into the Engine struct
+- [x] cleanup: budget once-per-day state and any other package-level maps keyed by *Engine move into the Engine struct (budget state is on Engine; only the deployHealth tally remains package-level, keyed by unique deployment IDs)
 - [x] docs/api.md corrections from the OpenAPI pass: history limit 500; approvals status=approved|rejected; live events carry id 0 in data; unknown JSON fields → 400; /config redacts option secrets and harness env
-- [ ] docs: toolchains under Codex's sandbox — GOCACHE in /tmp, GOFLAGS=-mod=readonly -buildvcs=false, GOPROXY=off. Codex's sandbox blocks all network incl. binding localhost (httptest); options: use the Claude implementer for such repos, or the OWNER opts in to `-c sandbox_workspace_write.network_access=true` (the agent-side enable was refused as weakening the sandbox — owner decision)
+- [x] docs: toolchains under Codex's sandbox — GOCACHE in /tmp, GOFLAGS=-mod=readonly -buildvcs=false, GOPROXY=off. Codex's sandbox blocks all network incl. binding localhost (httptest); options: use the Claude implementer for such repos, or the OWNER opts in to `-c sandbox_workspace_write.network_access=true` (the agent-side enable was refused as weakening the sandbox — owner decision)
 - [x] CI grace: right after a push GitHub may report no checks yet (looks like "no CI" → passes). Treat CI "none" as pending until `policy.ci_grace` (default 3m) after foundry's last push (Task.PushedAt)
 - [x] cosmetic: policy.decision message "risk low: " with no reasons → "risk low"
 - [x] re-runs on an existing PR should refresh its description (`gh pr edit --body`) with the latest summary — PR #1's body omitted the CI-fix test changes
@@ -118,7 +134,7 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] project `setup` commands (friction #20): run in each fresh worktree before the agent. The dogfood project now runs `npm ci` for web/
 - [x] factory: #36 Deploys page shows a release's evidence log (PR #38, auto-merged, released healthy). Its run used the web setup and ran vitest/build in the worktree; friction #20 closed
 - [x] cleanup (dropped): the deployHealth tally is keyed by unique deployment IDs, so the package-level map cannot cause cross-talk; not worth a run
-- [ ] known gaps from review: prod_watch runs deploy.logs synchronously (30s max per new incident); an issue report lost at shutdown is not retried; issue comments post agent summaries verbatim (no @mention or #ref neutralising)
+- [ ] known gaps (low): prod_watch runs deploy.logs synchronously (30s max per new incident); an issue-outcome comment due at shutdown is not retried. (@mentions in agent text are now neutralised.)
 - [x] UI pass on live dogfood data (Playwright): tables split short words mid-word ("foundr/y", "#3/0") → #37 → factory PR #39 (overflow-wrap instead of word-break), verified in a screenshot
 - [x] merged tasks blocked by a failed release now become done when a later healthy release contains their merge commit (git merge-base --is-ancestor). Three such stale tasks (#23, #24, #30) should resolve on the next healthy release
 - [x] factory: #40 wider release-log modal (PR #41, auto-merged, released healthy). Its release resolved the 3 stale blocked tasks: Overview shows Blocked 0
