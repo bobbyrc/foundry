@@ -7,6 +7,40 @@ through PR, merge, deploy and verification with as little human involvement as t
 Status: v0, written 2026-10-27 without a live design review. Every decision below is meant to be
 cheap to revisit; the ones most worth a second look are marked **(review)**.
 
+## Product direction
+
+Foundry is a **self-hosted** app: anyone runs it on their own machine or server, with their own
+agent logins and repositories. Later the owner plans a **paid managed version** (foundry hosted
+for customers). Build for self-hosting now, and keep the seams a managed version needs, so it is
+an extension rather than a rewrite.
+
+Self-hosted, now:
+
+- One binary and SQLite, no required cloud service; configuration is a file the user owns.
+- Nothing about the owner's own setup in defaults, code or docs (user names, host names, paths).
+- Runs headless on a Linux server as well as on a Mac: services beyond launchd (systemd), and a
+  documented way to reach the UI remotely (reverse proxy with TLS, `allowed_hosts`).
+- Users bring their own agent CLIs and logins; foundry never needs the maintainer's accounts.
+
+Managed, later (do not build these yet, but do not close them off):
+
+- **Tenancy:** a daemon serves one owner today. The likely first managed shape is one isolated
+  foundry instance per customer, running the same code as self-hosted; true multi-tenancy is a
+  later choice. Keep all state behind `store.Store` so another database can be added.
+- **Auth:** the single API token becomes accounts and sessions. GitHub access moves from the
+  user's `gh` login to a GitHub App, which also gives agents a bot identity.
+- **Agent isolation is mandatory** when customers' code and agents run on shared hardware:
+  containers or VMs per run (option B in `docs/proposals/agent-isolation.md`), never option C.
+- **Secrets:** per-project secrets held by foundry and given to runs explicitly, not the daemon's
+  own environment.
+- **Metering:** runs already record cost and tokens; billing and quotas build on that.
+- **Open questions for the owner:** licence and open-core split; whether managed customers bring
+  their own model keys or pay through foundry (check each provider's terms before reselling
+  access to a subscription).
+
+Rule for changes now: prefer the choice that keeps these seams cheap (interfaces, no hard-coded
+paths or accounts, nothing that assumes one machine and one person) when it costs little extra.
+
 ## Principles
 
 1. **Agents do judgment, code does gates.** Agents write code, review diffs, triage issues and
