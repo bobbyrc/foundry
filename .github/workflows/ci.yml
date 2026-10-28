@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  go:
+    name: Go vet, format, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs the toolchains pinned in mise.toml (Go 1.27).
+      - uses: jdx/mise-action@v2
+
+      - name: go vet
+        run: mise exec -- go vet ./...
+
+      - name: gofmt
+        run: |
+          unformatted="$(mise exec -- gofmt -l internal cmd)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # The Go binary embeds internal/api/webdist; make sure the directory exists.
+      - name: Create embed placeholder
+        run: mkdir -p internal/api/webdist && touch internal/api/webdist/.keep
+
+      - name: go test
+        run: mise exec -- go test -race -count=1 ./...
+
+  web:
+    name: Web typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: web
+        run: npm test
+
+      - name: Build
+        working-directory: web
+        run: npm run build
