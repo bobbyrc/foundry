@@ -17,3 +17,9 @@
   queueing one, and close it with the fixing commit instead.
 - Issue intake reads only the issue body. Put a spec for the factory in the body, not in a comment
   (comments from maintainers are included only since #34).
+- To neutralise syntax in text another parser reads (Markdown mentions), break the token itself
+  (a zero-width space after the @) rather than wrapping it in more markup. Added markup
+  interacts with the markup around it: backtick wrapping merged with neighbouring backticks and
+  left mentions bare. And when the guard's own parsing can be wrong, make its errors cosmetic,
+  not unsafe.
+

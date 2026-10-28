@@ -131,4 +131,11 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] OWNER: the dogfood daemon's data and clone live in a session scratch dir under /private/tmp. To keep it, follow examples/dogfood/README.md with DOGFOOD=~/.local/share/foundry-dogfood (or copy the scratch dir there)
 - [x] DRILL (real): a labelled synthetic ERROR line in the staging log → prod_watch signal → incident task → SRE run read the log evidence, found the drill, closed it with no code change and no PR (~1 min). The production-error loop works end to end; until then it had never fired (zero signals all night)
 - [x] UI at phone width (390px): tables become cards, nav collapses to a menu, approval cards readable
+- [x] REVIEW ROUND 2 (fresh reviewer over c54e18e..b4d762d), all findings confirmed and fixed except one:
+  - mention quoting was bypassable (lone or escaped backticks, mismatched runs, multi-line spans) → now a zero-width space after the @ everywhere but fenced code
+  - redaction missed loop errors (LastError, loop.error events, logs) and observer signals; a secret cut at a tail boundary left a fragment; URL passwords printed alone → all fixed
+  - shipped-task resolution marked reverted commits done and fetched once per task → one fetch, reverted work stays blocked
+  - setup failure output went into the next agent's task body (it might "fix" an outage by editing package.json) → output goes on the run instead
+  - issue-report lock was global across a gh call → per task
+  - NOT FIXED (owner decision): an agent that can run `git config` in its worktree can set core.fsmonitor or filters, which foundry's own git commands then run with foundry's environment (GH_TOKEN). Recorded in docs/proposals/agent-isolation.md; the fix is isolation (separate user or containers)
 
