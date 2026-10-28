@@ -5,6 +5,7 @@ import { useStats } from '../queries';
 import { AccountPanel } from './AccountPanel';
 import { LiveIndicator } from './LiveIndicator';
 import { PauseSwitch } from './PauseSwitch';
+import { RailLamps } from './RailLamps';
 
 const NAV: { to: string; label: string; end?: boolean; approvals?: boolean; blocked?: boolean; admin?: boolean }[] = [
   { to: '/', label: 'Overview', end: true },
@@ -120,6 +121,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
         </nav>
+        <RailLamps />
         <div className="sidebar-footer">
           <AccountPanel />
           <PauseSwitch />

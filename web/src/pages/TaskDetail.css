@@ -1,7 +1,7 @@
 /* Task detail: the line of stations, the two-column body and the spec sheet. Colours are tokens
    from styles.css; no shadows, no coloured side stripes. */
 
-.task-kicker {
+.task-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

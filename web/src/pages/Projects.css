@@ -1,0 +1,207 @@
+/* Projects page. Each project is a sheet that reads like a window of the Overview's andon board:
+   a lamp bar across the top carries the state, and the words under the name say it too. */
+
+.projects-sheets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.project-sheet {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  --sheet-lamp: var(--lamp-off-light);
+}
+
+.project-sheet[data-lamp='run'] {
+  --sheet-lamp: var(--lamp-run);
+}
+
+.project-sheet[data-lamp='call'] {
+  --sheet-lamp: var(--lamp-call);
+}
+
+.project-sheet[data-lamp='stop'] {
+  --sheet-lamp: var(--lamp-stop);
+}
+
+.project-sheet[data-lamp='run'] .sheet-state {
+  color: var(--run);
+}
+
+.project-sheet[data-lamp='call'] .sheet-state {
+  color: var(--call);
+}
+
+.project-sheet[data-lamp='stop'] .sheet-state {
+  color: var(--danger);
+}
+
+.project-sheet[data-lamp='off'] .sheet-state {
+  color: var(--muted);
+}
+
+.sheet-lamp {
+  height: 10px;
+  background: var(--sheet-lamp);
+  transition: background-color var(--switch);
+}
+
+.sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  padding: 14px 18px;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.sheet-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sheet-name {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.sheet-repo {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.sheet-state {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sheet-pause {
+  flex-shrink: 0;
+}
+
+.sheet-config-pause {
+  white-space: nowrap;
+}
+
+/* Five cells in one row: the number in the condensed face, the label under it in small caps. */
+.sheet-counts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.sheet-counts > li {
+  min-width: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.sheet-counts > li:first-child {
+  border-left: 0;
+}
+
+.sheet-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 10px 4px 8px;
+  text-align: center;
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.sheet-count:hover .sheet-count-n {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.sheet-count-n {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.sheet-count-label {
+  margin-top: 4px;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.sheet-count.is-zero {
+  color: var(--muted);
+}
+
+.sheet-count.is-blocked .sheet-count-n {
+  color: var(--danger);
+}
+
+.sheet-count.is-needs .sheet-count-n {
+  color: var(--call);
+}
+
+.sheet-facts,
+.sheet-loops {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sheet-failing {
+  color: var(--danger);
+}
+
+@media (max-width: 759px) {
+  .projects-sheets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sheet-count-n {
+    font-size: 22px;
+  }
+
+  /* Five labels share a phone row, so each is small and never breaks inside a word. */
+  .sheet-count-label {
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    overflow-wrap: normal;
+    word-break: keep-all;
+    white-space: nowrap;
+  }
+
+  /* "needs you" is the one label allowed to wrap, and only at its space. */
+  .sheet-count.is-needs .sheet-count-label {
+    white-space: normal;
+  }
+}

@@ -1,0 +1,90 @@
+/* The rail's project lamps: one 26px row per project, under the nav and above the account panel. */
+
+.rail-lamps {
+  display: flex;
+  flex-direction: column;
+  /* The sidebar's 18px gap, less 6px, leaves 12px above the rule; the same below it. */
+  margin: -6px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--board-rule);
+  padding-bottom: 0;
+}
+
+.rail-lamp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 20px;
+  color: var(--board-muted);
+  font-size: 13.5px;
+  text-decoration: none;
+}
+
+.rail-lamp-row:hover .rail-lamp-name {
+  color: var(--board-text);
+}
+
+.rail-lamp-square {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: var(--lamp-off-light);
+}
+
+.rail-lamp-run {
+  background: var(--lamp-run);
+}
+
+.rail-lamp-call {
+  background: var(--lamp-call);
+}
+
+.rail-lamp-stop {
+  background: var(--lamp-stop);
+}
+
+.rail-lamp-off {
+  background: var(--lamp-off-light);
+}
+
+.rail-lamp-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-lamp-label {
+  margin-left: auto;
+  flex: none;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.rail-lamp-label-call {
+  color: var(--lamp-call);
+}
+
+.rail-lamp-label-run,
+.rail-lamp-label-off {
+  color: var(--board-muted);
+}
+
+.rail-lamp-label-stop {
+  color: #ff8a80;
+}
+
+.rail-lamp-all {
+  color: var(--board-muted);
+}
+
+.rail-lamp-all:hover {
+  color: var(--board-text);
+}
+
+@media (max-width: 759px) {
+  .rail-lamps {
+    display: none;
+  }
+}

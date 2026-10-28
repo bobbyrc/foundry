@@ -38,6 +38,21 @@ export function formatClock(value: Date): string {
 
 export const humanize = (value: string): string => value.replace(/_/g, ' ');
 
+/**
+ * A Go duration string with its zero parts dropped: "1m0s" -> "1m", "1h30m0s" -> "1h30m".
+ * "0s" stays "0s". Anything that is not h/m/s parts is returned unchanged.
+ */
+export function formatGoDuration(s: string): string {
+  const match = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?$/.exec(s);
+  if (!match || s === '') return s;
+  const [, hours, minutes, seconds] = match;
+  const parts: string[] = [];
+  if (hours && Number(hours) > 0) parts.push(`${Number(hours)}h`);
+  if (minutes && Number(minutes) > 0) parts.push(`${Number(minutes)}m`);
+  if (seconds && Number(seconds) > 0) parts.push(`${Number(seconds)}s`);
+  return parts.length > 0 ? parts.join('') : '0s';
+}
+
 export function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);

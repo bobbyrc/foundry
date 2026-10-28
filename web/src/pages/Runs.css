@@ -1,0 +1,18 @@
+/* Runs page: the task cell. Colours are tokens from styles.css. */
+
+.run-task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.run-task-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.run-task-meta {
+  font-size: 13px;
+  color: var(--muted);
+}

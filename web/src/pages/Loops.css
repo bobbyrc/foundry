@@ -1,0 +1,174 @@
+/* Loops page: a lamp grid on desktop, one sheet per loop name under 760px. */
+
+.loops-summary {
+  margin: 0 0 12px;
+}
+
+/* ---- desktop grid ---- */
+
+.loops-grid-wrap {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.loops-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.loops-grid th,
+.loops-grid td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.loops-grid thead th {
+  font-family: var(--font-cond);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.loops-grid tbody tr:last-child th,
+.loops-grid tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.loop-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.loop-cell {
+  max-width: 240px;
+  min-width: 0;
+}
+
+.loop-cell-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+/* A disabled loop says "off" in words, so its cell does not differ from a healthy one by lamp only. */
+.loop-off {
+  color: var(--muted);
+}
+
+.loop-cell-status {
+  min-width: 0;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.loop-error {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loop-run {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+/* The lamp: 10px square, coloured by loopHealth. The words beside it are screen-reader text. */
+.loop-lamp {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: var(--lamp-off-light);
+}
+
+.loop-lamp-ok {
+  background: var(--lamp-run);
+}
+
+.loop-lamp-danger {
+  background: var(--lamp-stop);
+}
+
+.loop-lamp-muted {
+  background: var(--lamp-off-light);
+}
+
+/* ---- phone sheets ---- */
+
+.loops-sheets {
+  display: none;
+}
+
+@media (max-width: 759px) {
+  .loops-grid-wrap {
+    display: none;
+  }
+
+  .loops-sheets {
+    display: block;
+  }
+
+  .loop-sheet {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+
+  .loop-sheet-name {
+    margin: 0;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--rule);
+    overflow-wrap: anywhere;
+  }
+
+  .loop-sheet-rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .loop-sheet-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .loop-sheet-row:last-child {
+    border-bottom: 0;
+  }
+
+  .loop-sheet-main {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .loop-sheet-project {
+    font-weight: 600;
+  }
+
+  .loop-sheet-main .loop-error {
+    max-width: 100%;
+  }
+
+  .loop-sheet-row .loop-run {
+    margin-left: 0;
+  }
+}

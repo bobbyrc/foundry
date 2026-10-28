@@ -90,7 +90,7 @@
   position: sticky;
   bottom: 0;
   background: var(--input);
-  border: 1px solid var(--border);
+  border: 1px solid var(--field);
   border-radius: 0;
 }
 

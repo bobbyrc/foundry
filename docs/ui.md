@@ -80,6 +80,11 @@ blinks on and off rather than pulsing; both stop under `prefers-reduced-motion`.
   Signals, Friction, Loops, Agents, Config, and Users (owners only). Approvals carries a
   yellow count badge when approvals wait; Tasks a red one when tasks are blocked (each count
   has screen-reader text). The active item is lit (`--board-2` background, white text).
+- Project lamps: between the nav and the footer, one 26px row per project (its lamp square,
+  name, and its lamp label in words, right-aligned: "1 needs you" or "1 blocked" in call or stop
+  colour, "2 running", "idle", "paused" or "3 queued" in muted text), most urgent first,
+  each linking to that project's tasks. More than eight projects show the eight most urgent and
+  an "All projects" row. Hidden on Overview, which has the full board, and under 760px.
 - Rail footer: the **account panel**, then the **pause switch**. The account panel shows the
   signed-in username, the role in muted lower case, a "Sign out" link and a "Change password"
   link. Change password opens a dialog (current password, new password of at least 12
@@ -169,17 +174,21 @@ fallback.
 - Not built yet: a compact lamp row on pages other than Overview, and fuller window details on
   focus. The nav badges carry "needs you" and "blocked" everywhere meanwhile.
 
-**Projects** (`/projects`) — one card per project, in a responsive grid (one column on
-mobile). Card header: project name (semibold), repo as a muted link to
-`https://github.com/<repo>`, and on the right a pause toggle (secondary "Pause" / danger-fill
-"Paused — Resume"). When the project is paused in onlet.yaml, the toggle is replaced by a
-muted "Paused in onlet.yaml" label (the file wins; the UI cannot unpause it). Body: a row of
-counts (queued, running, review, awaiting approval, blocked — each a link to `/tasks` filtered
-by project and that status; zero counts muted), then muted lines for the default branch, the
-deployer type (or "no deployer") and observers (or "no observers"). Footer: the project's
-loops as small pills (name, a dot coloured by health: `--ok` when last run had no error,
-`--danger` with the error as a tooltip, `--muted` when disabled or never run). The sidebar
-gets **Projects** between Overview and Chat.
+**Projects** (`/projects`) — one sheet per project, in a grid (one column on a phone). Each
+sheet is a window of the Overview's board. A 10px lamp bar runs across its top in the colour the
+Overview shows for that project: green while work runs, yellow when something waits on the
+owner, red when work stopped itself, grey when idle or paused. Under the project name are the
+repo (a muted link to `https://github.com/<repo>`) and the lamp's label in words, such as
+"1 needs you". On the right is the pause toggle (secondary "Pause" / danger-fill
+"Paused — Resume"). When the project is paused in onlet.yaml, the toggle is replaced by a muted
+"Paused in onlet.yaml" label, because the file wins and the UI cannot unpause it. Below the name
+is a row of five counts: queued, running, review, needs you (awaiting approval) and blocked. Each
+non-zero count links to `/tasks`, filtered by that project and status. Blocked is red and needs
+you is yellow. Zero counts are muted and are not links. One muted line follows with the default
+branch, the deployer type (or "no deployer") and the observers (or "no observers"). The last line
+is the loops: "Loops: 5 on, 2 off", where "Loops" links to `/loops`. If any loop's last run
+failed, its name follows in red ("pr_shepherd failing"), and the error shows as a tooltip. The
+sidebar gets **Projects** between Overview and Chat.
 
 **Chat** (`/chat`, `/chat/:id`) — with no conversation open, a centred block 640px wide
 sits 8vh from the top: the heading "Talk to the orchestrator", a muted line on what it can and
@@ -246,8 +255,12 @@ your sign-off." "All" adds decided approvals as cards, each with its status pill
 kind, project, task link, reason (Markdown), created; Approve (primary) / Reject (danger) with an
 optional note field. Full width under 760px.
 
-**Runs** (`/runs`) — table: status, role, harness · model, project, task, started, duration,
-cost. Filters: project, status.
+**Runs** (`/runs`) — table: status, task, role, harness · model, started, duration, cost.
+The task cell shows the task's title as a link to the run's page, with a smaller line under it
+giving the project and the task's short ID (a link to the task). Active runs (starting or
+running) come first; the rest keep the server's order, newest first. Filters: project, status.
+On a phone the status is the card's title row and the task comes second, because the stacked
+table always takes the first column as the title.
 
 **Deploys** (`/deploys`) — table: project, ref (short SHA mono), state, URL, task, started,
 updated, notes.
@@ -257,8 +270,16 @@ seen, task link.
 
 **Friction** (`/friction`) — table: project, title, count, issue (link), updated.
 
-**Loops** (`/loops`) — table: name, project, enabled, every, last run, last error (danger,
-truncated with title tooltip); "Run now" per row.
+**Loops** (`/loops`) — a lamp grid: one row per loop name, one column per project. Loops that run
+across all projects get an "all projects" column, placed first. Each cell has a 10px lamp, then
+"every 30s" (the interval as configured), then on a second line "ran 3m ago" or "never". A disabled
+loop reads "off · every 30s" in muted text, so it differs from a healthy loop by words as well as by
+its grey lamp. The lamp is green when the last run worked, red when it failed, and grey when the
+loop is disabled or has not run yet; the words are screen-reader text. A failed loop shows its error
+in red on that second line, cut to one line, with the full text on hover. Operators see a "Run"
+button in each cell; viewers do not. Above the grid, one muted line counts loops on, off and failing
+(failing in red when any). Under 760px the grid becomes one sheet per loop name, with a row for each
+project it runs in.
 
 **Users** (`/users`, owners only; anyone else is sent to Overview) — a table of accounts:
 username (your own row says "(you)"), role, added (relative time) and actions. The role is a

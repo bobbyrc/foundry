@@ -6,15 +6,17 @@ import { Empty } from '../components/Empty';
 import { ErrorLine } from '../components/ErrorLine';
 import { PageHeader } from '../components/PageHeader';
 import { cx } from '../lib/format';
-import { loopHealth, loopHealthLabel, repoUrl } from '../lib/projects';
+import { projectLamp } from '../lib/lamp';
+import { loopSummary, repoUrl } from '../lib/projects';
 import type { LoopView, ProjectCounts, ProjectView } from '../types';
+import './Projects.css';
 
-/** The task counts on a card, in the order the factory moves work through them. */
+/** The task counts on a sheet, in the order the factory moves work through them. */
 const COUNTS: { key: keyof ProjectCounts; label: string; status: string }[] = [
   { key: 'queued', label: 'queued', status: 'queued' },
   { key: 'running', label: 'running', status: 'running' },
   { key: 'review', label: 'review', status: 'review' },
-  { key: 'awaiting_approval', label: 'awaiting approval', status: 'awaiting_approval' },
+  { key: 'awaiting_approval', label: 'needs you', status: 'awaiting_approval' },
   { key: 'blocked', label: 'blocked', status: 'blocked' },
 ];
 
@@ -29,9 +31,9 @@ export function Projects() {
       {projects.isSuccess && projects.data.length === 0 ? (
         <Empty>No projects are configured. Projects are set under projects in onlet.yaml.</Empty>
       ) : null}
-      <div className="card-grid projects-grid">
+      <div className="projects-sheets">
         {projects.data?.map((project) => (
-          <ProjectCard
+          <ProjectSheet
             key={project.name}
             project={project}
             loops={(loops.data ?? []).filter((loop) => loop.project === project.name)}
@@ -42,62 +44,99 @@ export function Projects() {
   );
 }
 
-function ProjectCard({ project, loops }: { project: ProjectView; loops: LoopView[] }) {
+/** One project as a window of the Overview's board: a lamp bar, then its name, counts and facts. */
+function ProjectSheet({ project, loops }: { project: ProjectView; loops: LoopView[] }) {
+  const lamp = projectLamp(project);
   const url = repoUrl(project.repo);
   const observers = (project.observe ?? []).map((o) => o.name);
+  const loopInfo = loopSummary(loops);
+
+  const facts = [
+    project.default_branch || null,
+    project.deploy ? `deploys with ${project.deploy.type}` : 'no deployer',
+    observers.length === 0 ? 'no observers' : `${observers.length} observer${observers.length === 1 ? '' : 's'}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <article className="card project-card">
-      <header className="card-head">
-        <div className="project-title">
-          <h3>{project.name}</h3>
-          {project.repo ? (
-            url ? (
-              <a className="small muted" href={url} target="_blank" rel="noopener noreferrer">
-                {project.repo}
-              </a>
-            ) : (
-              <span className="small muted">{project.repo}</span>
-            )
-          ) : null}
-        </div>
-        <PauseControl project={project} />
-      </header>
+    <article className="project-sheet" data-lamp={lamp.lamp}>
+      <div className="sheet-lamp" aria-hidden="true" />
+      <div className="sheet-body">
+        <header className="sheet-head">
+          <div className="sheet-id">
+            <h3 className="sheet-name">{project.name}</h3>
+            {project.repo ? (
+              url ? (
+                <a className="sheet-repo" href={url} target="_blank" rel="noopener noreferrer">
+                  {project.repo}
+                </a>
+              ) : (
+                <span className="sheet-repo">{project.repo}</span>
+              )
+            ) : null}
+            <p className="sheet-state">{lamp.label}</p>
+          </div>
+          <PauseControl project={project} />
+        </header>
 
-      <div className="project-counts">
-        {COUNTS.map((count) => {
-          const n = project.counts?.[count.key] ?? 0;
-          const to = `/tasks?${new URLSearchParams({ project: project.name, status: count.status })}`;
-          return (
-            <Link key={count.key} to={to} className={cx('project-count', n === 0 && 'is-zero')}>
-              {n} {count.label}
-            </Link>
-          );
-        })}
-      </div>
-
-      <div className="project-meta muted small">
-        <span>Default branch: {project.default_branch || '—'}</span>
-        <span>{project.deploy ? `Deployer: ${project.deploy.type}` : 'no deployer'}</span>
-        <span>{observers.length > 0 ? `Observers: ${observers.join(', ')}` : 'no observers'}</span>
-      </div>
-
-      {loops.length > 0 ? (
-        <ul className="loop-pills" aria-label="Loops">
-          {loops.map((loop) => {
-            const health = loopHealth(loop);
+        <ul className="sheet-counts" aria-label="Tasks by status">
+          {COUNTS.map((count) => {
+            const n = project.counts?.[count.key] ?? 0;
+            const cells = (
+              <>
+                <span className="sheet-count-n">{n}</span>
+                <span className="sheet-count-label">{count.label}</span>
+              </>
+            );
+            if (n === 0) {
+              return (
+                <li key={count.key}>
+                  <span className="sheet-count is-zero">{cells}</span>
+                </li>
+              );
+            }
+            const to = `/tasks?${new URLSearchParams({ project: project.name, status: count.status })}`;
             return (
-              <li key={loop.name}>
-                <span className="loop-pill" title={health === 'danger' ? loop.last_error : undefined}>
-                  <span className={`dot tone-${health}`} aria-hidden="true" />
-                  <span className="sr-only">{loopHealthLabel(loop)}: </span>
-                  {loop.name}
-                </span>
+              <li key={count.key}>
+                <Link
+                  to={to}
+                  className={cx(
+                    'sheet-count',
+                    count.key === 'blocked' && 'is-blocked',
+                    count.key === 'awaiting_approval' && 'is-needs',
+                  )}
+                >
+                  {cells}
+                </Link>
               </li>
             );
           })}
         </ul>
-      ) : null}
+
+        <p className="sheet-facts">{facts}</p>
+
+        <p className="sheet-loops">
+          {loops.length === 0 ? (
+            'no loops'
+          ) : (
+            <>
+              <Link to="/loops">Loops</Link>: {loopInfo.on} on, {loopInfo.off} off
+              {loopInfo.failing.length > 0 ? (
+                <>
+                  {' · '}
+                  <span
+                    className="sheet-failing"
+                    title={loopInfo.failing.map((l) => `${l.name}: ${l.last_error}`).join('\n')}
+                  >
+                    {loopInfo.failing.map((l) => l.name).join(', ')} failing
+                  </span>
+                </>
+              ) : null}
+            </>
+          )}
+        </p>
+      </div>
     </article>
   );
 }
@@ -111,7 +150,7 @@ function PauseControl({ project }: { project: ProjectView }) {
 
   let control;
   if (project.paused_by === 'config') {
-    control = <span className="muted small project-config-pause">Paused in onlet.yaml</span>;
+    control = <span className="muted small sheet-config-pause">Paused in onlet.yaml</span>;
   } else if (!canOperate) {
     control = <span className="muted small">{project.paused ? 'Paused' : 'Running'}</span>;
   } else if (project.paused) {
@@ -129,7 +168,7 @@ function PauseControl({ project }: { project: ProjectView }) {
   }
 
   return (
-    <div className="project-pause">
+    <div className="sheet-pause">
       {control}
       {mine ? <ErrorLine error={toggle.error} /> : null}
     </div>

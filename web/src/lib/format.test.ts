@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCost, formatTokens, safeHref, shortId, shortSha } from './format';
+import { formatCost, formatGoDuration, formatTokens, safeHref, shortId, shortSha } from './format';
 
 describe('ids and shas', () => {
   it('shows the last 8 characters of an id and the first 7 of a sha', () => {
@@ -39,5 +39,32 @@ describe('safeHref', () => {
     expect(safeHref('javascript:alert(1)')).toBeUndefined();
     expect(safeHref('')).toBeUndefined();
     expect(safeHref(undefined)).toBeUndefined();
+  });
+});
+
+describe('formatGoDuration', () => {
+  it('drops zero parts from Go duration strings', () => {
+    expect(formatGoDuration('1m0s')).toBe('1m');
+    expect(formatGoDuration('10m0s')).toBe('10m');
+    expect(formatGoDuration('24h0m0s')).toBe('24h');
+    expect(formatGoDuration('1h30m0s')).toBe('1h30m');
+    expect(formatGoDuration('1h0m30s')).toBe('1h30s');
+  });
+  it('keeps durations that have no zero parts', () => {
+    expect(formatGoDuration('30s')).toBe('30s');
+    expect(formatGoDuration('1m30s')).toBe('1m30s');
+    expect(formatGoDuration('1h30m')).toBe('1h30m');
+    expect(formatGoDuration('1m30.5s')).toBe('1m30.5s');
+  });
+  it('shows zero as 0s', () => {
+    expect(formatGoDuration('0s')).toBe('0s');
+    expect(formatGoDuration('0h0m0s')).toBe('0s');
+  });
+  it('returns anything it cannot parse unchanged', () => {
+    expect(formatGoDuration('')).toBe('');
+    expect(formatGoDuration('5')).toBe('5');
+    expect(formatGoDuration('10 minutes')).toBe('10 minutes');
+    expect(formatGoDuration('30m0s junk')).toBe('30m0s junk');
+    expect(formatGoDuration('500ms')).toBe('500ms');
   });
 });
