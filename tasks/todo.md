@@ -101,3 +101,5 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] cancelled incidents stay dismissed; retro excludes its own work; review findings deduped
 - [ ] known limit: budget counts a run's cost only when it ends (in-flight runs count $0)
 - [ ] idea: herdr gram intake — pick up owner-queued work posted from the Herdr phone app (herdr gram grab) as foundry tasks
+- [x] issue-sourced tasks must report back: when a github_issue task ends without a PR (no_changes / blocked / failed / cancelled) comment the outcome on the issue (the intake comment promises it); once per outcome
+- [ ] later: comments/PRs post as the owner's gh account — consider a bot account or GitHub App for clear provenance
