@@ -1,0 +1,8 @@
+# Fixture for TestLoadResolvesPromptPaths. Only the prompt path matters here.
+agents:
+  reviewer:
+    harness: claude
+    prompt: prompts/reviewer.md
+  triager:
+    harness: claude
+    prompt: /abs/triager.md

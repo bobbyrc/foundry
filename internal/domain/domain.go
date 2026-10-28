@@ -241,8 +241,10 @@ type Deployment struct {
 	URL        string      `json:"url,omitempty"`
 	State      DeployState `json:"state"`
 	Notes      string      `json:"notes,omitempty"`
-	StartedAt  time.Time   `json:"started_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
+	// VerifyingSince is when the release became ready and its health window started.
+	VerifyingSince *time.Time `json:"verifying_since,omitempty"`
+	StartedAt      time.Time  `json:"started_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // SignalObservation is what an observer reports about one production problem.

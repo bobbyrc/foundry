@@ -34,3 +34,10 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 ## Review
 
 (filled in at the end)
+
+## Fix batch (from accepted units)
+
+- [ ] policy.Evaluate: unrecognised agent risk string → treat as high (today it passes through)
+- [ ] config: unset `${NAME}` → load error naming the variable (decision: fail loudly on missing secrets)
+- [ ] foundry.example.yaml: "five built-in roles" lists six; max_attempts exhaustion → "blocked", not "failed"
+- [ ] merge docs/plugins-deploy-observe.md into docs/plugins.md
