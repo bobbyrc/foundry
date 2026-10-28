@@ -49,6 +49,18 @@ human, or when it has used up `max_attempts`. Retry it with a note, or cancel it
   code does everything that leaves the machine: commits, pushes, PRs, merges, deploys and rollbacks.
 - **Agents cannot approve their own work.** Worker agents get no API token. Only the orchestrator
   does, and it uses the CLI.
+- **Agents get a small environment.** An agent sees an allowlist (`PATH`, `HOME`, `USER`, `LANG`,
+  ...), not foundry's own environment, so `GH_TOKEN` and provider tokens do not reach it. To pass
+  one through, name it in the harness's `inherit_env` list. Agents still run as your user and can
+  read what your user can read; isolating them is an open decision, see
+  [docs/proposals/agent-isolation.md](docs/proposals/agent-isolation.md).
+- **Self-assigned work waits for you.** Follow-up and retro tasks (task sources `followup` and
+  `retro`) are rated at least `medium` by a built-in policy rule, and so is any change to foundry's
+  own gates and agent instructions (`high`). Add rules with a policy's `extra_rules`. Setting
+  `rules` instead **replaces** all the built-in rules, so copy back any you want to keep.
+- **Daily budget.** `limits.daily_budget_usd` stops new task runs once today's reported cost
+  reaches it. A run's cost is recorded when it ends, so runs in flight count only after they finish
+  and the total can overshoot. Codex reports no cost, so it is not counted.
 - **Risk only goes up.** Final risk is the highest of the rules the diff matches and the agent's own
   rating. An agent cannot lower it.
 - **Merges are pinned to a commit.** A merge uses `gh pr merge --match-head-commit`, so it merges the
@@ -56,7 +68,16 @@ human, or when it has used up `max_attempts`. Retry it with a note, or cancel it
   approval is withdrawn and the PR is checked again.
 - **Denials and stalls stop, they do not retry.** A denied tool call, or no output for
   `limits.stall_timeout` (default 15 minutes), ends the run and blocks the task with the reason.
-- **Pause switch.** `foundry pause` stops new runs and loop actions. Running agents finish.
+- **Pause switch.** `foundry pause` stops new runs and loop actions. Running agents finish. A
+  single project pauses with `foundry project pause NAME` (`resume` undoes it) or on the web UI's
+  Projects page; this survives restarts, but a `paused: true` in `foundry.yaml` can only be cleared
+  in the file. While paused, the `deploy_watch` and `prod_watch` loops keep running, so a release
+  already in flight is still health-checked and rolled back.
+- **Project checks.** A project's `checks` (name, `run` shell command, optional `timeout`, default
+  10m) run in the worktree after the agent finishes and before foundry commits and pushes. A failing
+  check re-queues the task with its output, like a CI failure, without spending a CI run.
+  A policy's `require_checks: true` makes a PR with no CI checks wait (then block after 30 minutes)
+  instead of counting as "no CI"; use it for repositories that always run CI.
 - **Local API.** It listens on `127.0.0.1:7777`. Every call needs the bearer token from `foundry token`.
 - **Known limit with Codex.** Claude Code reports refused tool calls in machine-readable form.
   Codex reports sandbox refusals only in prose. For Codex, "a denial stops the task" therefore relies
@@ -99,6 +120,14 @@ from `~/Library/LaunchAgents`. The daemon's log is `foundry.log` in the config's
 
 Run `service install` once, and do not also keep `foundry serve` running in a terminal: two daemons
 cannot both listen on the same address.
+
+### Retro loop and friction
+
+Agents list anything that slowed them down as `friction`. Foundry files it as a GitHub issue and
+dedupes by title: a near-duplicate of an open issue becomes a comment on that issue. The retro loop
+(`loops.retro`, every 24h) hands the last day's blocked and failed tasks, friction, incidents and
+review rejections to the `improver` role as one task. It is on by default only for the project named
+by `self_project`; set `enabled: true` or `false` to override.
 
 ## Repository layout
 

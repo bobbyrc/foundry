@@ -78,6 +78,25 @@ that only this project has. Under `routing:`, send a task kind to a role for thi
 kinds you leave out keep the global routing. `foundry.example.yaml` shows `myapp` running its
 implementer on Claude Code with a different model.
 
+**Per-project checks.** `checks` lists commands foundry runs in the worktree after the agent
+finishes and before it commits and pushes. A failure re-queues the task with the output instead of
+opening a PR that CI would reject:
+
+```yaml
+    checks:
+      - name: tests
+        run: "mise exec -- go test ./..."
+        timeout: 10m        # default 10m
+```
+
+**Environment.** Agents get a small allowlisted environment, not foundry's own, so `GH_TOKEN` and
+similar secrets are not passed on. A harness can name extra variables to pass through with
+`inherit_env: [NAME, ...]`. Worker agents are never given the foundry API token.
+
+**Budget.** `limits.daily_budget_usd` stops new task runs once the day's reported cost reaches it.
+A run's cost is recorded when it ends, so runs in flight count only after they finish. Codex
+reports no cost.
+
 Check the setup before you start the daemon:
 
 ```sh
@@ -175,9 +194,16 @@ needs no CI. Foundry treats "no checks" as passing, so the reviewer is the only 
 change is usually rated `low` risk. If the agent and the policy both agree, the PR merges on its
 own after the reviewer approves. Otherwise it waits for you, as in step 8.
 
-To add your own risk rules to a policy, use `extra_rules`. Setting `rules` instead replaces the
-built-in protections (migrations, CI, auth, dependency manifests, foundry's own gates) and must
-then copy them back in.
+To add your own risk rules to a policy, use `extra_rules`. Setting `rules` instead **replaces** the
+built-in protections (migrations, CI, auth, dependency manifests, foundry's own gates and agent
+instructions) and you must then copy them back in. Built-in rules also rate work foundry assigned
+itself (task sources `followup` and `retro`) `medium`, so it waits for your approval. For a
+repository that always runs CI, set the policy's `require_checks: true`: a PR with no checks then
+waits instead of being treated as "no CI".
+
+The retro loop files one improve task a day from recent blocked tasks, friction and incidents. It is
+on by default only for the `self_project`. Friction reports that nearly match an open issue's title
+are added to it as a comment instead of filing a duplicate.
 
 ## 8. Answer approvals
 
@@ -298,8 +324,12 @@ There are two switches:
 ./foundry resume
 ```
 
-For one project, set `paused: true` under it and run `./foundry config --reload`. Pausing does not
-stop agents that are already running. They finish, and nothing new starts.
+For one project, run `./foundry project pause NAME` (and `./foundry project resume NAME`), or use
+the Projects page in the web UI. That takes effect at once and survives restarts. A project with
+`paused: true` in the config can only be resumed by editing the file and running
+`./foundry config --reload`. Pausing does not stop agents that are already running. They finish, and
+nothing new starts. The `deploy_watch` and `prod_watch` loops keep running while paused, so a release
+in flight is still checked and rolled back.
 
 ## 14. Run toolchains under Codex's sandbox
 
