@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-28T16:40:29Z",
+  "generatedAt": "2026-10-28T18:22:40Z",
   "title": "Design System: Foundry",
   "extensions": {
     "colorMeta": {
@@ -133,9 +133,9 @@
       "name": "Field Input",
       "kind": "input",
       "refersTo": "field-input",
-      "description": "Text field. Its 1px stroke is below 3:1 against the field (a known gap, not a model for new controls).",
+      "description": "Text field with a 1px Field Rule outline, at least 3:1 against the field and the ground around it.",
       "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Note (optional)\">",
-      "css": ".ds-input { font: inherit; font-size: 15px; color: var(--text, #18201c); background: var(--input, #ffffff); border: 1px solid var(--border, #b9c6bd); border-radius: 2px; padding: 6px 10px; min-width: 0; } .ds-input:hover { border-color: var(--muted, #4b5751); } .ds-input::placeholder { color: var(--muted, #4b5751); } .ds-input:focus-visible { outline: 2px solid var(--focus, #18201c); outline-offset: 2px; }"
+      "css": ".ds-input { font: inherit; font-size: 15px; color: var(--text, #18201c); background: var(--input, #ffffff); border: 1px solid var(--field, #6f7d76); border-radius: 2px; padding: 6px 10px; min-width: 0; } .ds-input:hover { border-color: var(--text, #18201c); } .ds-input::placeholder { color: var(--muted, #4b5751); } .ds-input:focus-visible { outline: 2px solid var(--focus, #18201c); outline-offset: 2px; }"
     },
     {
       "name": "Rail Nav Item",
@@ -215,7 +215,7 @@
       "Don't set a control or sheet at more than 2px radius (sheets 0px, controls and pills 2px).",
       "Don't set body text in monospace.",
       "Don't use the charcoal board for a content sheet.",
-      "Don't copy the 1px field stroke as a control boundary; it is below 3:1 (see Fields)."
+      "Don't outline a control with the Outer Rule (#b9c6bd); control boundaries use the Field Rule (see Fields)."
     ]
   }
 }
