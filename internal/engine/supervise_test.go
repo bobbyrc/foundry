@@ -65,12 +65,20 @@ func TestSuperviseNoPriceNoEstimate(t *testing.T) {
 	assert.Zero(t, runs[0].CostUSD)
 }
 
-// firstEndedRun waits for the task's first run to finish and returns it as a one-run slice.
+// firstEndedRun waits for one of the task's runs to finish and returns it as a one-run slice. It
+// returns the run it saw ended rather than listing again: a retry can start a newer run between
+// two listings, and runs are listed newest first.
 func (env *rtEnv) firstEndedRun(taskID string) []domain.Run {
 	env.t.Helper()
+	var ended domain.Run
 	require.Eventually(env.t, func() bool {
-		rs := env.runs(taskID)
-		return len(rs) > 0 && rs[0].EndedAt != nil
+		for _, r := range env.runs(taskID) {
+			if r.EndedAt != nil {
+				ended = r
+				return true
+			}
+		}
+		return false
 	}, 10*time.Second, 20*time.Millisecond)
-	return env.runs(taskID)[:1]
+	return []domain.Run{ended}
 }

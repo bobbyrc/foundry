@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -31,8 +32,8 @@ func (c *Config) Validate() error {
 		if h.Type == "" {
 			add("harnesses.%s.type: must not be empty", name)
 		}
-		if p := h.Price; p != nil && (p.InputPerMTok < 0 || p.OutputPerMTok < 0 || p.CachedInputPerMTok < 0) {
-			add("harnesses.%s.price: prices must be 0 (unknown) or greater", name)
+		if p := h.Price; p != nil && (!validPrice(p.InputPerMTok) || !validPrice(p.OutputPerMTok) || !validPrice(p.CachedInputPerMTok)) {
+			add("harnesses.%s.price: prices must be finite numbers, 0 (unknown) or greater", name)
 		}
 	}
 
@@ -227,4 +228,10 @@ func validateRule(add func(string, ...any), prefix string, r Rule) {
 			add("%s.sources[%d]: must not be empty", prefix, j)
 		}
 	}
+}
+
+// validPrice reports whether a per-million-token price is usable: finite and not negative. YAML
+// accepts .inf and .nan, and either would make cost estimates meaningless or unencodable as JSON.
+func validPrice(v float64) bool {
+	return v >= 0 && !math.IsInf(v, 0)
 }
