@@ -309,7 +309,34 @@ func taskCreate(e *env, args []string) error {
 		return printJSON(e.out, task)
 	}
 	fmt.Fprintln(e.out, task.ID)
+	taskPauseNotice(c, *project, e.errOut)
 	return nil
+}
+
+// taskPauseNotice tells the caller on errOut when a new task will wait because the factory or its
+// project is paused. It is best effort: a failed lookup prints nothing, since the task exists.
+func taskPauseNotice(c *client.Client, project string, errOut io.Writer) {
+	ctx := context.Background()
+	stats, err := c.Stats(ctx)
+	if err == nil && stats.Paused {
+		fmt.Fprintln(errOut, `note: the factory is paused; this task waits until "foundry resume"`)
+		return
+	}
+	projects, err := c.Projects(ctx)
+	if err != nil {
+		return
+	}
+	for _, p := range projects {
+		if p.Name != project || !p.Paused {
+			continue
+		}
+		if p.PausedBy == "config" {
+			fmt.Fprintf(errOut, "note: project %s is paused in foundry.yaml (paused: true); this task waits until that is removed\n", p.Name)
+			return
+		}
+		fmt.Fprintf(errOut, "note: project %s is paused (by %s); this task waits until \"foundry project resume %s\"\n", p.Name, p.PausedBy, p.Name)
+		return
+	}
 }
 
 func readBodyFile(path string) ([]byte, error) {
