@@ -3,7 +3,7 @@
 Every client — the web UI, the `foundry` CLI, the orchestrator agent, future native and mobile
 apps — uses this API. JSON field names are the `json` tags in `internal/domain` (Task, Run,
 LogLine, Event, Approval, Deployment, Signal, Friction, Conversation, ChatMessage) and
-`internal/config` (Config). Times are RFC 3339.
+`internal/config` (Config). Times are RFC 3339. The machine-readable OpenAPI 3.1 spec is [openapi.yaml](openapi.yaml).
 
 ## Auth and errors
 

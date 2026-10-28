@@ -71,3 +71,5 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] (unblocked by owner) `foundry service` (launchd KeepAlive) + `foundry doctor` — written but its test run was denied by the auto-mode classifier ("Unauthorized Persistence"); parked UNTESTED on local branch `service-doctor` for the owner
 - [x] UI polish: tool_use ▸ marker inline with its text; "—" for empty Task/Project on chat runs; workdir gets a full-width row
 - [x] CI workflow for foundry itself (.github/workflows/ci.yml): go vet/test -race, gofmt, web typecheck/test/build
+- [ ] cleanup: budget once-per-day state and any other package-level maps keyed by *Engine move into the Engine struct
+- [ ] docs/api.md corrections from the OpenAPI pass: history limit 500; approvals status=approved|rejected; live events carry id 0 in data; unknown JSON fields → 400; /config redacts option secrets and harness env
