@@ -178,8 +178,12 @@ API you can call from a script.
 
 A `deploy` or `rollback` command may start long-running processes, such as a service in the
 background. They keep running after the command succeeds. If the command fails or hits its
-`timeout`, foundry kills them. Redirect a background process's output (`> app.log 2>&1 &`) so it
-does not hold the command's output pipe open.
+`timeout`, foundry kills them. The command's stdout and stderr go to temporary files, not pipes, so a
+background process keeps its output working after the command exits: it is not cut off by a closed
+pipe and does not hold foundry waiting. Redirecting its output (`> app.log 2>&1 &`) is still a good
+idea: without it, whatever the service prints after the command exits goes to a deleted temporary
+file that keeps growing until the service stops. The `deploy` result is read from the last non-empty line of stdout, and the incident
+evidence is the last 4 KB of stdout followed by stderr.
 
 | Option     | Required | Default | Meaning                                                              |
 |------------|----------|---------|----------------------------------------------------------------------|

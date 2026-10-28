@@ -343,3 +343,21 @@ func TestCommandDeployNonZeroExitWithBackgroundChildIsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "ok")
 	killLeftoverChildOnCleanup(t, pidFile)
 }
+
+func TestCommandDeployBackgroundChildWritingOutputSurvives(t *testing.T) {
+	// The child writes to the command's stdout (no redirect) for about 2s. A pipe would be closed
+	// when the deploy returns, so the child would die of SIGPIPE on its next write. A file keeps it
+	// alive, and the deploy returns without waiting for the child.
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	d := newTestCommand(t, map[string]any{
+		"deploy": "( for i in $(seq 20); do echo tick; sleep 0.1; done ) & echo $! > " + pidFile + "; echo https://ok.example",
+	}, nil)
+	start := time.Now()
+	_, err := d.Deploy(context.Background(), "sha")
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), time.Second)
+
+	pid := deployedChildPID(t, pidFile)
+	time.Sleep(time.Second)
+	assert.True(t, processAlive(pid), "a background child writing to the deploy's stdout must not be killed by SIGPIPE")
+}

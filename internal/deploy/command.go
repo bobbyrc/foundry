@@ -67,9 +67,9 @@ func newCommandDeployer(cfg Config) (Deployer, error) {
 // Deploy runs the deploy command with FOUNDRY_REF set. The last stdout line may be a JSON object
 // {"id","url","state"} or a bare URL; without either the ID is generated. Without a status command
 // the deploy is treated as synchronous and recorded as ready. The Handle carries the tail of the
-// command's output (stdout and stderr) as Output.
+// command's output (the tail of stdout, then stderr) as Output.
 func (d *commandDeployer) Deploy(ctx context.Context, ref string) (Handle, error) {
-	stdout, output, err := d.run(ctx, "deploy", d.deployCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_REF="+ref)
+	stdout, output, err := d.runFiles(ctx, "deploy", d.deployCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_REF="+ref)
 	if err != nil {
 		return Handle{}, err
 	}
@@ -109,31 +109,26 @@ func (d *commandDeployer) Rollback(ctx context.Context, id, ref string) error {
 	if d.rollbackCmd == "" {
 		return errors.New("deploy: no rollback command configured")
 	}
-	_, _, err := d.run(ctx, "rollback", d.rollbackCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_ROLLBACK_ID="+id, "FOUNDRY_ROLLBACK_REF="+ref)
+	_, _, err := d.runFiles(ctx, "rollback", d.rollbackCmd, sysproc.WaitKeepOnSuccess, "FOUNDRY_ROLLBACK_ID="+id, "FOUNDRY_ROLLBACK_REF="+ref)
 	return err
 }
 
-// run executes command with sh -c in the project directory. It returns the command's stdout (which
-// the caller parses for its result) and the last deployOutputTail bytes of stdout and stderr
-// combined, as they arrived (the evidence for incidents). The environment is the
-// process environment, then the project's env, then extra, so extra wins on conflicts. A non-zero
-// exit or timeout is an error that carries the tail of the command's output. wait decides what
-// happens to processes the command leaves behind (see sysproc.Wait and sysproc.WaitKeepOnSuccess).
+// run executes command with sh -c in the project directory, reading its stdout and stderr through
+// pipes. It is used by the status command only; deploy and rollback use runFiles. It returns the
+// command's stdout (which the caller parses for its result) and the last deployOutputTail bytes of
+// stdout and stderr combined. The environment is the process environment, then the project's env,
+// then extra, so extra wins on conflicts. A non-zero exit or timeout is an error that carries the
+// tail of the command's output. wait decides what happens to processes the command leaves behind
+// (see sysproc.Wait).
 func (d *commandDeployer) run(ctx context.Context, label, command string, wait func(*exec.Cmd) error, extra ...string) (stdout, output string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 
 	var out bytes.Buffer
 	combined := &tailWriter{max: deployOutputTail}
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	cmd.Dir = d.dir
-	cmd.Env = append(append(os.Environ(), d.env...), extra...)
+	cmd := d.newCmd(ctx, command, extra)
 	cmd.Stdout = io.MultiWriter(&out, combined)
 	cmd.Stderr = combined
-	// On timeout the whole process group is killed, not just sh, and the wait does not block on pipes
-	// a grandchild still holds open. A deploy that exits 0 may leave a service running (see
-	// sysproc.WaitKeepOnSuccess).
-	sysproc.Configure(cmd)
 	err = cmd.Start()
 	if err == nil {
 		err = wait(cmd)
@@ -142,6 +137,87 @@ func (d *commandDeployer) run(ctx context.Context, label, command string, wait f
 		return "", "", fmt.Errorf("deploy: %s command failed: %w: output: %s", label, err, tail(strings.TrimSpace(combined.String())))
 	}
 	return out.String(), combined.String(), nil
+}
+
+// runFiles executes command like run, but sends its stdout and stderr to two temporary files
+// instead of pipes, and waits with sysproc.WaitKeepOnSuccess. Why files: a pipe ties the command
+// to foundry. Once a deploy returns, foundry stops reading the pipe, so a service the deploy left
+// running gets SIGPIPE on its next write and dies. A file has no reader that can go away: a
+// leftover process keeps a valid descriptor to an unlinked file and can write without blocking.
+// foundry reads each file once, up to its size when the command exits, so later writes by
+// leftover processes are never read. The files are removed before runFiles returns.
+//
+// It returns the command's stdout, which the caller parses (its last non-empty line is the
+// result), and the last deployOutputTail bytes of stdout followed by stderr. Unlike the pipe
+// version, the two streams are not interleaved in the order they were written.
+func (d *commandDeployer) runFiles(ctx context.Context, label, command string, wait func(*exec.Cmd) error, extra ...string) (stdout, output string, err error) {
+	ctx, cancel := context.WithTimeout(ctx, d.timeout)
+	defer cancel()
+
+	outFile, err := os.CreateTemp("", "foundry-"+label+"-stdout-*")
+	if err != nil {
+		return "", "", fmt.Errorf("deploy: %s command: create stdout file: %w", label, err)
+	}
+	defer removeTemp(outFile)
+	errFile, err := os.CreateTemp("", "foundry-"+label+"-stderr-*")
+	if err != nil {
+		return "", "", fmt.Errorf("deploy: %s command: create stderr file: %w", label, err)
+	}
+	defer removeTemp(errFile)
+
+	cmd := d.newCmd(ctx, command, extra)
+	cmd.Stdout = outFile
+	cmd.Stderr = errFile
+	err = cmd.Start()
+	if err == nil {
+		err = wait(cmd)
+	}
+
+	var outBuf bytes.Buffer
+	combined := &tailWriter{max: deployOutputTail}
+	readErr := readBack(outFile, io.MultiWriter(&outBuf, combined))
+	if errR := readBack(errFile, combined); readErr == nil {
+		readErr = errR
+	}
+	if err == nil {
+		err = readErr
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("deploy: %s command failed: %w: output: %s", label, err, tail(strings.TrimSpace(combined.String())))
+	}
+	return outBuf.String(), combined.String(), nil
+}
+
+// newCmd builds the sh -c command for command in the project directory. Its environment is the
+// process environment, then the project's env, then extra, so extra wins on conflicts. It is
+// placed in its own process group (see sysproc.Configure), so a timeout kills the whole tree, not
+// just sh, and the wait does not block on a grandchild that still holds output open. A deploy that
+// exits 0 may leave a service running (see sysproc.WaitKeepOnSuccess).
+func (d *commandDeployer) newCmd(ctx context.Context, command string, extra []string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Dir = d.dir
+	cmd.Env = append(append(os.Environ(), d.env...), extra...)
+	sysproc.Configure(cmd)
+	return cmd
+}
+
+// readBack copies the bytes f held when the command exited into w. It reads with ReadAt, so the
+// file offset that the command's processes share is not moved, and it stops at the size measured
+// here, so output a leftover process writes afterwards cannot keep the read going.
+func readBack(f *os.File, w io.Writer) error {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(w, io.NewSectionReader(f, 0, info.Size()))
+	return err
+}
+
+// removeTemp closes and deletes a temporary output file. A process that still holds it keeps
+// writing to the unlinked file, which the kernel frees when that process exits.
+func removeTemp(f *os.File) {
+	_ = f.Close()
+	_ = os.Remove(f.Name())
 }
 
 // tailWriter keeps the last max bytes written to it, so a chatty command cannot grow foundry's
