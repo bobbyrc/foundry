@@ -1372,3 +1372,23 @@ input[type='checkbox'] {
     grid-template-columns: 1fr;
   }
 }
+
+.approval-section {
+  margin-top: 12px;
+}
+
+.approval-section h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.approval-card .decide {
+  margin-top: 8px;
+}
