@@ -183,3 +183,23 @@ commit, push, open PRs or call the GitHub API, and write your report to
   verified PID, never by pattern.
 - Never write a secret into the repository, a log, a test fixture or a command's output.
 - After the owner corrects you, add the rule that prevents the mistake to `tasks/lessons.md`.
+
+## Keep the maintainer's instance up to date
+
+The maintainer runs a long-lived foundry on their own machine, set up as in
+`examples/dogfood/README.md`. It works on the maintainer's other projects and on foundry itself,
+so it must run current `main`. When you develop foundry on that machine (there,
+`DOGFOOD=~/.local/share/foundry-dogfood`), finish every change that reaches `main` like this:
+
+1. Bring the factory's base branch up to date: push `main` to `dogfood` when it fast-forwards
+   and no factory PR is waiting on the same files (see above).
+2. Run `mise exec -- examples/dogfood/update.sh`. It builds `main`, waits until the factory is
+   idle, swaps the binary, restarts the daemon, checks its version, and puts the old binary back
+   if the new one fails.
+3. Check that the UI loads and `foundry status` is sane.
+
+That machine's config, `$DOGFOOD/foundry.yaml`, is a local copy of the example plus
+machine-specific settings, so it is not in the repository. When a change adds a config key that
+the instance needs, update the binary first and then add the key to that file: an older binary
+rejects keys it does not know. Agents that foundry runs never do any of this, because restarting
+the daemon ends their own run.

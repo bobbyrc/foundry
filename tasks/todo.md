@@ -100,7 +100,7 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] EnsureClone leaves the clone checked out on the remote HEAD (main), not the project's default_branch — the orchestrator reading project.path saw only main's README. Keep the clone's checkout at origin/<default_branch> (detached) after each fetch
 - [ ] friction: semantic duplicates need judgment — periodically queue a triager task "consolidate duplicate friction issues" (close dupes with a link)
 - [x] openapi.yaml + web/src/types.ts: add 'retro' to the loop names / loops config shape
-- [ ] OWNER: approve or reject dogfood PR #14 (retro's implementer-prompt change; high risk = foundry's own instructions). My approval attempt was refused as self-approval — correctly; it is yours. My read: safe and useful; one hint (GOMODCACHE→/tmp with GOPROXY=off) is slightly off.
+- [x] OWNER (done): approve or reject dogfood PR #14 (retro's implementer-prompt change; high risk = foundry's own instructions). My approval attempt was refused as self-approval — correctly; it is yours. My read: safe and useful; one hint (GOMODCACHE→/tmp with GOPROXY=off) is slightly off. — owner rejected #14 (2026-10-28); PR closed
 - [ ] OWNER: friction #4, #5, #6 are all the Codex sandbox (no localhost listeners, no module cache); they resolve with your Codex network decision. #3 closed as a duplicate of #5
 - [x] per-project `checks:` — commands foundry runs in the worktree after the agent and before commit/push (generic replacement for the cancelled Go-specific follow-ups); failure re-queues with the output
 - [x] policy rule criterion `sources` + default rule: work foundry assigned itself (followup, retro) is at least medium — tonight 2 of 2 retro follow-ups had design problems (owner may relax)
@@ -126,7 +126,7 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] ROLLBACK TEST (real): killed staging during PR #30's verify window → release e697fd5 rolled_back, staging back on healthy 8f8fefa within ~1.5 min, incident opened. The SRE's diagnosis was stale (no logs: daemon predated the evidence change); induced incident cancelled, its PR #31 closed. Dogfood daemon now runs 3f1ecbd with `deploy.logs` set
 - [x] closed fixed friction issues #25 (CI/web build) and #27 (nohup service killed)
 - [x] factory queue: #28 (health-failure reason names URL, count, elapsed; spec in the body) and #33 (intake includes OWNER/MEMBER/COLLABORATOR comments; public repo, so others are ignored)
-- [ ] OWNER: PR #19 — recommend REJECT: superseded by the example on init (its example put GH_TOKEN in inherit_env, handing agents foundry's GitHub token). It also conflicts with dogfood (foundry.example.yaml); approve → the factory must rebase it first, or reject
+- [x] OWNER (done): PR #19 — recommend REJECT: superseded by the example on init (its example put GH_TOKEN in inherit_env, handing agents foundry's GitHub token). It also conflicts with dogfood (foundry.example.yaml); approve → the factory must rebase it first, or reject — owner rejected #19 (2026-10-28); PR closed
 - [x] friction #32: the dogfood setup now lives in examples/dogfood/ (config, release and observer scripts). The scripts run from foundry's clone, so agents can change them by PR (rated high). The live daemon runs on it (scratchpad/dogfood/run-daemon.sh)
 - [x] factory merged #34 (#33: intake includes OWNER/MEMBER/COLLABORATOR comments) and #35 (#28: health-failure reason names URL, count, elapsed). Both auto-merged at low risk, released and verified healthy on staging, and their issues closed automatically
 - [x] defect review of 47ee9be..b167957 (two fresh reviewers) → fixed: wildcard bind address broke the CLI, foundry open and orchestrator chat (Host guard 421) → LocalURL; public_url validated; exec intake over 1 MB is an error; secrets redacted from deploy/logs evidence and failure notes; deploy stdout bounded to a 64 KB tail; issue outcome comments serialised (no double post)
@@ -142,7 +142,7 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] redaction: SESSION removed from the secret words (it mangled paths containing CLAUDE_CODE_SESSION_ID)
 - [x] orchestrator chat verified live (56s, correct counts; it repeated stale incident diagnoses, which resolved once the blocked tasks did)
 - [x] PR #26 (Codex cost estimate): an independent review found flaky tests (reproduced: 2 of 120 runs failed under load) and unchecked .inf/.nan prices. Fixed both on the PR branch and merged dogfood into it (full suite and 57 web tests pass). foundry re-reviews it, then it returns to the owner for approval. Recommend APPROVE
-- [ ] OWNER: PR #14 — recommend REJECT as written: its Go cache advice belongs in project env/setup, and GOMODCACHE=/tmp with GOPROXY=off breaks module resolution. Its rule "never report a skipped check as passed; rate it medium; file friction" is worth adding to the implementer prompt by hand
+- [x] OWNER (done): PR #14 — recommend REJECT as written: its Go cache advice belongs in project env/setup, and GOMODCACHE=/tmp with GOPROXY=off breaks module resolution. Its rule "never report a skipped check as passed; rate it medium; file friction" is worth adding to the implementer prompt by hand — rejected; the "never report a skipped check as passed" rule is now in AGENTS.md
 - [x] #42 → PR #43 was the first release through the in-repo release script (22cccf4, healthy); friction #32 closed
 - [x] the dogfood factory moved out of the session scratch dir to ~/.local/share/foundry-dogfood (data, clone, binary; staging rebuilt there). Start it with ~/.local/share/foundry-dogfood/run-daemon.sh; the CLI needs DOGFOOD=~/.local/share/foundry-dogfood FOUNDRY_CONFIG=$DOGFOOD/clone/examples/dogfood/foundry.yaml. The old scratch copy is untouched (backup)
 - [ ] OWNER: to keep the daemon running across reboots, `foundry service install` (launchd) — not done for you
@@ -172,3 +172,10 @@ Owner decisions and open items are the unchecked `OWNER:` lines below.
 - [x] docs audit (CLI help and config vs every doc): 11 mismatches fixed, including two small CLI bugs (`task -h` and `run -h` errored; `project pause -h` treated "-h" as a project name)
 - [x] `foundry task create` warns on stderr when the factory or project is paused, so the orchestrator relays it
 
+
+## Morning, 2026-10-28
+
+- [x] owner approved PR #26 (merged, released healthy); #47 (init → main), #48 (product direction), #49 (Connect button fix), #50 (AGENTS.md) merged
+- [x] UI reachable over Tailscale (`tailscale serve --https=7797`); the instance's local config `$DOGFOOD/foundry.yaml` sets `public_url`
+- [x] `examples/dogfood/update.sh`: one-step update of the maintainer's instance to `main`; AGENTS.md says to run it after every change to `main`. Tested live (47a21fe → 68d139d, then a no-op run); the undo-on-failed-health path is untested
+- [x] stale branches deleted (factory branches of cancelled/rejected tasks, merged `init`, local `service-doctor`)
