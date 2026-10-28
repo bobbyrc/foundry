@@ -45,7 +45,7 @@ auto-merge. Each merge is released and its health verified, with automatic rollb
 with evidence, and SRE triage. Production signals become incidents. Issues are closed on merge,
 and friction becomes issues.
 
-Proven live on this repo: 20 factory PRs merged on their own, every release verified on a
+Proven live on this repo: 20 factory PRs merged on their own, every release health-checked on a
 local staging copy, a rollback drill, a prod_watch drill, a Codex smoke run, orchestrator chat
 (read-only questions and delegation), and the in-repo release pipeline (examples/dogfood).
 
