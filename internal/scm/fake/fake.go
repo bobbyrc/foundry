@@ -335,5 +335,6 @@ func clonePR(pr scm.PR) scm.PR {
 
 func cloneIssue(is scm.Issue) scm.Issue {
 	is.Labels = append([]string(nil), is.Labels...)
+	is.Comments = append([]scm.IssueComment(nil), is.Comments...)
 	return is
 }
