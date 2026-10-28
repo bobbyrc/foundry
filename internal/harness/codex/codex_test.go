@@ -230,3 +230,31 @@ func replay(t *testing.T, path string, exitCode int) ([]harness.Event, harness.R
 	}
 	return events, p.result(exitCode, nil)
 }
+
+func TestSandboxEnvDefaultsAndOverrides(t *testing.T) {
+	t.Setenv("GOMODCACHE", "/mods")
+	env := mergeEnv(sandboxEnv(nil), map[string]string{"GOPROXY": "direct"})
+	want := map[string]string{
+		"GOCACHE":    "/tmp/foundry-go/gocache",
+		"GOMODCACHE": "/mods",
+		"GOFLAGS":    "-mod=readonly -buildvcs=false",
+		"GOPROXY":    "direct",
+	}
+	for k, v := range want {
+		if env[k] != v {
+			t.Errorf("%s = %q, want %q", k, env[k], v)
+		}
+	}
+}
+
+func TestSandboxEnvSkipsInheritedVariables(t *testing.T) {
+	env := sandboxEnv([]string{"GOPROXY", "GOCACHE"})
+	for _, k := range []string{"GOPROXY", "GOCACHE"} {
+		if _, ok := env[k]; ok {
+			t.Errorf("%s set although inherited", k)
+		}
+	}
+	if env["GOFLAGS"] == "" {
+		t.Error("GOFLAGS not set")
+	}
+}

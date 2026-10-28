@@ -303,6 +303,10 @@ Codex is the agent behind the `implementer` and `improver` roles. Its default `w
 sandbox can write only to the task's worktree and `/tmp`, and it has no network. Build tools that
 write caches under `$HOME` or download dependencies fail inside it, usually with a permission error.
 
+Foundry's `codex` harness already sets `GOCACHE=/tmp/foundry-go/gocache`, `GOMODCACHE` (foundry's own
+module cache), `GOFLAGS="-mod=readonly -buildvcs=false"` and `GOPROXY=off` for every session. Override
+any of them under the harness `env:`, or list them in `inherit_env` to keep foundry's own values.
+
 **Keep caches in the worktree or `/tmp`.** For Go, point the build cache (and, if needed, the module
 cache and temp directory) at `/tmp`:
 

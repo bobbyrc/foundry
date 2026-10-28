@@ -4,6 +4,9 @@ package codex
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"slices"
 
 	"github.com/bobbyrc/foundry/internal/harness"
 )
@@ -37,7 +40,7 @@ func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session,
 	p, err := harness.StartProcess(ctx, harness.ProcSpec{
 		Command:    buildArgs(r.cfg, spec),
 		Dir:        spec.Workdir,
-		Env:        mergeEnv(r.cfg.Env, spec.Env),
+		Env:        mergeEnv(sandboxEnv(r.cfg.InheritEnv), r.cfg.Env, spec.Env),
 		InheritEnv: r.cfg.InheritEnv,
 		Stdin:      stdinText(spec),
 		ParseLine:  ps.parseLine,
@@ -117,4 +120,39 @@ func mergeEnv(maps ...map[string]string) map[string]string {
 		}
 	}
 	return out
+}
+
+// sandboxEnv returns Go settings that work under the workspace-write sandbox, which has no
+// network and can write only to the worktree and /tmp: the build cache goes to /tmp and nothing
+// is fetched or VCS-stamped. The module cache stays at its normal, already warm location, which
+// is readable. Variables named in inherit are left alone, and harness or task env overrides these.
+func sandboxEnv(inherit []string) map[string]string {
+	env := map[string]string{
+		"GOCACHE": "/tmp/foundry-go/gocache",
+		"GOFLAGS": "-mod=readonly -buildvcs=false",
+		"GOPROXY": "off",
+	}
+	if mc := goModCache(); mc != "" {
+		env["GOMODCACHE"] = mc
+	}
+	for k := range env {
+		if slices.Contains(inherit, k) {
+			delete(env, k)
+		}
+	}
+	return env
+}
+
+// goModCache is where Go keeps downloaded modules, resolved from foundry's own environment.
+func goModCache() string {
+	if d := os.Getenv("GOMODCACHE"); d != "" {
+		return d
+	}
+	if d := os.Getenv("GOPATH"); d != "" {
+		return filepath.Join(filepath.SplitList(d)[0], "pkg", "mod")
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, "go", "pkg", "mod")
+	}
+	return ""
 }
