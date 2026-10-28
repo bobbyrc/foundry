@@ -293,6 +293,8 @@ projects:
 
 Every option, and how deployers read command output, is in [plugins.md](plugins.md#deployers).
 
+To see releases from a terminal, run `./foundry deploys`, and `./foundry deploys show ID` for one release's fields and evidence log (why it failed).
+
 ## 11. Add a Sentry observer (optional)
 
 An observer reports production problems. The prod watch loop polls every observer (every 10 minutes
