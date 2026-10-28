@@ -232,3 +232,21 @@ func TestDoctorReadsHealthJSON(t *testing.T) {
 	_, out, _ := runCLI("doctor", "--config", f.cfg)
 	assertLine(t, out, "ok", "daemon: running at "+srv.URL+" (version 1.2.3)")
 }
+
+func TestDoctorChecksProjectOnlyRoleHarnesses(t *testing.T) {
+	healthyDaemon(t)
+	f := newDoctorFixture(t, "  broken:\n    type: exec\n    command: [\"/nonexistent/tool-xyz\"]\n")
+	raw, err := os.ReadFile(f.cfg)
+	require.NoError(t, err)
+	// The project adds a role that only it has, on the harness whose CLI is missing.
+	body := strings.Replace(string(raw), "    repo: \"bobbyrc/foundry\"\n",
+		"    repo: \"bobbyrc/foundry\"\n    agents:\n      scout:\n        harness: broken\n        prompt: builtin:implementer\n", 1)
+	require.NotEqual(t, string(raw), body)
+	require.NoError(t, os.WriteFile(f.cfg, []byte(body), 0o600))
+	toolRunner(t, nil)
+
+	code, out, _ := runCLI("doctor", "--config", f.cfg)
+	assert.Equal(t, 1, code, out)
+	assertLine(t, out, "FAIL", "harness broken: /nonexistent/tool-xyz not runnable")
+	assertLine(t, out, "FAIL", "agents scout (project foundry) use it")
+}

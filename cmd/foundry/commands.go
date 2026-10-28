@@ -103,11 +103,11 @@ func writeStatus(w io.Writer, s statusSnapshot) error {
 	fmt.Fprintln(w, "Needs you:")
 	n := 0
 	for _, a := range s.Approvals {
-		fmt.Fprintf(w, "  approval %s  [%s] %s: %s\n", a.ID, a.Kind, a.Title, orDash(a.Reason))
+		fmt.Fprintf(w, "  approval %s  [%s] %s: %s\n", a.ID, a.Kind, oneLine(a.Title), orDash(oneLine(a.Reason)))
 		n++
 	}
 	for _, t := range s.Blocked {
-		fmt.Fprintf(w, "  blocked  %s  %s: %s\n", t.ID, truncate(t.Title, titleWidth), orDash(t.BlockedReason))
+		fmt.Fprintf(w, "  blocked  %s  %s: %s\n", oneLine(t.ID), truncate(t.Title, titleWidth), orDash(oneLine(t.BlockedReason)))
 		n++
 	}
 	if n == 0 {
@@ -119,7 +119,7 @@ func writeStatus(w io.Writer, s statusSnapshot) error {
 		fmt.Fprintln(w, "  nothing")
 	}
 	for _, r := range s.Running {
-		fmt.Fprintf(w, "  %-12s %-16s run %s  task %s\n", r.Role, r.Project, r.ID, r.TaskID)
+		fmt.Fprintf(w, "  %-12s %-16s run %s  task %s\n", oneLine(r.Role), oneLine(r.Project), oneLine(r.ID), oneLine(r.TaskID))
 	}
 	return nil
 }
@@ -149,11 +149,7 @@ func cmdProjects(e *env, args []string) error {
 	}
 	rows := make([][]string, 0, len(projects))
 	for _, p := range projects {
-		paused := "no"
-		if p.Paused {
-			paused = "yes"
-		}
-		rows = append(rows, []string{p.Name, orDash(p.Repo), paused, joinNonZero(p.Counts)})
+		rows = append(rows, []string{p.Name, orDash(p.Repo), pausedColumn(p), joinNonZero(p.Counts)})
 	}
 	table(e.out, []string{"NAME", "REPO", "PAUSED", "TASKS"}, rows)
 	return nil
@@ -376,36 +372,36 @@ func taskShow(e *env, args []string) error {
 
 func writeTaskDetail(w io.Writer, d client.TaskDetail) {
 	t := d.Task
-	fmt.Fprintf(w, "Task %s: %s\n", t.ID, t.Title)
-	fmt.Fprintf(w, "Status:    %s\n", t.Status)
-	fmt.Fprintf(w, "Kind:      %s   Role: %s   Project: %s\n", t.Kind, orDash(t.Role), t.Project)
-	fmt.Fprintf(w, "Priority:  %d   Attempts: %d of %d   Source: %s\n", t.Priority, t.Attempts, t.MaxAttempts, orDash(t.Source))
+	fmt.Fprintf(w, "Task %s: %s\n", oneLine(t.ID), oneLine(t.Title))
+	fmt.Fprintf(w, "Status:    %s\n", oneLine(string(t.Status)))
+	fmt.Fprintf(w, "Kind:      %s   Role: %s   Project: %s\n", oneLine(string(t.Kind)), orDash(oneLine(t.Role)), oneLine(t.Project))
+	fmt.Fprintf(w, "Priority:  %d   Attempts: %d of %d   Source: %s\n", t.Priority, t.Attempts, t.MaxAttempts, orDash(oneLine(t.Source)))
 	risk := "-"
 	if t.Risk != "" {
-		risk = string(t.Risk)
+		risk = oneLine(string(t.Risk))
 		if len(t.RiskReasons) > 0 {
-			risk += " (" + strings.Join(t.RiskReasons, "; ") + ")"
+			risk += " (" + oneLine(strings.Join(t.RiskReasons, "; ")) + ")"
 		}
 	}
 	fmt.Fprintf(w, "Risk:      %s\n", risk)
 	if t.PRNumber > 0 {
-		fmt.Fprintf(w, "PR:        #%d %s\n", t.PRNumber, t.PRURL)
+		fmt.Fprintf(w, "PR:        #%d %s\n", t.PRNumber, oneLine(t.PRURL))
 	}
 	if t.Branch != "" {
-		fmt.Fprintf(w, "Branch:    %s\n", t.Branch)
+		fmt.Fprintf(w, "Branch:    %s\n", oneLine(t.Branch))
 	}
 	if t.BlockedReason != "" {
-		fmt.Fprintf(w, "Blocked:   %s\n", t.BlockedReason)
+		fmt.Fprintf(w, "Blocked:   %s\n", oneLine(t.BlockedReason))
 	}
 	if t.Summary != "" {
-		fmt.Fprintf(w, "Summary:   %s\n", t.Summary)
+		fmt.Fprintf(w, "Summary:   %s\n", oneLine(t.Summary))
 	}
 	if t.ParentID != "" {
-		fmt.Fprintf(w, "Parent:    %s\n", t.ParentID)
+		fmt.Fprintf(w, "Parent:    %s\n", oneLine(t.ParentID))
 	}
 	fmt.Fprintf(w, "Created:   %s   Updated: %s\n", stamp(t.CreatedAt), stamp(t.UpdatedAt))
 	if t.Body != "" {
-		fmt.Fprintf(w, "\nBody:\n%s\n", strings.TrimRight(t.Body, "\n"))
+		fmt.Fprintf(w, "\nBody:\n%s\n", cleanText(strings.TrimRight(t.Body, "\n")))
 	}
 
 	fmt.Fprintln(w, "\nRuns:")
@@ -421,7 +417,7 @@ func writeTaskDetail(w io.Writer, d client.TaskDetail) {
 	if len(d.Approvals) > 0 {
 		fmt.Fprintln(w, "\nApprovals:")
 		for _, a := range d.Approvals {
-			fmt.Fprintf(w, "  %s  %s  %s\n", a.ID, a.Status, a.Title)
+			fmt.Fprintf(w, "  %s  %s  %s\n", oneLine(a.ID), oneLine(string(a.Status)), oneLine(a.Title))
 		}
 	}
 	if len(d.Children) > 0 {
@@ -561,19 +557,19 @@ func runShow(e *env, args []string) error {
 	if *jsonOut {
 		return printJSON(e.out, r)
 	}
-	fmt.Fprintf(e.out, "Run %s\n", r.ID)
-	fmt.Fprintf(e.out, "Status:   %s\n", r.Status)
-	fmt.Fprintf(e.out, "Task:     %s   Project: %s   Role: %s\n", r.TaskID, r.Project, orDash(r.Role))
-	fmt.Fprintf(e.out, "Harness:  %s   Model: %s\n", orDash(r.Harness), orDash(r.Model))
-	fmt.Fprintf(e.out, "Branch:   %s\n", orDash(r.Branch))
-	fmt.Fprintf(e.out, "Workdir:  %s\n", orDash(r.Workdir))
+	fmt.Fprintf(e.out, "Run %s\n", oneLine(r.ID))
+	fmt.Fprintf(e.out, "Status:   %s\n", oneLine(string(r.Status)))
+	fmt.Fprintf(e.out, "Task:     %s   Project: %s   Role: %s\n", oneLine(r.TaskID), oneLine(r.Project), orDash(oneLine(r.Role)))
+	fmt.Fprintf(e.out, "Harness:  %s   Model: %s\n", orDash(oneLine(r.Harness)), orDash(oneLine(r.Model)))
+	fmt.Fprintf(e.out, "Branch:   %s\n", orDash(oneLine(r.Branch)))
+	fmt.Fprintf(e.out, "Workdir:  %s\n", orDash(oneLine(r.Workdir)))
 	fmt.Fprintf(e.out, "Started:  %s   Ended: %s\n", stamp(r.StartedAt), stamp(derefTime(r.EndedAt)))
 	fmt.Fprintf(e.out, "Exit:     %d   Cost: $%.4f   Tokens in/out: %d/%d\n", r.ExitCode, r.CostUSD, r.InputTokens, r.OutputTokens)
 	if r.Summary != "" {
-		fmt.Fprintf(e.out, "Summary:  %s\n", r.Summary)
+		fmt.Fprintf(e.out, "Summary:  %s\n", cleanText(r.Summary))
 	}
 	if r.Error != "" {
-		fmt.Fprintf(e.out, "Error:    %s\n", r.Error)
+		fmt.Fprintf(e.out, "Error:    %s\n", cleanText(r.Error))
 	}
 	return nil
 }
@@ -664,7 +660,7 @@ func printLogs(ctx context.Context, w io.Writer, c *client.Client, runID string,
 			return after, err
 		}
 		for _, l := range lines {
-			fmt.Fprintf(w, "%s %s %s\n", clock(l.Time), l.Kind, l.Text)
+			fmt.Fprintf(w, "%s %s %s\n", clock(l.Time), oneLine(string(l.Kind)), cleanText(l.Text))
 			after = l.Seq
 		}
 		if len(lines) < logPageSize {
@@ -799,7 +795,7 @@ func cmdEvents(e *env, args []string) error {
 			return err
 		}
 		if err != nil {
-			fmt.Fprintf(e.errOut, "event stream lost (%v); reconnecting\n", err)
+			fmt.Fprintf(e.errOut, "event stream lost (%s); reconnecting\n", cleanText(err.Error()))
 		}
 		select {
 		case <-ctx.Done():
@@ -810,7 +806,7 @@ func cmdEvents(e *env, args []string) error {
 }
 
 func writeEvent(w io.Writer, ev domain.Event) {
-	fmt.Fprintf(w, "%s %-22s %s\n", clock(ev.Time), ev.Type, ev.Message)
+	fmt.Fprintf(w, "%s %-22s %s\n", clock(ev.Time), oneLine(ev.Type), oneLine(ev.Message))
 }
 
 // ---- loops ----
@@ -877,6 +873,48 @@ func cmdLoop(e *env, args []string) error {
 }
 
 // ---- pause, resume ----
+
+// cmdProject pauses or resumes one project: `foundry project pause NAME`.
+func cmdProject(e *env, args []string) error {
+	if len(args) == 0 {
+		return usagef("usage: foundry project pause|resume NAME")
+	}
+	sub, rest := args[0], args[1:]
+	switch sub {
+	case "pause", "resume":
+		return setProjectPaused(e, sub, rest)
+	}
+	return usagef("unknown project command %q (want pause or resume)", sub)
+}
+
+func setProjectPaused(e *env, sub string, args []string) error {
+	if err := requireArgs(args, 1, "project "+sub+" NAME"); err != nil {
+		return err
+	}
+	c, err := apiClient()
+	if err != nil {
+		return err
+	}
+	name := args[0]
+	ctx := context.Background()
+	if sub == "resume" {
+		if _, err := c.ResumeProject(ctx, name); err != nil {
+			return err
+		}
+		fmt.Fprintf(e.out, "project %s resumed\n", oneLine(name))
+		return nil
+	}
+	state, err := c.PauseProject(ctx, name)
+	if err != nil {
+		return err
+	}
+	msg := "paused"
+	if state.PausedBy != "" {
+		msg += " (" + oneLine(state.PausedBy) + ")"
+	}
+	fmt.Fprintf(e.out, "project %s %s\n", oneLine(name), msg)
+	return nil
+}
 
 func cmdPause(e *env, args []string) error {
 	return setPaused(e, args, true)
@@ -965,7 +1003,7 @@ func cmdChat(e *env, args []string) error {
 		if detail.Conversation.Busy {
 			continue
 		}
-		fmt.Fprintln(e.out, newestAssistantText(detail.Messages))
+		fmt.Fprintln(e.out, cleanText(newestAssistantText(detail.Messages)))
 		return nil
 	}
 }

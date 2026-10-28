@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -134,7 +135,18 @@ func cmdServe(e *env, args []string) error {
 		Version:    version,
 		Logger:     logger,
 	})
-	srv := &http.Server{Addr: cfg.Server.Addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	// Every request context derives from baseCtx. Streaming (SSE) handlers run until their
+	// context ends, and http.Server.Shutdown does not end it, so shutdown cancels baseCtx first.
+	baseCtx, cancelBase := context.WithCancel(context.Background())
+	defer cancelBase()
+	srv := &http.Server{
+		Addr:              cfg.Server.Addr,
+		Handler:           handler,
+		BaseContext:       func(net.Listener) context.Context { return baseCtx },
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -154,10 +166,14 @@ func cmdServe(e *env, args []string) error {
 		stop()
 	}
 
+	// End the streaming handlers, then wait for the server and the engine. The store closes
+	// last, after nothing can read or write it.
+	cancelBase()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("http shutdown", "err", err)
+		_ = srv.Close()
 	}
 	engErr := <-engineDone
 	closeErr := st.Close()
@@ -202,6 +218,7 @@ func containsString(list []string, s string) bool {
 func harnessFor(name string, h config.Harness) (harness.Harness, error) {
 	return harness.New(harness.Config{
 		Name: name, Type: h.Type, Command: h.Command, Args: h.Args, Env: h.Env,
+		InheritEnv: h.InheritEnv,
 	})
 }
 

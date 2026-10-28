@@ -74,13 +74,22 @@ type Stats struct {
 
 // ProjectView is one entry of GET /projects: the project's settings plus its task counts.
 type ProjectView struct {
-	Name          string         `json:"name"`
-	Repo          string         `json:"repo"`
-	Path          string         `json:"path"`
-	DefaultBranch string         `json:"default_branch"`
-	Policy        string         `json:"policy"`
-	Paused        bool           `json:"paused"`
-	Counts        map[string]int `json:"counts"`
+	Name          string `json:"name"`
+	Repo          string `json:"repo"`
+	Path          string `json:"path"`
+	DefaultBranch string `json:"default_branch"`
+	Policy        string `json:"policy"`
+	Paused        bool   `json:"paused"`
+	// PausedBy says who paused the project: "config" (paused: true in foundry.yaml) or "owner"
+	// (POST /projects/{name}/pause). Empty when it is not paused.
+	PausedBy string         `json:"paused_by"`
+	Counts   map[string]int `json:"counts"`
+}
+
+// ProjectControl is the answer of the project pause and resume routes.
+type ProjectControl struct {
+	Paused   bool   `json:"paused"`
+	PausedBy string `json:"paused_by"`
 }
 
 // AgentView is one entry of GET /agents: a role and the harness it runs on.
@@ -186,6 +195,20 @@ func (c *Client) Pause(ctx context.Context) (ControlState, error) {
 func (c *Client) Resume(ctx context.Context) (ControlState, error) {
 	var out ControlState
 	err := c.do(ctx, http.MethodPost, "/control/resume", nil, nil, &out)
+	return out, err
+}
+
+// PauseProject calls POST /projects/{name}/pause.
+func (c *Client) PauseProject(ctx context.Context, name string) (ProjectControl, error) {
+	var out ProjectControl
+	err := c.do(ctx, http.MethodPost, "/projects/"+url.PathEscape(name)+"/pause", nil, nil, &out)
+	return out, err
+}
+
+// ResumeProject calls POST /projects/{name}/resume.
+func (c *Client) ResumeProject(ctx context.Context, name string) (ProjectControl, error) {
+	var out ProjectControl
+	err := c.do(ctx, http.MethodPost, "/projects/"+url.PathEscape(name)+"/resume", nil, nil, &out)
 	return out, err
 }
 

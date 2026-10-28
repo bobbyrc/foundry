@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -60,6 +61,7 @@ func commandList() []command {
 		{"events", "show history, or follow the event stream", cmdEvents},
 		{"loops", "list recurring loops", cmdLoops},
 		{"loop", "run a loop now: loop run NAME [--project P]", cmdLoop},
+		{"project", "pause or resume one project: project pause|resume NAME", cmdProject},
 		{"pause", "stop starting runs and loops", cmdPause},
 		{"resume", "resume a paused factory", cmdResume},
 		{"chat", "message the orchestrator and print its reply", cmdChat},
@@ -102,10 +104,10 @@ func exitCode(e *env, err error) int {
 	}
 	var ue *usageError
 	if errors.As(err, &ue) {
-		fmt.Fprintf(e.errOut, "foundry: %s\n", ue.msg)
+		fmt.Fprintf(e.errOut, "foundry: %s\n", cleanText(ue.msg))
 		return 2
 	}
-	fmt.Fprintf(e.errOut, "foundry: %s\n", err)
+	fmt.Fprintf(e.errOut, "foundry: %s\n", cleanText(err.Error()))
 	return 1
 }
 
@@ -282,23 +284,93 @@ func printJSON(w io.Writer, v any) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(w, string(data))
+	_, err = fmt.Fprintln(w, escapeC1(string(data)))
 	return err
+}
+
+// escapeC1 writes the C1 control characters (U+0080 to U+009F) in s as \uXXXX escapes. In JSON
+// they can appear only inside strings, so the output stays valid JSON with the same meaning. The
+// C0 controls are already escaped by encoding/json.
+func escapeC1(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 0x80 && r <= 0x9f {
+			fmt.Fprintf(&b, `\u%04x`, r)
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // table writes rows under headers, aligned in columns.
 func table(w io.Writer, headers []string, rows [][]string) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, strings.Join(headers, "\t"))
+	fmt.Fprintln(tw, strings.Join(cleanCells(headers), "\t"))
 	for _, r := range rows {
-		fmt.Fprintln(tw, strings.Join(r, "\t"))
+		fmt.Fprintln(tw, strings.Join(cleanCells(r), "\t"))
 	}
 	_ = tw.Flush()
 }
 
-// truncate shortens s to at most n runes, ending with "..." when it cuts.
+// pausedColumn is the PAUSED cell of `foundry projects`: "config" or "owner" for the one who paused
+// the project, "-" when it runs. A paused project that names no pauser shows "yes".
+func pausedColumn(p client.ProjectView) string {
+	switch {
+	case p.PausedBy != "":
+		return oneLine(p.PausedBy)
+	case p.Paused:
+		return "yes"
+	}
+	return "-"
+}
+
+// terminalEscape matches the escape sequences a terminal acts on: OSC (ESC ], or the C1 byte
+// U+009D) up to BEL or ST, CSI (ESC [, or U+009B) with its parameters, and the two-byte ESC
+// sequences. A bare ESC is left for cleanText's control-character pass.
+var terminalEscape = regexp.MustCompile(
+	`\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?` +
+		`|\x{9d}[^\x07\x{9c}]*(?:\x07|\x{9c})?` +
+		`|\x1b\[[0-?]*[ -/]*[@-~]` +
+		`|\x{9b}[0-?]*[ -/]*[@-~]` +
+		`|\x1b[ -/]*[0-~]`)
+
+// cleanText makes text from the server, an agent or GitHub safe to print to a terminal. It removes
+// terminal escape sequences, then every control character except \n and \t, including DEL and
+// the C1 range U+0080 to U+009F. Line breaks and tabs stay, for text printed over several lines.
+func cleanText(s string) string {
+	s = terminalEscape.ReplaceAllString(s, "")
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\t':
+			return r
+		case r < 0x20, r == 0x7f, r >= 0x80 && r <= 0x9f:
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// oneLine is cleanText with every line break and tab turned into a space, for a value that must
+// stay on one line: a table cell, or a field of a line.
+func oneLine(s string) string {
+	return strings.NewReplacer("\n", " ", "\t", " ").Replace(cleanText(s))
+}
+
+// cleanCells applies oneLine to every cell, so a cell can neither break the table nor move the
+// cursor.
+func cleanCells(cells []string) []string {
+	out := make([]string, len(cells))
+	for i, c := range cells {
+		out[i] = oneLine(c)
+	}
+	return out
+}
+
+// truncate shortens s to at most n runes, ending with "..." when it cuts. The result is cleaned
+// and on one line.
 func truncate(s string, n int) string {
-	s = strings.Join(strings.Fields(s), " ")
+	s = strings.Join(strings.Fields(cleanText(s)), " ")
 	if utf8.RuneCountInString(s) <= n {
 		return s
 	}

@@ -159,3 +159,41 @@ func TestReadEventStreamIgnoresTrailingPartialEvent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, n, "an event without its terminating blank line is dropped at EOF")
 }
+
+func TestPauseAndResumeProjectCallProjectRoutes(t *testing.T) {
+	var gotPaths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "Bearer tok", r.Header.Get("Authorization"))
+		gotPaths = append(gotPaths, r.URL.EscapedPath())
+		paused := r.URL.EscapedPath() == "/api/v1/projects/a%2Fb/pause"
+		_ = json.NewEncoder(w).Encode(ProjectControl{Paused: paused, PausedBy: map[bool]string{true: "owner", false: ""}[paused]})
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "tok")
+	got, err := c.PauseProject(context.Background(), "a/b")
+	require.NoError(t, err)
+	assert.True(t, got.Paused)
+	assert.Equal(t, "owner", got.PausedBy)
+
+	resumed, err := c.ResumeProject(context.Background(), "a/b")
+	require.NoError(t, err)
+	assert.False(t, resumed.Paused)
+	assert.Empty(t, resumed.PausedBy)
+	assert.Equal(t, []string{"/api/v1/projects/a%2Fb/pause", "/api/v1/projects/a%2Fb/resume"}, gotPaths)
+}
+
+func TestProjectsDecodesPausedBy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/projects", r.URL.Path)
+		_, _ = io.WriteString(w, `[{"name":"foundry","paused":true,"paused_by":"config"}]`)
+	}))
+	defer srv.Close()
+
+	projects, err := New(srv.URL, "tok").Projects(context.Background())
+	require.NoError(t, err)
+	require.Len(t, projects, 1)
+	assert.True(t, projects[0].Paused)
+	assert.Equal(t, "config", projects[0].PausedBy)
+}

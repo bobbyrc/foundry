@@ -26,6 +26,7 @@ func (d *doctor) line(status, msg, fix string) {
 	if status == "FAIL" {
 		d.failures++
 	}
+	msg, fix = cleanText(msg), cleanText(fix)
 	if fix != "" {
 		fmt.Fprintf(d.out, "%-4s  %s — fix: %s\n", status, msg, fix)
 		return
@@ -174,13 +175,27 @@ func (d *doctor) missingHarness(name, cli string, agents []string, reason string
 		fmt.Sprintf("install %s if you plan to use this harness", cli))
 }
 
-// agentsUsing lists the agents whose harness is name, sorted.
+// agentsUsing lists the roles that run on the harness name, sorted. That is every role that
+// some context resolves to this harness: the global roles (context ""), and each project's merged
+// roles from AgentsFor, so a role only one project has is found too. A role a project re-points
+// to name is labelled with the project.
 func agentsUsing(cfg *config.Config, name string) []string {
-	var out []string
-	for agent, a := range cfg.Agents {
-		if a.Harness == name {
-			out = append(out, agent)
+	seen := map[string]bool{}
+	for _, ctx := range append([]string{""}, cfg.ProjectNames()...) {
+		for role, a := range cfg.AgentsFor(ctx) {
+			if a.Harness != name {
+				continue
+			}
+			label := role
+			if g, ok := cfg.Agents[role]; ctx != "" && (!ok || g.Harness != name) {
+				label = fmt.Sprintf("%s (project %s)", role, ctx)
+			}
+			seen[label] = true
 		}
+	}
+	out := make([]string, 0, len(seen))
+	for label := range seen {
+		out = append(out, label)
 	}
 	sort.Strings(out)
 	return out
