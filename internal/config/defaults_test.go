@@ -257,3 +257,15 @@ func TestCIGraceUserValueIsKept(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 45*time.Second, cfg.Policies["quick"].CIGrace.Duration)
 }
+
+func TestRetroDefaultsToDailyWithLookbackOfEvery(t *testing.T) {
+	cfg, err := Parse([]byte(""), "")
+	require.NoError(t, err)
+	assert.Equal(t, 24*time.Hour, cfg.Loops.Retro.Every.Duration)
+	assert.Equal(t, 24*time.Hour, cfg.Loops.Retro.Lookback.Duration)
+	assert.Nil(t, cfg.Loops.Retro.Enabled, "unset enabled is left to RetroOn")
+
+	cfg, err = Parse([]byte("loops:\n  retro:\n    every: 6h\n"), "")
+	require.NoError(t, err)
+	assert.Equal(t, 6*time.Hour, cfg.Loops.Retro.Lookback.Duration, "lookback 0 takes every")
+}

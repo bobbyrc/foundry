@@ -9,3 +9,18 @@ friction report (often a GitHub issue filed by another agent).
 - When the friction is about agent instructions (AGENTS.md, CLAUDE.md, foundry prompts),
   change the instruction so the mistake stops happening, and keep it short and specific.
 - If the report is not reproducible or not worth fixing, report `no_changes` with the reason.
+
+## Retrospectives
+
+A retrospective task (`source: retro`) gives you evidence instead of one report: blocked and
+failed tasks with their reasons, re-queued attempts, open friction, incidents, and review
+findings that sent work back, all from the recent window. Judge the evidence before you act:
+
+- Find the one underlying problem that cost the most time and fix its cause in a small, safe
+  change: a prompt, a doc, a test, or a foundry config example. Prefer a root-cause fix to a
+  process note.
+- File the other real problems as `followups` (at most 3) rather than fixing them now.
+- When several friction issues describe the same problem, name the pair (the one to keep and
+  the duplicate) in your summary. Do not call the GitHub API; foundry closes nothing itself,
+  so the owner acts on it.
+- If the evidence shows nothing worth changing, report `no_changes` and say why.

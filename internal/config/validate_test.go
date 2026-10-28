@@ -156,3 +156,13 @@ func TestValidateCIGraceMustNotBeNegative(t *testing.T) {
 	_, err = Parse([]byte("policies:\n  ok:\n    ci_grace: 0s\n"), "")
 	assert.NoError(t, err, "0 means the default")
 }
+
+func TestValidateRetroLookbackMustNotBeNegative(t *testing.T) {
+	_, err := Parse([]byte("loops:\n  retro:\n    lookback: -1h\n"), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "loops.retro.lookback")
+
+	_, err = Parse([]byte("projects:\n  app:\n    repo: bob/app\n    loops:\n      retro:\n        lookback: -1h\n"), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "projects.app.loops.retro.lookback")
+}

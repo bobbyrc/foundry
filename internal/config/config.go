@@ -172,6 +172,14 @@ type Loops struct {
 		MinLevel string `yaml:"min_level" json:"min_level"` // default "error"
 		MinCount int64  `yaml:"min_count" json:"min_count"` // default 1
 	} `yaml:"prod_watch" json:"prod_watch"`
+	// Retro periodically gives an improver agent the evidence of what went wrong recently
+	// (blocked/failed tasks and their reasons, open friction, incidents, review findings) to fix
+	// the top problem, consolidate duplicate friction issues and file follow-ups. Default every
+	// 24h; enabled by default only for self_project (it spends agent time).
+	Retro struct {
+		Loop     `yaml:",inline"`
+		Lookback Duration `yaml:"lookback" json:"lookback"` // evidence window; default = Every
+	} `yaml:"retro" json:"retro"`
 	// Friction files GitHub issues for reported friction.
 	Friction struct {
 		Loop      `yaml:",inline"`

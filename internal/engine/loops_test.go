@@ -294,8 +294,8 @@ projects:
 	env := lpNewEngine(t, doc)
 
 	rows := env.e.Loops(env.ctx)
-	if len(rows) != 10 {
-		t.Fatalf("got %d rows, want 5 loops x 2 projects", len(rows))
+	if len(rows) != 12 {
+		t.Fatalf("got %d rows, want 6 loops x 2 projects", len(rows))
 	}
 	var keys []string
 	for _, r := range rows {

@@ -21,10 +21,11 @@ const (
 	loopDeployWatch = "deploy_watch"
 	loopProdWatch   = "prod_watch"
 	loopFriction    = "friction"
+	loopRetro       = "retro"
 )
 
 // loopNames lists every loop, in the order they start.
-var loopNames = []string{loopIssueIntake, loopPRShepherd, loopDeployWatch, loopProdWatch, loopFriction}
+var loopNames = []string{loopIssueIntake, loopPRShepherd, loopDeployWatch, loopProdWatch, loopFriction, loopRetro}
 
 // loopWakeMax and loopWakeMin bound how often a loop checks which projects are due.
 const (
@@ -46,6 +47,7 @@ func (e *Engine) loopFuncs() map[string]loopFn {
 		loopDeployWatch: e.deployLoop,
 		loopProdWatch:   e.prodLoop,
 		loopFriction:    e.frictionLoop,
+		loopRetro:       e.retroLoop,
 	}
 }
 
@@ -83,7 +85,7 @@ func (e *Engine) loopWakeInterval(name string) time.Duration {
 	wake := loopWakeMax
 	for _, project := range cfg.ProjectNames() {
 		s := loopSettingsFor(cfg.LoopsFor(project), name)
-		if s.On() && s.Every.Duration < wake {
+		if loopOn(cfg, name, project) && s.Every.Duration < wake {
 			wake = s.Every.Duration
 		}
 	}
@@ -124,7 +126,7 @@ func (e *Engine) loopTick(ctx context.Context, name string, kicked map[string]bo
 	now := e.d.Now()
 	for _, project := range cfg.ProjectNames() {
 		settings := loopSettingsFor(cfg.LoopsFor(project), name)
-		if !settings.On() {
+		if !loopOn(cfg, name, project) {
 			continue
 		}
 		if !kicked[project] {
@@ -177,7 +179,7 @@ func (e *Engine) runLoopOnce(ctx context.Context, name, project string, manual b
 		return nil
 	}
 	cfg := e.Config()
-	if !manual && !loopSettingsFor(cfg.LoopsFor(project), name).On() {
+	if !manual && !loopOn(cfg, name, project) {
 		return nil
 	}
 	p := cfg.Projects[project]
@@ -235,7 +237,7 @@ func (e *Engine) Loops(ctx context.Context) []api.LoopView {
 			out = append(out, api.LoopView{
 				Name:      name,
 				Project:   project,
-				Enabled:   l.On(),
+				Enabled:   loopOn(cfg, name, project),
 				Every:     l.Every.Duration.String(),
 				LastRunAt: st.LastRunAt,
 				LastError: st.LastError,
@@ -295,8 +297,19 @@ func loopSettingsFor(l config.Loops, name string) config.Loop {
 		return l.ProdWatch.Loop
 	case loopFriction:
 		return l.Friction.Loop
+	case loopRetro:
+		return l.Retro.Loop
 	}
 	return config.Loop{}
+}
+
+// loopOn reports whether loop name is enabled for project. Every loop follows its Enabled flag
+// (default on), except retro, which defaults to on for the self project only.
+func loopOn(cfg *config.Config, name, project string) bool {
+	if name == loopRetro {
+		return cfg.LoopsFor(project).RetroOn(project, cfg.SelfProject)
+	}
+	return loopSettingsFor(cfg.LoopsFor(project), name).On()
 }
 
 // isGitHubRepo reports whether the project's repo is owner/name on GitHub, rather than a local

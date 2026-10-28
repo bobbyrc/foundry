@@ -311,3 +311,60 @@ projects:
 	require.NoError(t, err)
 	assert.Equal(t, "codex", agent.Harness)
 }
+
+func TestLoopsForMergesRetroOverrides(t *testing.T) {
+	cfg, err := Parse([]byte(`
+self_project: app
+projects:
+  app:
+    repo: bob/app
+  other:
+    repo: bob/other
+    loops:
+      retro:
+        enabled: true
+        every: 6h
+        lookback: 2h
+`), "")
+	require.NoError(t, err)
+
+	other := cfg.LoopsFor("other")
+	require.NotNil(t, other.Retro.Enabled)
+	assert.True(t, *other.Retro.Enabled)
+	assert.Equal(t, 6*time.Hour, other.Retro.Every.Duration)
+	assert.Equal(t, 2*time.Hour, other.Retro.Lookback.Duration)
+	assert.Nil(t, cfg.Loops.Retro.Enabled, "the global loop is not changed")
+	assert.Equal(t, 24*time.Hour, cfg.Loops.Retro.Every.Duration)
+}
+
+func TestRetroOnDefaultsToSelfProject(t *testing.T) {
+	cfg, err := Parse([]byte(`
+self_project: app
+projects:
+  app:
+    repo: bob/app
+    loops:
+      retro:
+        enabled: false
+  other:
+    repo: bob/other
+  forced:
+    repo: bob/forced
+    loops:
+      retro:
+        enabled: true
+`), "")
+	require.NoError(t, err)
+
+	assert.False(t, cfg.LoopsFor("app").RetroOn("app", cfg.SelfProject), "explicit false wins over self")
+	assert.False(t, cfg.LoopsFor("other").RetroOn("other", cfg.SelfProject), "other projects default off")
+	assert.True(t, cfg.LoopsFor("forced").RetroOn("forced", cfg.SelfProject), "explicit true wins over default")
+
+	plain, err := Parse([]byte("projects:\n  app:\n    repo: bob/app\n"), "")
+	require.NoError(t, err)
+	assert.False(t, plain.Loops.RetroOn("app", plain.SelfProject), "no self project means no retro")
+
+	self, err := Parse([]byte("self_project: app\nprojects:\n  app:\n    repo: bob/app\n"), "")
+	require.NoError(t, err)
+	assert.True(t, self.Loops.RetroOn("app", self.SelfProject))
+}

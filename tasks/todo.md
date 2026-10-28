@@ -83,3 +83,4 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [ ] sysproc.Wait: also kill the leftover process group after a non-zero exit (no orphans either way)
 - [x] EnsureClone leaves the clone checked out on the remote HEAD (main), not the project's default_branch — the orchestrator reading project.path saw only main's README. Keep the clone's checkout at origin/<default_branch> (detached) after each fetch
 - [ ] friction: semantic duplicates need judgment — periodically queue a triager task "consolidate duplicate friction issues" (close dupes with a link)
+- [ ] openapi.yaml + web/src/types.ts: add 'retro' to the loop names / loops config shape

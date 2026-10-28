@@ -144,6 +144,14 @@ repo (the project, or foundry's own repo for factory friction) labelled `frictio
 picks up issues labelled `foundry` (configurable), so turning a friction issue into work is one
 label — or automatic with `friction.auto_queue`.
 
+The retro loop (`loops.retro`, default every 24h) is the factory's retrospective. Each day, code
+gathers the evidence of the last `lookback` (blocked and failed tasks with their reasons,
+re-queued attempts, friction, incidents, review findings sent back) and files one improve task
+for the improver agent with that evidence. The agent picks the most valuable root cause to fix,
+files the rest as followups, and names duplicate friction issues in its summary, since foundry
+never closes issues itself. Nothing is filed when there is no evidence. It is on only for
+`self_project` unless `enabled` says otherwise.
+
 ### The orchestrator (main agent)
 
 Chat messages go to a persistent `orchestrator` harness session (resumed by session ID per

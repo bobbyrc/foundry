@@ -182,6 +182,10 @@ loops:
     min_count: 1                       # reports before an issue is filed (default 1)
     auto_file: true                    # file issues automatically; false only records them (default true)
     auto_queue: false                  # also label the filed issue so issue_intake picks it up (default false)
+  retro:
+    every: 24h                         # files a retrospective improve task with recent failures and friction (default 24h)
+    lookback: 24h                      # evidence window; default is every
+    # enabled: true                    # unset, retro runs for self_project only; true or false overrides that
 
 # Notify: where to send notifications. Empty means a log line only.
 notify:

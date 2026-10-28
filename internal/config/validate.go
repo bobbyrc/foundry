@@ -80,6 +80,9 @@ func (c *Config) Validate() error {
 		if !repoPattern.MatchString(p.Repo) && !filepath.IsAbs(p.Repo) {
 			add("%s.repo: want owner/name or an absolute local path, not %q", prefix, p.Repo)
 		}
+		if p.Loops != nil && p.Loops.Retro.Lookback.Duration < 0 {
+			add("%s.loops.retro.lookback: must be 0 (default = every) or greater", prefix)
+		}
 		if _, ok := c.Policies[p.Policy]; !ok {
 			add("%s.policy: unknown policy %q", prefix, p.Policy)
 		}
@@ -138,6 +141,9 @@ func (c *Config) Validate() error {
 	}
 	if l.MaxAttempts <= 0 {
 		add("limits.max_attempts: must be greater than 0")
+	}
+	if c.Loops.Retro.Lookback.Duration < 0 {
+		add("loops.retro.lookback: must be 0 (default = every) or greater")
 	}
 	if l.DailyBudgetUSD < 0 {
 		add("limits.daily_budget_usd: must be 0 (no limit) or greater, not %v", l.DailyBudgetUSD)

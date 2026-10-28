@@ -326,6 +326,12 @@ func applyLoopDefaults(c *Config) {
 	if l.Friction.MinCount == 0 {
 		l.Friction.MinCount = 1
 	}
+	if l.Retro.Every.Duration == 0 {
+		l.Retro.Every.Duration = 24 * time.Hour
+	}
+	if l.Retro.Lookback.Duration == 0 {
+		l.Retro.Lookback.Duration = l.Retro.Every.Duration
+	}
 }
 
 // expandHome replaces a leading "~" with the user's home directory. If the home directory is

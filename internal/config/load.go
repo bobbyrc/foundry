@@ -111,6 +111,15 @@ func (l Loops) FrictionAutoFile() bool {
 	return l.Friction.AutoFile == nil || *l.Friction.AutoFile
 }
 
+// RetroOn reports whether the retro loop runs for project. An explicit enabled setting wins.
+// Unset, it runs only for selfProject, because a retrospective spends agent time.
+func (l Loops) RetroOn(project, selfProject string) bool {
+	if l.Retro.Enabled != nil {
+		return *l.Retro.Enabled
+	}
+	return selfProject != "" && project == selfProject
+}
+
 // LoopsFor returns the loop settings that apply to project: the global Loops with each
 // field the project overrides applied on top. Unset override fields keep the global value.
 func (c *Config) LoopsFor(project string) Loops {
@@ -175,6 +184,16 @@ func (c *Config) LoopsFor(project string) Loops {
 	}
 	if ov.Friction.MinCount != 0 {
 		out.Friction.MinCount = ov.Friction.MinCount
+	}
+
+	if ov.Retro.Enabled != nil {
+		out.Retro.Enabled = ov.Retro.Enabled
+	}
+	if ov.Retro.Every.Duration != 0 {
+		out.Retro.Every = ov.Retro.Every
+	}
+	if ov.Retro.Lookback.Duration != 0 {
+		out.Retro.Lookback = ov.Retro.Lookback
 	}
 	return out
 }
