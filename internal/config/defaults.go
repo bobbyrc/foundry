@@ -309,6 +309,14 @@ func applyProjectDefaults(c *Config) {
 				p.Observe[i].Name = p.Observe[i].Type
 			}
 		}
+		for i := range p.Intake {
+			if p.Intake[i].Kind == "" {
+				p.Intake[i].Kind = string(domain.KindFeature)
+			}
+			if p.Intake[i].Timeout.Duration == 0 {
+				p.Intake[i].Timeout.Duration = time.Minute
+			}
+		}
 	}
 }
 
@@ -349,6 +357,9 @@ func applyLoopDefaults(c *Config) {
 	}
 	if l.Retro.Lookback.Duration == 0 {
 		l.Retro.Lookback.Duration = l.Retro.Every.Duration
+	}
+	if l.ExecIntake.Every.Duration == 0 {
+		l.ExecIntake.Every.Duration = time.Minute
 	}
 }
 

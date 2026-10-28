@@ -14,6 +14,10 @@ import (
 // repoPattern matches a GitHub owner/name pair.
 var repoPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 
+// intakeNamePattern matches an intake source name. It appears in task refs and in logs, so it is
+// kept to lowercase words.
+var intakeNamePattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
 // Validate checks c and returns every problem it finds, joined into one error. Each message
 // starts with the path of the setting at fault, such as "agents.reviewer.harness".
 // It expects defaults to have been applied already, as Parse does.
@@ -95,6 +99,28 @@ func (c *Config) Validate() error {
 				add("%s.routing.%s: unknown agent %q", prefix, kind, role)
 			}
 		}
+		seenSource := map[string]bool{}
+		for i, src := range p.Intake {
+			sprefix := fmt.Sprintf("%s.intake[%d]", prefix, i)
+			switch {
+			case src.Name == "":
+				add("%s.name: must not be empty", sprefix)
+			case !intakeNamePattern.MatchString(src.Name):
+				add("%s.name: must match ^[a-z0-9_-]+$, not %q", sprefix, src.Name)
+			case seenSource[src.Name]:
+				add("%s.name: duplicate intake source %q", sprefix, src.Name)
+			}
+			seenSource[src.Name] = true
+			if strings.TrimSpace(src.Command) == "" {
+				add("%s.command: must not be empty", sprefix)
+			}
+			if !isTaskKind(src.Kind) || src.Kind == string(domain.KindReview) || src.Kind == string(domain.KindIncident) {
+				add("%s.kind: must be a task kind other than review or incident, not %q", sprefix, src.Kind)
+			}
+			if src.Timeout.Duration < 0 {
+				add("%s.timeout: must be 0 (default 60s) or greater", sprefix)
+			}
+		}
 		if p.Deploy != nil && p.Deploy.Type == "" {
 			add("%s.deploy.type: must not be empty", prefix)
 		}
@@ -138,6 +164,18 @@ func (c *Config) Validate() error {
 	}
 	if l.DailyBudgetUSD < 0 {
 		add("limits.daily_budget_usd: must be 0 (no limit) or greater, not %v", l.DailyBudgetUSD)
+	}
+
+	for i, h := range c.Server.AllowedHosts {
+		prefix := fmt.Sprintf("server.allowed_hosts[%d]", i)
+		switch {
+		case strings.TrimSpace(h) == "":
+			add("%s: must not be empty", prefix)
+		case strings.Contains(h, "://"):
+			add("%s: want a host name, not a URL with a scheme, not %q", prefix, h)
+		case strings.Contains(h, "/"):
+			add("%s: must not include a path, not %q", prefix, h)
+		}
 	}
 
 	for i, n := range c.Notify {

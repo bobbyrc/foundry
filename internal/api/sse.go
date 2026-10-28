@@ -17,6 +17,9 @@ const (
 	replayPage = 500
 	// pingInterval is how often a ": ping" comment keeps idle connections open.
 	pingInterval = 15 * time.Second
+	// maxEventStreams caps concurrent /events streams. Each holds a bus subscription and a
+	// connection, so a client that opens streams without closing them must not exhaust the server.
+	maxEventStreams = 32
 )
 
 // events serves GET /events as a Server-Sent Events stream. With ?after=<id> it first replays
@@ -31,6 +34,14 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeErrorMsg(w, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+	select {
+	case s.streams <- struct{}{}:
+		defer func() { <-s.streams }()
+	default:
+		w.Header().Set("Retry-After", "5")
+		writeErrorMsg(w, http.StatusServiceUnavailable, "too many event streams")
 		return
 	}
 	ctx := r.Context()

@@ -27,6 +27,14 @@ import (
 
 const testToken = "test-token-value"
 
+// testRequest is httptest.NewRequest with a Host the default allowlist accepts. The default Host
+// of httptest is example.com, which the host guard rejects.
+func testRequest(method, target string, body io.Reader) *http.Request {
+	r := httptest.NewRequest(method, target, body)
+	r.Host = "localhost:7777"
+	return r
+}
+
 // fakeCtl is a Controller that records calls. errs maps a method name to the error it returns.
 type fakeCtl struct {
 	mu          sync.Mutex
@@ -230,7 +238,7 @@ func (x *harness) do(t *testing.T, method, target, body string, token string) *h
 	if body != "" {
 		rd = strings.NewReader(body)
 	}
-	req := httptest.NewRequest(method, target, rd)
+	req := testRequest(method, target, rd)
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -286,7 +294,7 @@ func TestAuthEmptyConfiguredToken(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	h := NewServer(Options{Store: st, Bus: events.NewBus(st, nil), Controller: &fakeCtl{cfg: testConfig()}, Web: fstest.MapFS{}})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil)
+	req := testRequest(http.MethodGet, "/api/v1/stats", nil)
 	req.Header.Set("Authorization", "Bearer ")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -766,7 +774,7 @@ func TestSPAFallbackAndNotBuilt(t *testing.T) {
 
 	get := func(path string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		h.ServeHTTP(rec, testRequest(http.MethodGet, path, nil))
 		return rec
 	}
 	rec := get("/tasks/abc")
@@ -776,12 +784,12 @@ func TestSPAFallbackAndNotBuilt(t *testing.T) {
 	assert.Equal(t, "console.log(1)", get("/assets/app.js").Body.String())
 
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/tasks/abc", nil))
+	h.ServeHTTP(rec, testRequest(http.MethodPost, "/tasks/abc", nil))
 	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 
 	h = NewServer(Options{Store: st, Bus: events.NewBus(st, nil), Controller: &fakeCtl{cfg: testConfig()}, Web: fstest.MapFS{}})
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/abc", nil))
+	h.ServeHTTP(rec, testRequest(http.MethodGet, "/tasks/abc", nil))
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "The web UI is not built")
 }

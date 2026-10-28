@@ -147,7 +147,7 @@ func TestSSELiveOnlyWithoutAfter(t *testing.T) {
 func TestSSEClientDisconnectEndsHandler(t *testing.T) {
 	x := newHarness(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/events", nil).WithContext(ctx)
+	req := testRequest(http.MethodGet, "/api/v1/events", nil).WithContext(ctx)
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	rec := httptest.NewRecorder()
 
@@ -217,4 +217,50 @@ func TestSSEAfterZeroReplaysFromStart(t *testing.T) {
 	live := nextFrame(t, frames)
 	assert.Equal(t, fmt.Sprint(total+1), live.id)
 	assert.Equal(t, "live", live.data.Message)
+}
+
+func TestSSEConcurrentStreamLimit(t *testing.T) {
+	x := newHarness(t)
+	srv := httptest.NewServer(x.h)
+	t.Cleanup(srv.Close)
+
+	// Each open stream is held until its cancel runs. Registered after srv.Close, so the
+	// cancels run first and the server can shut down.
+	var cancels []context.CancelFunc
+	t.Cleanup(func() {
+		for _, c := range cancels {
+			c()
+		}
+	})
+	open := func() (*http.Response, context.CancelFunc) {
+		ctx, cancel := context.WithCancel(context.Background())
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/v1/events", nil)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+testToken)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		return resp, cancel
+	}
+
+	for i := 0; i < maxEventStreams; i++ {
+		resp, cancel := open()
+		cancels = append(cancels, cancel)
+		require.Equal(t, http.StatusOK, resp.StatusCode, "stream %d", i+1)
+		t.Cleanup(func() { _ = resp.Body.Close() })
+	}
+
+	resp, cancel := open()
+	defer cancel()
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, "5", resp.Header.Get("Retry-After"))
+
+	// Closing one stream frees its slot once the handler notices the cancelled request.
+	cancels[0]()
+	require.Eventually(t, func() bool {
+		r, c := open()
+		defer c()
+		defer r.Body.Close()
+		return r.StatusCode == http.StatusOK
+	}, 5*time.Second, 10*time.Millisecond)
 }

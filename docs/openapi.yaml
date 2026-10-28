@@ -749,8 +749,8 @@ paths:
       tags: [loops]
       summary: Run one loop now.
       description: |
-        `name` is one of `issue_intake`, `pr_shepherd`, `deploy_watch`, `prod_watch`,
-        `friction` or `retro`. An unknown name, or an unknown project, returns 400. The run is
+        `name` is one of `issue_intake`, `exec_intake`, `pr_shepherd`, `deploy_watch`,
+        `prod_watch`, `friction` or `retro`. An unknown name, or an unknown project, returns 400. The run is
         asynchronous, so the response carries no body.
       parameters:
         - name: name
@@ -1893,7 +1893,7 @@ components:
 
     Loops:
       type: object
-      required: [issue_intake, pr_shepherd, deploy_watch, prod_watch, friction, retro]
+      required: [issue_intake, exec_intake, pr_shepherd, deploy_watch, prod_watch, friction, retro]
       properties:
         issue_intake:
           description: Turns open issues carrying `label` into tasks.
@@ -1905,6 +1905,11 @@ components:
                 label:
                   type: string
                   description: Default `foundry`.
+        exec_intake:
+          description: >-
+            Runs each project's intake sources (their commands print tasks as JSON lines) and
+            creates a task for each new id. Default every `1m`.
+          $ref: '#/components/schemas/Loop'
         pr_shepherd:
           description: Moves tasks in review through CI, review, policy and merge.
           $ref: '#/components/schemas/Loop'

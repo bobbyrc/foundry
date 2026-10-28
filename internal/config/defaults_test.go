@@ -281,3 +281,20 @@ func TestDefaultRulesRateSelfAssignedWorkMedium(t *testing.T) {
 	assert.Equal(t, []string{"followup", "retro"}, last.Sources)
 	assert.Empty(t, last.Paths)
 }
+
+// Exec intake defaults: the loop runs every minute, and a source takes kind feature and a 60s
+// timeout unless it sets them.
+func TestExecIntakeDefaults(t *testing.T) {
+	cfg, err := Parse([]byte("projects:\n  app:\n    repo: bob/app\n    intake:\n      - name: inbox\n        command: cat inbox.jsonl\n"), "")
+	require.NoError(t, err)
+	assert.Equal(t, time.Minute, cfg.Loops.ExecIntake.Every.Duration)
+	src := cfg.Projects["app"].Intake[0]
+	assert.Equal(t, "feature", src.Kind)
+	assert.Equal(t, time.Minute, src.Timeout.Duration)
+
+	cfg, err = Parse([]byte("projects:\n  app:\n    repo: bob/app\n    intake:\n      - name: inbox\n        command: x\n        kind: chore\n        timeout: 5s\n"), "")
+	require.NoError(t, err)
+	src = cfg.Projects["app"].Intake[0]
+	assert.Equal(t, "chore", src.Kind, "a set kind is kept")
+	assert.Equal(t, 5*time.Second, src.Timeout.Duration, "a set timeout is kept")
+}

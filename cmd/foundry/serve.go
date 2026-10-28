@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -128,12 +129,13 @@ func cmdServe(e *env, args []string) error {
 	}
 
 	handler := api.NewServer(api.Options{
-		Store:      st,
-		Bus:        bus,
-		Controller: eng,
-		Token:      token,
-		Version:    version,
-		Logger:     logger,
+		Store:        st,
+		Bus:          bus,
+		Controller:   eng,
+		Token:        token,
+		Version:      version,
+		AllowedHosts: serveAllowedHosts(cfg.Server),
+		Logger:       logger,
 	})
 	// Every request context derives from baseCtx. Streaming (SSE) handlers run until their
 	// context ends, and http.Server.Shutdown does not end it, so shutdown cancels baseCtx first.
@@ -312,6 +314,26 @@ func parseSecrets(data []byte) []secret {
 		out = append(out, secret{key: key, value: value})
 	}
 	return out
+}
+
+// serveAllowedHosts returns the Host names the API accepts beyond localhost: the bind host, the
+// public URL host and server.allowed_hosts. A wildcard bind address (0.0.0.0, ::, or empty) is
+// not a name a client can use, so it adds nothing.
+func serveAllowedHosts(s config.Server) []string {
+	var out []string
+	add := func(h string) {
+		if ip := net.ParseIP(h); h == "" || ip != nil && ip.IsUnspecified() {
+			return
+		}
+		out = append(out, h)
+	}
+	if host, _, err := net.SplitHostPort(s.Addr); err == nil {
+		add(host)
+	}
+	if u, err := url.Parse(s.PublicURL); err == nil {
+		add(u.Hostname())
+	}
+	return append(out, s.AllowedHosts...)
 }
 
 // signalContext is cancelled by SIGINT or SIGTERM.

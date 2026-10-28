@@ -324,14 +324,14 @@ projects:
 	env := lpNewEngine(t, doc)
 
 	rows := env.e.Loops(env.ctx)
-	if len(rows) != 12 {
-		t.Fatalf("got %d rows, want 6 loops x 2 projects", len(rows))
+	if len(rows) != 14 {
+		t.Fatalf("got %d rows, want 7 loops x 2 projects", len(rows))
 	}
 	var keys []string
 	for _, r := range rows {
 		keys = append(keys, r.Name+"/"+r.Project)
 	}
-	wantFirst := []string{"deploy_watch/demo", "deploy_watch/other", "friction/demo"}
+	wantFirst := []string{"deploy_watch/demo", "deploy_watch/other", "exec_intake/demo"}
 	for i, w := range wantFirst {
 		if keys[i] != w {
 			t.Fatalf("row %d = %s, want %s (rows sorted by name then project)", i, keys[i], w)

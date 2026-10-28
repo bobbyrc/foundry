@@ -25,6 +25,12 @@ type Options struct {
 	// Token is the bearer token every route except health requires.
 	Token   string
 	Version string
+	// AllowedHosts are the Host names accepted beyond localhost, 127.0.0.1 and ::1, which are
+	// always accepted. serve computes the list: the host of server.addr (not a wildcard
+	// address), the host of server.public_url and server.allowed_hosts. A request for any other
+	// Host gets 421. When the server listens on 0.0.0.0 or ::, no name is added for the bind
+	// address, so remote access needs the name listed in server.allowed_hosts.
+	AllowedHosts []string
 	// Web is the UI to serve. Nil serves the build embedded from webdist (see DefaultWeb).
 	Web    fs.FS
 	Logger *slog.Logger
@@ -34,6 +40,8 @@ type server struct {
 	opts Options
 	log  *slog.Logger
 	web  fs.FS
+	// streams holds one slot per open /events stream; see events in sse.go.
+	streams chan struct{}
 }
 
 // NewServer returns the handler for every foundry HTTP route.
@@ -45,17 +53,19 @@ func NewServer(o Options) http.Handler {
 	if web == nil {
 		web = DefaultWeb()
 	}
-	s := &server{opts: o, log: o.Logger, web: web}
+	s := &server{opts: o, log: o.Logger, web: web, streams: make(chan struct{}, maxEventStreams)}
 
 	r := chi.NewRouter()
+	r.Use(securityHeaders)
 	r.Use(middleware.Recoverer)
 	r.Use(s.requestLog)
+	r.Use(hostGuard(allowedHostSet(o.AllowedHosts)))
 	r.Route("/api/v1", func(r chi.Router) {
 		r.NotFound(notFound)
 		r.MethodNotAllowed(methodNotAllowed)
 		r.Get("/health", s.health)
 		r.Group(func(r chi.Router) {
-			r.Use(s.auth)
+			r.Use(s.auth, clampLimits)
 			s.apiRoutes(r)
 		})
 	})

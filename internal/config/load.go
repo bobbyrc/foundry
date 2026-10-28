@@ -195,6 +195,13 @@ func (c *Config) LoopsFor(project string) Loops {
 	if ov.Retro.Lookback.Duration != 0 {
 		out.Retro.Lookback = ov.Retro.Lookback
 	}
+
+	if ov.ExecIntake.Enabled != nil {
+		out.ExecIntake.Enabled = ov.ExecIntake.Enabled
+	}
+	if ov.ExecIntake.Every.Duration != 0 {
+		out.ExecIntake.Every = ov.ExecIntake.Every
+	}
 	return out
 }
 

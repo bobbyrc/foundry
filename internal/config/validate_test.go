@@ -181,3 +181,46 @@ func TestValidateRuleSourcesMustNotBeEmpty(t *testing.T) {
 	_, err = Parse([]byte("policies:\n  ok:\n    extra_rules:\n      - risk: high\n        reason: x\n        sources: [\"retro\"]\n"), "")
 	assert.NoError(t, err, "a rule that matches only on source is valid")
 }
+
+func TestValidateIntakeSources(t *testing.T) {
+	valid := "projects:\n  app:\n    repo: bob/app\n    intake:\n      - name: inbox\n        command: cat x\n"
+	_, err := Parse([]byte(valid), "")
+	require.NoError(t, err)
+
+	cases := map[string]struct{ src, want string }{
+		"empty name":   {"      - name: ''\n        command: x\n", "intake[0].name: must not be empty"},
+		"bad name":     {"      - name: Phone App\n        command: x\n", `intake[0].name: must match ^[a-z0-9_-]+$, not "Phone App"`},
+		"no command":   {"      - name: inbox\n        command: '  '\n", "intake[0].command: must not be empty"},
+		"review kind":  {"      - name: inbox\n        command: x\n        kind: review\n", "intake[0].kind"},
+		"incident":     {"      - name: inbox\n        command: x\n        kind: incident\n", "intake[0].kind"},
+		"unknown kind": {"      - name: inbox\n        command: x\n        kind: nope\n", "intake[0].kind"},
+		"neg timeout":  {"      - name: inbox\n        command: x\n        timeout: -1s\n", "intake[0].timeout: must be 0"},
+	}
+	for name, tc := range cases {
+		doc := "projects:\n  app:\n    repo: bob/app\n    intake:\n" + tc.src
+		_, err := Parse([]byte(doc), "")
+		require.Error(t, err, name)
+		assert.Contains(t, err.Error(), "projects.app."+tc.want, name)
+	}
+
+	dup := "projects:\n  app:\n    repo: bob/app\n    intake:\n      - name: inbox\n        command: x\n      - name: inbox\n        command: y\n"
+	_, err = Parse([]byte(dup), "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `projects.app.intake[1].name: duplicate intake source "inbox"`)
+}
+
+func TestValidateAllowedHosts(t *testing.T) {
+	_, err := Parse([]byte("server:\n  allowed_hosts: [foundry.lan, 'foundry.lan:7777']\n"), "")
+	require.NoError(t, err, "a bare host name, with or without a port, is valid")
+
+	cases := map[string]struct{ src, want string }{
+		"empty":  {"server:\n  allowed_hosts: ['  ']\n", "server.allowed_hosts[0]: must not be empty"},
+		"scheme": {"server:\n  allowed_hosts: [https://foundry.lan]\n", "server.allowed_hosts[0]: want a host name, not a URL with a scheme"},
+		"path":   {"server:\n  allowed_hosts: [foundry.lan/ui]\n", "server.allowed_hosts[0]: must not include a path"},
+	}
+	for name, tc := range cases {
+		_, err := Parse([]byte(tc.src), "")
+		require.Error(t, err, name)
+		assert.Contains(t, err.Error(), tc.want, name)
+	}
+}

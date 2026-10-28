@@ -17,6 +17,7 @@ import (
 // Loop names. They are the names used in config, the API and LoopState.
 const (
 	loopIssueIntake = "issue_intake"
+	loopExecIntake  = "exec_intake"
 	loopPRShepherd  = "pr_shepherd"
 	loopDeployWatch = "deploy_watch"
 	loopProdWatch   = "prod_watch"
@@ -25,7 +26,7 @@ const (
 )
 
 // loopNames lists every loop, in the order they start.
-var loopNames = []string{loopIssueIntake, loopPRShepherd, loopDeployWatch, loopProdWatch, loopFriction, loopRetro}
+var loopNames = []string{loopIssueIntake, loopExecIntake, loopPRShepherd, loopDeployWatch, loopProdWatch, loopFriction, loopRetro}
 
 // loopWakeMax and loopWakeMin bound how often a loop checks which projects are due.
 const (
@@ -43,6 +44,7 @@ type loopFn func(ctx context.Context, p *config.Project) error
 func (e *Engine) loopFuncs() map[string]loopFn {
 	return map[string]loopFn{
 		loopIssueIntake: e.intakeLoop,
+		loopExecIntake:  e.execIntakeLoop,
 		loopPRShepherd:  e.shepherdLoop,
 		loopDeployWatch: e.deployLoop,
 		loopProdWatch:   e.prodLoop,
@@ -304,6 +306,8 @@ func loopSettingsFor(l config.Loops, name string) config.Loop {
 	switch name {
 	case loopIssueIntake:
 		return l.IssueIntake.Loop
+	case loopExecIntake:
+		return l.ExecIntake
 	case loopPRShepherd:
 		return l.PRShepherd
 	case loopDeployWatch:

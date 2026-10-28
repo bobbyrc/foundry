@@ -124,6 +124,11 @@ projects:
       Run `mise exec -- go test -race ./...` before you report done.
     env:                               # added to each agent session for this project
       FOUNDRY_PROJECT: foundry
+    # intake:                          # external queues that become tasks; see docs/plugins.md, "Intake sources"
+    #   - name: inbox                  # lowercase letters, digits, - and _; unique per project
+    #     command: cat ~/foundry-inbox.jsonl   # prints one JSON item per line: {"id","title","body","kind","priority","role"}
+    #     kind: feature                # default kind for items that name none (default feature)
+    #     timeout: 60s                 # for one run of the command (default 60s)
     # No deploy block: merged work is not released by foundry.
     paused: false                      # true stops new runs and loop-created tasks (default false)
 
@@ -186,6 +191,8 @@ loops:
     min_count: 1                       # reports before an issue is filed (default 1)
     auto_file: true                    # file issues automatically; false only records them (default true)
     auto_queue: false                  # also label the filed issue so issue_intake picks it up (default false)
+  exec_intake:
+    every: 1m                          # runs each project's intake sources and creates tasks for new items (default 1m)
   retro:
     every: 24h                         # files a retrospective improve task with recent failures and friction (default 24h)
     lookback: 24h                      # evidence window; default is every

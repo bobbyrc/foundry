@@ -10,6 +10,8 @@ you pick one per harness, project or notifier by its `type` in `foundry.yaml`:
 - **Observers** report production problems. Built in: `sentry`. Any program: the `exec` type.
 - **Notifiers** tell you about things that need attention. Built in: `log`, `ntfy`. Any program: the
   `exec` type.
+- **Intake sources** turn an external queue of work into tasks. There are no built-in types: any
+  program that prints JSON lines can be one. See [Intake sources](#intake-sources).
 
 The `exec` types let you add a plugin in any language, without recompiling foundry. The source
 interfaces are in `internal/harness`, `internal/deploy`, `internal/observe` and `internal/notify`.
@@ -381,3 +383,85 @@ notify:
       command: 'my-notify-script --title "$FOUNDRY_NOTIFY_TITLE" --url "$FOUNDRY_NOTIFY_URL"'
     min_priority: high
 ```
+
+## Intake sources
+
+An intake source turns any external queue of work into foundry tasks: a phone app's inbox, a ticket
+system, a chat bot, or a plain file. Foundry runs each source's command for every project on the
+`exec_intake` loop (every 1m by default) and creates one task per new item the command prints.
+
+Sources are listed under a project in `foundry.yaml`:
+
+```yaml
+projects:
+  myapp:
+    intake:
+      - name: inbox                    # lowercase letters, digits, - and _; unique per project
+        command: cat ~/foundry-inbox.jsonl
+        kind: feature                  # default kind for items that name none (default feature)
+        timeout: 60s                   # for one run of the command (default 60s)
+```
+
+### The protocol
+
+- The command runs with `sh -c` in the project's clone, or in the data directory if the clone does
+  not exist yet. It gets foundry's environment, the project's `env`, and `FOUNDRY_PROJECT` set to
+  the project name.
+- It prints zero or more items on stdout, one JSON object per line. Blank lines are ignored.
+
+| Field      | Required | Meaning                                                                          |
+|------------|----------|----------------------------------------------------------------------------------|
+| `id`       | yes      | Your identifier for the item. Items are deduplicated by it (see below).          |
+| `title`    | yes      | The task title.                                                                  |
+| `body`     | no       | The task body. Foundry adds a footer naming the source and the id.               |
+| `kind`     | no       | `feature`, `bugfix`, `chore`, `improve` or `question`. Anything else, or none, uses the source's `kind`. A line can never create a `review` or an `incident`. |
+| `priority` | no       | Integer. Higher runs first.                                                      |
+| `role`     | no       | An agent role name, as in `routing`. Empty uses the kind's routing.             |
+
+```json
+{"id": "2026-10-28-1", "title": "Add a /healthz endpoint", "body": "It returns 200 when the DB is up.", "kind": "feature", "priority": 1}
+```
+
+- A line that is not JSON, or lacks `id` or `title`, is skipped. Each run logs one warning that counts
+  the skipped lines. The run still succeeds.
+- A non-zero exit or a timeout is an error for that source. Its items from that run are not used,
+  and the error shows as the loop's last error in the web UI. Other sources still run.
+- Stdout is kept up to 1 MB; the rest is dropped. The last 4 KB of stderr is kept for errors.
+
+### Dedupe by id
+
+Each task records the source ref `intake:<name>:<id>`. When an item's ref already has a task, in any
+state, the item is skipped. So the command may print its whole queue on every run: only new ids
+create tasks. To queue the same work again, give it a new id.
+
+### Example: a file queue
+
+Append one JSON object per line to `~/foundry-inbox.jsonl`. Each line becomes a task within a
+minute. Lines already in the file are not queued again, so keep the file append-only.
+
+```yaml
+intake:
+  - name: inbox
+    command: cat ~/foundry-inbox.jsonl
+```
+
+### Example: the Herdr phone app (sketch)
+
+This is a sketch, not a tested integration. The `herdr gram` command and its JSON fields `id` and
+`text` are assumptions. Verify them with `herdr gram list --queue` on your version before relying on
+this. The script claims each message, so the phone app no longer shows it, and then prints it as an
+item. A message that fails to claim is left in the queue and not printed.
+
+```sh
+#!/bin/sh
+# SKETCH: verify the field names (.result.messages[], .id, .text) against your herdr version.
+queue=$(herdr gram list --queue) || exit 1
+echo "$queue" | jq -c '.result.messages[]' | while read -r msg; do
+  id=$(echo "$msg" | jq -r '.id')
+  herdr gram grab "$id" --as foundry >/dev/null 2>&1 || continue
+  echo "$msg" | jq -c '{id: .id, title: (.text | split("\n")[0]), body: .text}'
+done
+```
+
+Claiming a message before foundry creates its task means a crash in between loses the message. If
+that matters, print the items first and claim them after a successful run.

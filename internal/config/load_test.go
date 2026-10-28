@@ -369,3 +369,25 @@ projects:
 	require.NoError(t, err)
 	assert.True(t, self.Loops.RetroOn("app", self.SelfProject))
 }
+
+func TestLoopsForMergesExecIntakeOverrides(t *testing.T) {
+	cfg, err := Parse([]byte(`
+projects:
+  app:
+    repo: bob/app
+  other:
+    repo: bob/other
+    loops:
+      exec_intake:
+        enabled: false
+        every: 30s
+`), "")
+	require.NoError(t, err)
+
+	other := cfg.LoopsFor("other")
+	require.NotNil(t, other.ExecIntake.Enabled)
+	assert.False(t, *other.ExecIntake.Enabled)
+	assert.Equal(t, 30*time.Second, other.ExecIntake.Every.Duration)
+	assert.Equal(t, time.Minute, cfg.LoopsFor("app").ExecIntake.Every.Duration, "unset override keeps the global value")
+	assert.Nil(t, cfg.LoopsFor("app").ExecIntake.Enabled)
+}
