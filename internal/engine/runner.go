@@ -222,10 +222,12 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 			if stopped() {
 				return
 			}
-			e.finishRun(bg, run.ID, domain.RunFailed, "setup failed: "+f.name)
+			// The output goes on the run for the owner, not into the task body: the next agent
+			// reads the body, and setup failures are usually infrastructure it cannot fix.
+			e.finishRun(bg, run.ID, domain.RunFailed, "setup failed: "+f.name+"\n\n"+f.context())
 			e.d.Bus.Emit(bg, domain.EvSystem, t.Project, t.ID, run.ID,
 				fmt.Sprintf("setup %s failed: %v", f.name, f.err), nil)
-			e.requeueOrBlock(bg, t.ID, "setup failed: "+f.name, f.context())
+			e.requeueOrBlock(bg, t.ID, "setup failed: "+f.name, "")
 			return
 		}
 	}

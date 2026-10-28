@@ -138,8 +138,8 @@ The evidence on a release and its incident is the deploy command's output tail a
 the output of the project's `deploy.logs` command. Secret values (environment variables named
 like `*_TOKEN`, `*_SECRET`, `*_KEY`, ..., and URLs with credentials) are replaced with `***` before
 anything is stored or handed to an agent. A task blocked because its own release failed becomes
-done when a later healthy release contains its merge commit: the code shipped, so nothing is left
-to do for it.
+done when a later healthy release contains its merge commit and no commit in that release
+reverts it: the code shipped, so nothing is left to do for it.
 
 A deploy command that exits 0 may leave a service running in the background, and that service
 keeps running. A failed or timed-out deploy has its whole process group killed. The command's

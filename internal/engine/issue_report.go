@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 )
@@ -23,9 +24,11 @@ func (e *Engine) reportToIssue(ctx context.Context, t domain.Task) {
 		return
 	}
 	// Held from the re-read to the save, so a concurrent report of the same status sees the
-	// cursor this one saves and does not post again.
-	e.issueReportMu.Lock()
-	defer e.issueReportMu.Unlock()
+	// cursor this one saves and does not post again. The lock is per task, so a slow comment on
+	// one task does not delay reports for the others.
+	mu, _ := e.issueReportLocks.LoadOrStore(t.ID, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
 	// The status may have moved on since the write that started this goroutine.
 	cur, err := e.d.Store.GetTask(ctx, t.ID)
 	if err != nil {

@@ -11,7 +11,8 @@ import (
 
 // TestIsAncestorOrdersCommitsAndRejectsUnknown checks IsAncestor on a two-commit history: an
 // earlier commit is an ancestor of a later one but not the reverse, a commit is its own
-// ancestor, and a commit the clone does not have is an error rather than false.
+// ancestor, and a commit the clone does not have is an error rather than false. The clone is
+// fetched explicitly first, because IsAncestor does not fetch.
 func TestIsAncestorOrdersCommitsAndRejectsUnknown(t *testing.T) {
 	repo, m, seed := setup(t)
 	ctx := context.Background()
@@ -23,6 +24,7 @@ func TestIsAncestorOrdersCommitsAndRejectsUnknown(t *testing.T) {
 	runGit(t, seed, "-c", "user.name=Seed", "-c", "user.email=seed@example.com", "commit", "-m", "later")
 	runGit(t, seed, "push", repo.Remote, "main")
 	b := runGit(t, seed, "rev-parse", "HEAD")
+	require.NoError(t, m.Fetch(ctx, repo))
 
 	got, err := m.IsAncestor(ctx, repo, a, b)
 	require.NoError(t, err)

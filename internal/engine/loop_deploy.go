@@ -283,9 +283,11 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 }
 
 // resolveShippedTasks marks a blocked task done when its own release failed but a later healthy
-// release contains its merge commit: the code shipped, so the failed release no longer holds the
-// task back. Errors are logged, never returned, because a healthy release must not be undone by
-// this bookkeeping.
+// release contains its merge commit, and no later commit reverts that commit. Done here means
+// contained, unreverted, in a healthy release: the code shipped and is still in effect, so the
+// failed release no longer holds the task back. A reverted commit stays blocked, because the
+// healthy release does not carry the work. Errors are logged, never returned, because a healthy
+// release must not be undone by this bookkeeping.
 func (e *Engine) resolveShippedTasks(ctx context.Context, p *config.Project, ref string) {
 	blocked, err := e.d.Store.ListTasks(ctx, store.TaskFilter{
 		Project: p.Name, Statuses: []domain.TaskStatus{domain.TaskBlocked},
@@ -294,16 +296,32 @@ func (e *Engine) resolveShippedTasks(ctx context.Context, p *config.Project, ref
 		e.d.Logger.Warn("deploy watch: list blocked tasks", "project", p.Name, "err", err)
 		return
 	}
+	// One fetch serves every candidate below: the ancestry and revert checks read the clone as
+	// it is now, and fetching per task would repeat the same network round trip.
+	repo := e.repoFor(p)
+	if err := e.d.Workspaces.Fetch(ctx, repo); err != nil {
+		e.d.Logger.Warn("deploy watch: fetch before shipped check", "project", p.Name, "err", err)
+		return
+	}
 	for _, t := range blocked {
 		if !strings.HasPrefix(t.BlockedReason, releaseFailedPrefix) || t.MergeSHA == "" {
 			continue
 		}
-		shipped, err := e.d.Workspaces.IsAncestor(ctx, e.repoFor(p), t.MergeSHA, ref)
+		shipped, err := e.d.Workspaces.IsAncestor(ctx, repo, t.MergeSHA, ref)
 		if err != nil {
 			e.d.Logger.Warn("deploy watch: check task commit", "task", t.ID, "err", err)
 			continue
 		}
 		if !shipped {
+			continue
+		}
+		reverted, err := e.d.Workspaces.RevertedIn(ctx, repo, t.MergeSHA, ref)
+		if err != nil {
+			e.d.Logger.Warn("deploy watch: check task commit for a revert", "task", t.ID, "err", err)
+			continue
+		}
+		if reverted {
+			e.d.Logger.Info("deploy watch: task's commit was reverted; left blocked", "task", t.ID)
 			continue
 		}
 		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskBlocked}, "released in "+deployShortRef(ref), func(x *domain.Task) error {

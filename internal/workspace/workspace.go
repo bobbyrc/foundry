@@ -427,16 +427,25 @@ func (m *Manager) Diff(ctx context.Context, r Repo, base, head string) ([]policy
 	return changes, nil
 }
 
-// IsAncestor reports whether commit ancestor is an ancestor of descendant, or the same commit, in
-// r's clone. It fetches origin first, so a commit pushed since the last fetch is found. A commit
-// the clone does not have is an error, not a false answer: a caller that treats "unknown" as "not
-// contained" would act on a guess.
-func (m *Manager) IsAncestor(ctx context.Context, r Repo, ancestor, descendant string) (bool, error) {
+// Fetch updates r's clone from origin, pruning deleted branches. Callers that then ask about
+// commits pushed since the last fetch, such as IsAncestor or RevertedIn, call it first. It is a
+// separate call so a caller that asks several questions pays for one network round trip.
+func (m *Manager) Fetch(ctx context.Context, r Repo) error {
 	unlock := m.lockClone(r.Path)
 	defer unlock()
 	if _, err := git(ctx, r.Path, "fetch", "origin", "--prune"); err != nil {
-		return false, fmt.Errorf("fetch %s: %w", r.Name, err)
+		return fmt.Errorf("fetch %s: %w", r.Name, err)
 	}
+	return nil
+}
+
+// IsAncestor reports whether commit ancestor is an ancestor of descendant, or the same commit, in
+// r's clone. It does not fetch: the caller fetches first (see Fetch), so a commit pushed since the
+// last fetch is found. A commit the clone does not have is an error, not a false answer: a caller
+// that treats "unknown" as "not contained" would act on a guess.
+func (m *Manager) IsAncestor(ctx context.Context, r Repo, ancestor, descendant string) (bool, error) {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
 	code, err := gitExitCode(ctx, r.Path, "merge-base", "--is-ancestor", ancestor, descendant)
 	if err != nil {
 		return false, err
@@ -449,6 +458,22 @@ func (m *Manager) IsAncestor(ctx context.Context, r Repo, ancestor, descendant s
 	default:
 		return false, fmt.Errorf("is-ancestor %s %s: git exit %d", ancestor, descendant, code)
 	}
+}
+
+// RevertedIn reports whether a commit made after commit, and reachable from ref, reverts it, so
+// the change is contained in ref but no longer in effect. A standard `git revert`, and GitHub's
+// revert pull requests, put "This reverts commit <full sha>." in the message, and that line is
+// what this looks for. A revert made another way is not detected. The caller fetches first (see
+// Fetch), as with IsAncestor.
+func (m *Manager) RevertedIn(ctx context.Context, r Repo, commit, ref string) (bool, error) {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
+	out, err := git(ctx, r.Path, "log", "--format=%H",
+		"--grep=This reverts commit "+commit, "--fixed-strings", commit+".."+ref)
+	if err != nil {
+		return false, fmt.Errorf("revert check %s in %s: %w", commit, ref, err)
+	}
+	return out != "", nil
 }
 
 // numstatCount reads one count column; git prints "-" for binary files, which count as zero.

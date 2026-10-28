@@ -6,13 +6,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/harness"
 )
 
-// A failing setup command fails the attempt before the agent starts: the task is re-queued with
-// the command's output, and the harness is never started.
+// A failing setup command fails the attempt before the agent starts: the task is re-queued, and
+// the harness is never started. The command's output goes on each failed run, where the owner
+// reads it, and not into the task body, where the next agent would read it and might try to
+// "fix" infrastructure it cannot change.
 func TestRunnerFailingSetupRequeuesBeforeAgentStarts(t *testing.T) {
 	var starts atomic.Int32
 	script := func(ctx context.Context, spec harness.Spec, emit func(harness.Event)) (harness.Result, error) {
@@ -27,8 +30,15 @@ func TestRunnerFailingSetupRequeuesBeforeAgentStarts(t *testing.T) {
 	got := env.waitStatus(task.ID, domain.TaskBlocked)
 	assert.Contains(t, got.BlockedReason, "setup failed: prep")
 	assert.Contains(t, got.BlockedReason, "gave up after 2 attempts")
-	assert.Contains(t, got.Body, "## Attempt 1: setup failed: prep", "the first failure re-queued the task")
-	assert.Contains(t, got.Body, "boom", "the setup command's output reaches the next attempt")
+	assert.Contains(t, got.Body, "[fake:commit]", "the task body is the original request")
+	assert.NotContains(t, got.Body, "## Attempt", "the failed setup adds nothing to the task body")
+	assert.NotContains(t, got.Body, "boom", "the setup command's output stays out of the task body")
+	runs := env.runs(task.ID)
+	require.NotEmpty(t, runs)
+	for _, r := range runs {
+		assert.Contains(t, r.Error, "setup failed: prep", "each failed run names the failed setup")
+		assert.Contains(t, r.Error, "boom", "each failed run carries the setup command's output")
+	}
 	assert.Zero(t, starts.Load(), "the agent never starts when setup fails")
 	assert.Empty(t, env.scm.PRs, "no pull request is opened for a failed setup")
 	rtWaitEvent(t, env, task.ID, "setup prep failed")
