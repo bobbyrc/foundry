@@ -14,6 +14,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/bobbyrc/foundry/internal/config"
 )
 
 // serviceLabel is the launchd label of the daemon. The plist file is named after it.
@@ -135,10 +137,23 @@ func serviceInstall(e *env, cfgFlag string) error {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 	logPath := filepath.Join(dataDir, logFileName)
+	// launchd starts the daemon with none of this shell's environment, so record each variable
+	// the config references: without them the config does not load. PATH is recorded anyway.
+	data, err := os.ReadFile(absCfg)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	var vars []envVar
+	for _, name := range config.EnvRefs(data) {
+		if name != "PATH" {
+			vars = append(vars, envVar{Name: name, Value: os.Getenv(name)})
+		}
+	}
 
 	body, err := renderPlist(plistSpec{
 		Args:    []string{exe, "serve", "--config", absCfg},
 		Path:    os.Getenv("PATH"),
+		Env:     vars,
 		LogPath: logPath,
 	})
 	if err != nil {
@@ -147,7 +162,8 @@ func serviceInstall(e *env, cfgFlag string) error {
 	if err := os.MkdirAll(filepath.Dir(plist), 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Dir(plist), err)
 	}
-	if err := os.WriteFile(plist, []byte(body), 0o644); err != nil {
+	// Only the user may read it: recorded variables can hold secrets.
+	if err := os.WriteFile(plist, []byte(body), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", plist, err)
 	}
 	if _, err := runLaunchctl("bootstrap", launchdDomain(), plist); err != nil {
@@ -156,6 +172,13 @@ func serviceInstall(e *env, cfgFlag string) error {
 		return err
 	}
 	fmt.Fprintf(e.out, "installed %s\n  plist: %s\n  log:   %s\n", serviceLabel, plist, logPath)
+	if len(vars) > 0 {
+		names := make([]string, len(vars))
+		for i, v := range vars {
+			names[i] = v.Name
+		}
+		fmt.Fprintf(e.out, "  env:   %s (from the config; uninstall and install again to change them)\n", strings.Join(names, ", "))
+	}
 	return nil
 }
 
@@ -219,7 +242,13 @@ type plistSpec struct {
 	Label   string
 	Args    []string
 	Path    string
+	Env     []envVar // recorded besides PATH
 	LogPath string
+}
+
+// envVar is one environment variable set in the plist.
+type envVar struct {
+	Name, Value string
 }
 
 // plistText is the launchd property list. Every value goes through xmlEscape.
@@ -239,6 +268,10 @@ const plistText = `<?xml version="1.0" encoding="UTF-8"?>
 	<dict>
 		<key>PATH</key>
 		<string>{{xmlEscape .Path}}</string>
+{{- range .Env}}
+		<key>{{xmlEscape .Name}}</key>
+		<string>{{xmlEscape .Value}}</string>
+{{- end}}
 	</dict>
 	<key>RunAtLoad</key>
 	<true/>

@@ -19,6 +19,22 @@ import (
 // config values such as "vercel rollback $FOUNDRY_ROLLBACK_ID" pass through unchanged.
 var envRef = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
+// EnvRefs returns the names of the environment variables that data references as ${NAME},
+// sorted and each once. `foundry service install` records them, because a daemon started by
+// launchd does not inherit the installing shell's environment.
+func EnvRefs(data []byte) []string {
+	seen := map[string]bool{}
+	var names []string
+	for _, m := range envRef.FindAllSubmatch(data, -1) {
+		if name := string(m[1]); !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 // Load reads, expands, decodes, defaults and validates the config file at path. Path is
 // stored as an absolute path in Config.Path.
 func Load(path string) (*Config, error) {
