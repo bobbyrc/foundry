@@ -128,7 +128,9 @@ Shared file: `go.mod`/`go.sum` — all deps pre-fetched; no agent edits them.
 - [x] PR #26 (Codex cost estimate): an independent review found flaky tests (reproduced: 2 of 120 runs failed under load) and unchecked .inf/.nan prices. Fixed both on the PR branch and merged dogfood into it (full suite and 57 web tests pass). foundry re-reviews it, then it returns to the owner for approval. Recommend APPROVE
 - [ ] OWNER: PR #14 — recommend REJECT as written: its Go cache advice belongs in project env/setup, and GOMODCACHE=/tmp with GOPROXY=off breaks module resolution. Its rule "never report a skipped check as passed; rate it medium; file friction" is worth adding to the implementer prompt by hand
 - [x] #42 → PR #43 was the first release through the in-repo release script (22cccf4, healthy); friction #32 closed
-- [ ] OWNER: the dogfood daemon's data and clone live in a session scratch dir under /private/tmp. To keep it, follow examples/dogfood/README.md with DOGFOOD=~/.local/share/foundry-dogfood (or copy the scratch dir there)
+- [x] the dogfood factory moved out of the session scratch dir to ~/.local/share/foundry-dogfood (data, clone, binary; staging rebuilt there). Start it with ~/.local/share/foundry-dogfood/run-daemon.sh; the CLI needs DOGFOOD=~/.local/share/foundry-dogfood FOUNDRY_CONFIG=$DOGFOOD/clone/examples/dogfood/foundry.yaml. The old scratch copy is untouched (backup)
+- [ ] OWNER: to keep the daemon running across reboots, `foundry service install` (launchd) — not done for you
+- [ ] gap: worktrees of cancelled/blocked tasks are left on disk (4 found); decide whether foundry should remove them when a task ends
 - [x] DRILL (real): a labelled synthetic ERROR line in the staging log → prod_watch signal → incident task → SRE run read the log evidence, found the drill, closed it with no code change and no PR (~1 min). The production-error loop works end to end; until then it had never fired (zero signals all night)
 - [x] UI at phone width (390px): tables become cards, nav collapses to a menu, approval cards readable
 - [x] REVIEW ROUND 2 (fresh reviewer over c54e18e..b4d762d), all findings confirmed and fixed except one:
