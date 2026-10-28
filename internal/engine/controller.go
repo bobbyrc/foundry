@@ -10,23 +10,28 @@ import (
 	"github.com/bobbyrc/foundry/internal/api"
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/notify"
+	"github.com/bobbyrc/foundry/internal/store"
 )
 
 // Engine is the API's controller: every owner action goes through these methods.
 var _ api.Controller = (*Engine)(nil)
 
 // CreateTask queues a task from an owner or API client. Client-supplied identity and run
-// state (ID, status, attempts, branch, PR and SHA fields, timestamps) are discarded.
+// state (ID, status, attempts, branch, PR and SHA fields, risk, timestamps) are discarded.
+// Review tasks are created by foundry when a pull request is ready, never by a client.
 func (e *Engine) CreateTask(ctx context.Context, t domain.Task) (domain.Task, error) {
 	switch t.Kind {
 	case "", domain.KindFeature, domain.KindBugfix, domain.KindIssue, domain.KindIncident,
-		domain.KindReview, domain.KindChore, domain.KindImprove, domain.KindQuestion:
+		domain.KindChore, domain.KindImprove, domain.KindQuestion:
+	case domain.KindReview:
+		return domain.Task{}, fmt.Errorf("%w: review tasks are created by foundry", api.ErrInvalid)
 	default:
 		return domain.Task{}, fmt.Errorf("%w: unknown task kind %q", api.ErrInvalid, t.Kind)
 	}
 	t.ID, t.Status, t.Attempts = "", "", 0
 	t.Branch, t.PRNumber, t.PRURL = "", 0, ""
 	t.ApprovedSHA, t.MergeSHA = "", ""
+	t.Risk, t.RiskReasons = domain.RiskUnknown, nil
 	t.CreatedAt, t.UpdatedAt = time.Time{}, time.Time{}
 	if t.Source == "" {
 		t.Source = "api"
@@ -34,11 +39,20 @@ func (e *Engine) CreateTask(ctx context.Context, t domain.Task) (domain.Task, er
 	return e.createTask(ctx, t)
 }
 
-// CancelTask cancels a task that is not yet terminal, stops its live runs and rejects its
-// pending approvals. The check and the status change happen in one store update.
+// cancellableStatuses are the statuses a cancel may move a task out of: every status except
+// done, failed and cancelled.
+var cancellableStatuses = []domain.TaskStatus{
+	domain.TaskQueued, domain.TaskRunning, domain.TaskReview, domain.TaskAwaitingApproval,
+	domain.TaskMerged, domain.TaskDeploying, domain.TaskBlocked,
+}
+
+// CancelTask cancels a task that is not done, failed or already cancelled (a blocked task may be
+// cancelled). It also cancels the task's open children, such as an in-flight review, and stops
+// their runs. The status check and the change happen in one store update.
 func (e *Engine) CancelTask(ctx context.Context, id string) error {
 	if _, err := e.setTask(ctx, id, "cancelled by owner", func(t *domain.Task) error {
-		if t.Status.Terminal() {
+		switch t.Status {
+		case domain.TaskDone, domain.TaskFailed, domain.TaskCancelled:
 			return fmt.Errorf("%w: task is %s", api.ErrConflict, t.Status)
 		}
 		t.Status = domain.TaskCancelled
@@ -46,6 +60,13 @@ func (e *Engine) CancelTask(ctx context.Context, id string) error {
 	}); err != nil {
 		return err
 	}
+	return e.cancelTree(ctx, id)
+}
+
+// cancelTree stops everything under task id after it was cancelled: its live runs stop and its
+// pending approvals are rejected, then each child is cancelled the same way, recursively. A
+// child already in a terminal state is left as it is.
+func (e *Engine) cancelTree(ctx context.Context, id string) error {
 	for _, runID := range e.liveRunsOf(id) {
 		e.cancelRun(runID, "cancelled by user")
 	}
@@ -59,6 +80,23 @@ func (e *Engine) CancelTask(ctx context.Context, id string) error {
 		}
 		_, err := e.recordDecision(ctx, a.ID, domain.ApprovalRejected, "task cancelled")
 		if err != nil && !errors.Is(err, api.ErrConflict) {
+			return err
+		}
+	}
+
+	children, err := e.d.Store.ListTasks(ctx, store.TaskFilter{ParentID: id, Limit: 10000})
+	if err != nil {
+		return err
+	}
+	for _, c := range children {
+		if _, _, err := e.setTaskFrom(ctx, c.ID, cancellableStatuses, "cancelled with its parent task",
+			func(x *domain.Task) error {
+				x.Status = domain.TaskCancelled
+				return nil
+			}); err != nil {
+			return err
+		}
+		if err := e.cancelTree(ctx, c.ID); err != nil {
 			return err
 		}
 	}
@@ -102,38 +140,86 @@ func (e *Engine) CancelRun(ctx context.Context, id string) error {
 	return nil
 }
 
-// DecideApproval records the owner's decision. For a merge approval, approving merges the
-// task's PR and rejecting cancels the task. Other kinds are only recorded.
+// DecideApproval records the owner's decision. For a merge approval the task must be awaiting
+// approval; approving merges the task's PR at the head the approval was requested for, and
+// rejecting cancels the task. The decision is recorded only once the checks pass, so a refused
+// approval stays pending. Other kinds are only recorded.
 func (e *Engine) DecideApproval(ctx context.Context, id string, approve bool, note string) (domain.Approval, error) {
 	status := domain.ApprovalRejected
 	if approve {
 		status = domain.ApprovalApproved
 	}
-	a, err := e.recordDecision(ctx, id, status, note)
+	cur, err := e.d.Store.GetApproval(ctx, id)
 	if err != nil {
 		return domain.Approval{}, err
 	}
-	if a.Kind != "merge" {
-		return a, nil
+	if cur.Kind != "merge" {
+		return e.recordDecision(ctx, id, status, note)
 	}
-	t, err := e.d.Store.GetTask(ctx, a.TaskID)
+	if cur.Status != domain.ApprovalPending {
+		return domain.Approval{}, fmt.Errorf("%w: approval is already %s", api.ErrConflict, cur.Status)
+	}
+	t, err := e.d.Store.GetTask(ctx, cur.TaskID)
 	if err != nil {
-		return a, fmt.Errorf("approval %s: task: %w", a.ID, err)
+		return domain.Approval{}, fmt.Errorf("approval %s: task: %w", cur.ID, err)
 	}
+	if t.Status != domain.TaskAwaitingApproval {
+		return domain.Approval{}, fmt.Errorf("%w: task is %s, not awaiting approval", api.ErrConflict, t.Status)
+	}
+
 	if !approve {
+		a, err := e.recordDecision(ctx, id, status, note)
+		if err != nil {
+			return a, err
+		}
 		reason := "merge rejected by owner"
 		if note != "" {
 			reason += ": " + note
 		}
-		if _, err := e.setTask(ctx, t.ID, reason, func(x *domain.Task) error {
-			x.Status = domain.TaskCancelled
-			return nil
-		}); err != nil {
+		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskAwaitingApproval}, reason,
+			func(x *domain.Task) error {
+				x.Status = domain.TaskCancelled
+				return nil
+			}); err != nil {
 			return a, err
 		}
 		return a, nil
 	}
-	if err := e.mergeTask(ctx, t); err != nil {
+
+	p, err := e.project(t.Project)
+	if err != nil {
+		return domain.Approval{}, err
+	}
+	s, err := e.d.SCMFor(p)
+	if err != nil {
+		return domain.Approval{}, fmt.Errorf("scm: %w", err)
+	}
+	pr, err := s.GetPR(ctx, t.PRNumber)
+	if err != nil {
+		return domain.Approval{}, fmt.Errorf("read PR #%d: %w", t.PRNumber, err)
+	}
+	if cur.HeadSHA != "" && pr.HeadSHA != cur.HeadSHA {
+		// The reviewed code is no longer what would merge: the approval does not cover it.
+		const msg = "the pull request changed after this approval was requested; foundry will re-check it"
+		a, err := e.recordDecision(ctx, id, domain.ApprovalRejected, msg)
+		if err != nil {
+			return a, err
+		}
+		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskAwaitingApproval}, msg,
+			func(x *domain.Task) error {
+				x.Status = domain.TaskReview
+				return nil
+			}); err != nil {
+			return a, err
+		}
+		return a, fmt.Errorf("%w: %s", api.ErrConflict, msg)
+	}
+
+	a, err := e.recordDecision(ctx, id, domain.ApprovalApproved, note)
+	if err != nil {
+		return a, err
+	}
+	if err := e.mergeTask(ctx, t.ID, cur.HeadSHA); err != nil {
 		e.blockTask(ctx, t.ID, "merge failed after approval: "+err.Error())
 		return a, fmt.Errorf("merge failed after approval: %w", err)
 	}
@@ -212,13 +298,15 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 
 	// The reply outlives the request, so it does not use the request's context.
 	timeout := e.Config().Limits.RunTimeout.Duration
-	e.wg.Add(1)
-	go func() {
-		defer e.wg.Done()
+	started := e.goTracked(func() {
 		runCtx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		e.chatReply(runCtx, conv, text)
-	}()
+	})
+	if !started {
+		e.releaseConversation(context.WithoutCancel(ctx), conv.ID)
+		return domain.ChatMessage{}, errStopped
+	}
 	return msg, nil
 }
 

@@ -188,6 +188,7 @@ projects:
 	assert.Equal(t, "default", app.Policy)
 	assert.Equal(t, filepath.Join("/data", "repos", "app"), app.Path)
 	assert.Equal(t, 10*time.Minute, app.Deploy.VerifyFor.Duration)
+	assert.Equal(t, 30*time.Minute, app.Deploy.Timeout.Duration)
 	assert.True(t, app.Deploy.RollbackEnabled())
 
 	local := cfg.Projects["local"]

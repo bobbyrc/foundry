@@ -24,6 +24,8 @@ const (
 	deployProbeSignalLimit = 200
 	// deployProbeTitles is how many signal titles go into a failure reason.
 	deployProbeTitles = 3
+	// defaultDeployTimeout fails a release still building after this long, when the config sets none.
+	defaultDeployTimeout = 30 * time.Minute
 )
 
 // deployHealthTally counts consecutive failed health checks per deployment ID. It lives in
@@ -86,7 +88,7 @@ func (e *Engine) finishUndeployed(ctx context.Context, p *config.Project) error 
 	}
 	var errs []error
 	for _, t := range merged {
-		if _, err := e.setTask(ctx, t.ID, "merged; no deployer configured", func(x *domain.Task) error {
+		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskMerged}, "merged; no deployer configured", func(x *domain.Task) error {
 			x.Status = domain.TaskDone
 			return nil
 		}); err != nil {
@@ -137,7 +139,7 @@ func (e *Engine) startRelease(ctx context.Context, p *config.Project, dep deploy
 	}); err != nil {
 		return err
 	}
-	_, err = e.setTask(ctx, oldest.ID, "deploying "+deployShortRef(d.Ref), func(x *domain.Task) error {
+	_, _, err = e.setTaskFrom(ctx, oldest.ID, []domain.TaskStatus{domain.TaskMerged}, "deploying "+deployShortRef(d.Ref), func(x *domain.Task) error {
 		x.Status = domain.TaskDeploying
 		return nil
 	})
@@ -159,6 +161,10 @@ func (e *Engine) advanceRelease(ctx context.Context, p *config.Project, dep depl
 
 // advanceDeploying waits for the provider to finish building the release.
 func (e *Engine) advanceDeploying(ctx context.Context, p *config.Project, dep deploy.Deployer, d domain.Deployment) error {
+	if timeout := deployTimeout(p); e.d.Now().Sub(d.StartedAt) > timeout {
+		// Nothing new is serving yet, so there is nothing to roll back to.
+		return e.failRelease(ctx, p, dep, d, fmt.Sprintf("deploy still not ready after %s", timeout), false)
+	}
 	st, err := dep.Status(ctx, d.ProviderID)
 	if err != nil {
 		return fmt.Errorf("deploy %s status: %w", d.ID, err)
@@ -238,7 +244,7 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 		}
 		if err == nil {
 			label = t.Title
-			if _, err := e.setTask(ctx, t.ID, "deployed and verified", func(x *domain.Task) error {
+			if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskDeploying}, "deployed and verified", func(x *domain.Task) error {
 				x.Status = domain.TaskDone
 				return nil
 			}); err != nil {
@@ -337,6 +343,15 @@ func (e *Engine) setDeployment(ctx context.Context, id string, fn func(*domain.D
 	e.d.Bus.Emit(ctx, domain.EvDeployUpdated, saved.Project, saved.TaskID, "",
 		"deploy "+deployShortRef(saved.Ref)+" is "+string(saved.State), saved)
 	return saved, nil
+}
+
+// deployTimeout is how long a release may take to build: the project's deploy timeout, or 30m
+// when it is unset.
+func deployTimeout(p *config.Project) time.Duration {
+	if p.Deploy == nil || p.Deploy.Timeout.Duration == 0 {
+		return defaultDeployTimeout
+	}
+	return p.Deploy.Timeout.Duration
 }
 
 // deployShortRef shortens a commit SHA for messages.

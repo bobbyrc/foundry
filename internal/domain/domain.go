@@ -208,12 +208,14 @@ const (
 
 // Approval is a decision foundry is waiting for you to make.
 type Approval struct {
-	ID        string         `json:"id"`
-	TaskID    string         `json:"task_id"`
-	Project   string         `json:"project"`
-	Kind      string         `json:"kind"` // "merge", "unblock"
-	Title     string         `json:"title"`
-	Reason    string         `json:"reason"`
+	ID      string `json:"id"`
+	TaskID  string `json:"task_id"`
+	Project string `json:"project"`
+	Kind    string `json:"kind"` // "merge", "unblock"
+	Title   string `json:"title"`
+	Reason  string `json:"reason"`
+	// HeadSHA is the PR head the approval is for; a different head needs a new approval.
+	HeadSHA   string         `json:"head_sha,omitempty"`
 	Status    ApprovalStatus `json:"status"`
 	Note      string         `json:"note,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`

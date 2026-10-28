@@ -43,7 +43,8 @@ Radius 8px on cards, 6px on controls, 999px on pills. Spacing scale 4/8/12/16/24
   Deployments: pending/deploying/verifying `--info`, healthy `--ok`, failed/rolled_back `--danger`.
 - **RiskBadge** — outlined pill: low `--ok`, medium `--warn`, high `--danger`.
 - **RelTime** — "3m ago", full timestamp in `title`.
-- **IdChip** — first 8 chars of an ID in monospace, copies the full ID on click.
+- **IdChip** — last 8 chars of an ID in monospace (IDs are UUIDv7, whose leading chars are a
+  timestamp shared by IDs created close together), copies the full ID on click.
 - **Empty** — muted centred line saying what would appear here and why it is empty.
 - **Markdown** — marked + dompurify; code blocks in `--panel-2` monospace.
 - Buttons: primary (accent fill, dark text), secondary (panel-2 fill), danger (danger outline).

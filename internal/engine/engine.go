@@ -42,9 +42,12 @@ type Deps struct {
 	// ReloadConfig re-reads the config file (config.Load on the current path by default).
 	ReloadConfig func(path string) (*config.Config, error)
 
-	// AgentEnv is added to every agent session: FOUNDRY_API, FOUNDRY_TOKEN, and PATH with the
-	// foundry binary's directory first, so agents can run the `foundry` CLI.
+	// AgentEnv is added to every agent session (e.g. PATH). It must not hold the API token:
+	// worker agents may not act on foundry, or one could approve its own work.
 	AgentEnv map[string]string
+	// OrchestratorEnv is added only to orchestrator (chat) sessions: FOUNDRY_API and
+	// FOUNDRY_TOKEN, so the orchestrator can run the `foundry` CLI.
+	OrchestratorEnv map[string]string
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// SchedulerTick is how often the scheduler looks for work without being woken (default 5s).
@@ -68,7 +71,14 @@ type Engine struct {
 	loopMu    sync.Mutex
 	loopLocks map[string]*sync.Mutex
 
-	wg sync.WaitGroup
+	// kicks holds one channel per loop name; loops.go creates them in startLoops.
+	kickMu sync.Mutex
+	kicks  map[string]chan string
+
+	// lifeMu guards stopped; goTracked refuses new goroutines once Run is shutting down.
+	lifeMu  sync.Mutex
+	stopped bool
+	wg      sync.WaitGroup
 }
 
 // activeRun is a live harness session the engine can cancel.
@@ -108,6 +118,7 @@ func New(d Deps) (*Engine, error) {
 		wake:      make(chan struct{}, 1),
 		active:    map[string]*activeRun{},
 		loopLocks: map[string]*sync.Mutex{},
+		kicks:     map[string]chan string{},
 	}, nil
 }
 
@@ -124,9 +135,31 @@ func (e *Engine) Run(ctx context.Context) error {
 	}()
 	e.startLoops(ctx) // loops.go
 	<-ctx.Done()
+	e.lifeMu.Lock()
+	e.stopped = true
+	e.lifeMu.Unlock()
 	e.cancelAllRuns("foundry is shutting down")
 	e.wg.Wait()
 	return nil
+}
+
+// errStopped is returned by work refused because the engine is shutting down.
+var errStopped = errors.New("foundry is shutting down")
+
+// goTracked runs fn in a goroutine that Run waits for. It returns false (and does not run fn)
+// once Run has begun shutting down, so no goroutine starts after wg.Wait.
+func (e *Engine) goTracked(fn func()) bool {
+	e.lifeMu.Lock()
+	defer e.lifeMu.Unlock()
+	if e.stopped {
+		return false
+	}
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		fn()
+	}()
+	return true
 }
 
 // recover fixes state a crashed or restarted process left behind: runs still marked live are
@@ -153,15 +186,22 @@ func (e *Engine) recover(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		if r.TaskID == "" {
-			continue
-		}
-		if _, err := e.setTask(ctx, r.TaskID, "re-queued after restart", func(t *domain.Task) error {
-			if t.Status == domain.TaskRunning {
+	}
+
+	// No run is live at startup, so every running task is orphaned — including one claimed by
+	// the scheduler just before a crash, before its run row existed.
+	tasks, err := e.d.Store.ListTasks(ctx, store.TaskFilter{
+		Statuses: []domain.TaskStatus{domain.TaskRunning}, Limit: 10000,
+	})
+	if err != nil {
+		return err
+	}
+	for _, t := range tasks {
+		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskRunning},
+			"re-queued after restart", func(t *domain.Task) error {
 				t.Status = domain.TaskQueued
-			}
-			return nil
-		}); err != nil && !errors.Is(err, store.ErrNotFound) {
+				return nil
+			}); err != nil {
 			return err
 		}
 	}

@@ -403,3 +403,40 @@ func TestLoopKickIsRemembered(t *testing.T) {
 		t.Fatalf("buffered kicks = %d, want 2", got)
 	}
 }
+
+// Kicks live on the engine, not in a package-level registry.
+func TestLoopKicksAreEngineOwned(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	env.e.kickLoop(loopDeployWatch, "demo")
+	if n := len(env.e.kicks[loopDeployWatch]); n != 1 {
+		t.Fatalf("engine kick channel holds %d kicks, want 1", n)
+	}
+}
+
+// An unknown loop name is ignored and creates no channel.
+func TestLoopKickUnknownLoopIsNoop(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	env.e.kickLoop("no_such_loop", "demo")
+	if n := len(env.e.kicks); n != 0 {
+		t.Fatalf("unknown loop created %d kick channels, want 0", n)
+	}
+}
+
+// Once shutdown has begun, startLoops starts no loop goroutine, so a queued kick stays queued.
+func TestStartLoopsStartsNothingAfterShutdown(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	env.e.kickLoop(loopDeployWatch, "demo")
+	env.e.lifeMu.Lock()
+	env.e.stopped = true
+	env.e.lifeMu.Unlock()
+
+	ctx, cancel := context.WithCancel(env.ctx)
+	env.e.startLoops(ctx)
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	env.e.wg.Wait()
+
+	if n := len(env.e.kicks[loopDeployWatch]); n != 1 {
+		t.Fatalf("a loop started after shutdown and consumed the kick: %d left, want 1", n)
+	}
+}

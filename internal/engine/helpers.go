@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bobbyrc/foundry/internal/api"
@@ -97,16 +99,52 @@ func (e *Engine) setTask(ctx context.Context, id, message string, fn func(*domai
 	return t, nil
 }
 
+// errSkip aborts a guarded update without an error; see setTaskFrom.
+var errSkip = errors.New("skip")
+
+// setTaskFrom is setTask guarded by the task's current status: fn runs only when the status
+// is one of from, in the same transaction as the write. applied is false (and err nil) when
+// the task had moved on — e.g. the owner cancelled it while a run or loop was working on it.
+// Every automatic status change goes through this, so late outcomes never overwrite a
+// decision made since.
+func (e *Engine) setTaskFrom(ctx context.Context, id string, from []domain.TaskStatus, message string, fn func(*domain.Task) error) (domain.Task, bool, error) {
+	t, err := e.setTask(ctx, id, message, func(t *domain.Task) error {
+		if !slices.Contains(from, t.Status) {
+			return errSkip
+		}
+		return fn(t)
+	})
+	if errors.Is(err, errSkip) {
+		cur, gerr := e.d.Store.GetTask(ctx, id)
+		if gerr == nil {
+			e.d.Logger.Info("task moved on; update skipped", "task", id, "status", cur.Status, "update", message)
+		}
+		return cur, false, nil
+	}
+	return t, err == nil, err
+}
+
+// activeStatuses are the statuses foundry itself moves a task out of. blockTask and
+// requeueOrBlock act only on these; done, failed, cancelled and blocked belong to the owner.
+var activeStatuses = []domain.TaskStatus{
+	domain.TaskQueued, domain.TaskRunning, domain.TaskReview, domain.TaskAwaitingApproval,
+	domain.TaskMerged, domain.TaskDeploying,
+}
+
 // blockTask stops a task until a human acts: status blocked with the exact reason, an event,
 // and a high-priority notification. Use it for denials, stalls, timeouts, agent-reported
-// blocks and exhausted retries. Never retry automatically after this.
+// blocks and exhausted retries. Never retry automatically after this. It does nothing to a
+// task that is no longer active (e.g. cancelled by the owner).
 func (e *Engine) blockTask(ctx context.Context, id, reason string) {
-	t, err := e.setTask(ctx, id, "blocked: "+reason, func(t *domain.Task) error {
+	t, applied, err := e.setTaskFrom(ctx, id, activeStatuses, "blocked: "+reason, func(t *domain.Task) error {
 		t.Status, t.BlockedReason = domain.TaskBlocked, reason
 		return nil
 	})
 	if err != nil {
 		e.d.Logger.Error("block task", "task", id, "err", err)
+		return
+	}
+	if !applied {
 		return
 	}
 	e.notify(ctx, notify.PriorityHigh, "Blocked: "+t.Title, reason, "/tasks/"+t.ID)
@@ -124,7 +162,7 @@ func (e *Engine) requeueOrBlock(ctx context.Context, id, why, context string) {
 		e.blockTask(ctx, id, fmt.Sprintf("%s (gave up after %d attempts)", why, t.Attempts))
 		return
 	}
-	if _, err := e.setTask(ctx, id, "re-queued: "+why, func(t *domain.Task) error {
+	if _, _, err := e.setTaskFrom(ctx, id, []domain.TaskStatus{domain.TaskRunning, domain.TaskReview, domain.TaskAwaitingApproval}, "re-queued: "+why, func(t *domain.Task) error {
 		t.Status = domain.TaskQueued
 		if context != "" {
 			t.Body = strings.TrimRight(t.Body, "\n") + fmt.Sprintf("\n\n## Attempt %d: %s\n\n%s\n", t.Attempts, why, context)

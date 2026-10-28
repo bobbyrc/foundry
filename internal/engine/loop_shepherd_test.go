@@ -241,3 +241,141 @@ func TestLoopShepherdWithoutPRBlocks(t *testing.T) {
 		t.Fatalf("task = %s %q, want blocked for having no PR", got.Status, got.BlockedReason)
 	}
 }
+
+// A merge that GitHub is still computing is judged on a later pass, never merged now.
+func TestLoopShepherdSkipsUnknownMergeability(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.ApprovedSHA = "sha-1" })
+	env.fake.PRs[task.PRNumber].Mergeable = "unknown"
+
+	env.run(loopPRShepherd)
+
+	if got := env.task(task.ID); got.Status != domain.TaskReview {
+		t.Fatalf("status = %s, want review while mergeability is unknown", got.Status)
+	}
+	if len(env.fake.Merged) != 0 {
+		t.Fatalf("merged while mergeability was unknown: %v", env.fake.Merged)
+	}
+}
+
+// Awaiting approval with nothing pending means the request is gone; the task is judged again.
+func TestLoopShepherdAwaitingWithoutApprovalReturnsToReview(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.Status = domain.TaskAwaitingApproval })
+
+	env.run(loopPRShepherd)
+
+	if got := env.task(task.ID); got.Status != domain.TaskReview {
+		t.Fatalf("status = %s, want review when no approval is pending", got.Status)
+	}
+}
+
+// An approval asked about an older PR head is rejected and the task goes back to review.
+func TestLoopShepherdSupersedesApprovalForOldHead(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.Status = domain.TaskAwaitingApproval })
+	if _, err := env.st.CreateApproval(env.ctx, domain.Approval{
+		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "Merge: Add notes",
+		HeadSHA: "sha-0", Status: domain.ApprovalPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	env.run(loopPRShepherd)
+
+	if got := env.task(task.ID); got.Status != domain.TaskReview {
+		t.Fatalf("status = %s, want review after the head changed", got.Status)
+	}
+	rejected, err := env.st.ListApprovals(env.ctx, domain.ApprovalRejected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rejected) != 1 || rejected[0].Note != "superseded: the pull request changed" {
+		t.Fatalf("rejected approvals = %+v, want one superseded by the head change", rejected)
+	}
+}
+
+// An approval for the current head keeps the task waiting.
+func TestLoopShepherdApprovalForCurrentHeadKeepsWaiting(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.Status = domain.TaskAwaitingApproval })
+	if _, err := env.st.CreateApproval(env.ctx, domain.Approval{
+		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "Merge: Add notes",
+		HeadSHA: "sha-1", Status: domain.ApprovalPending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	env.run(loopPRShepherd)
+
+	if got := env.task(task.ID); got.Status != domain.TaskAwaitingApproval {
+		t.Fatalf("status = %s, want awaiting_approval for the current head", got.Status)
+	}
+	pending, err := env.st.ListApprovals(env.ctx, domain.ApprovalPending)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending approvals = %d (err %v), want 1", len(pending), err)
+	}
+}
+
+// The approval records the PR head it was asked about.
+func TestLoopShepherdApprovalRecordsHeadSHA(t *testing.T) {
+	env, task := lpShepherdEnv(t, map[string]string{"migrations/0001_init.sql": "create table t();\n"})
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.ApprovedSHA = "sha-1" })
+
+	env.run(loopPRShepherd)
+
+	pending, err := env.st.ListApprovals(env.ctx, domain.ApprovalPending)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending approvals = %d (err %v), want 1", len(pending), err)
+	}
+	if pending[0].TaskID != task.ID || pending[0].HeadSHA != "sha-1" {
+		t.Fatalf("approval task %s head %q, want task %s head sha-1", pending[0].TaskID, pending[0].HeadSHA, task.ID)
+	}
+}
+
+// mergeTask refuses a task that is not waiting for a merge and merges nothing.
+func TestMergeTaskRefusesTaskNotWaiting(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.Status = domain.TaskDone })
+
+	err := env.e.mergeTask(env.ctx, task.ID, "sha-1")
+	if err == nil || !strings.Contains(err.Error(), "task is done") {
+		t.Fatalf("mergeTask error = %v, want 'task is done'", err)
+	}
+	if len(env.fake.Merged) != 0 {
+		t.Fatalf("merged a task that was done: %v", env.fake.Merged)
+	}
+}
+
+// mergeTask merges only the head it was given; a head that moved is not merged.
+func TestMergeTaskMergesOnlyGivenHead(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	env.fake.HeadSHA = func(string) string { return "sha-2" }
+
+	if err := env.e.mergeTask(env.ctx, task.ID, "sha-1"); err == nil {
+		t.Fatal("mergeTask merged a head that is no longer the PR head")
+	}
+	if len(env.fake.Merged) != 0 {
+		t.Fatalf("merged despite a moved head: %v", env.fake.Merged)
+	}
+	if got := env.task(task.ID); got.Status != domain.TaskReview {
+		t.Fatalf("status = %s, want review after a refused merge", got.Status)
+	}
+}
+
+// An approved task in awaiting_approval merges at the approved head and is marked merged.
+func TestMergeTaskMergesAwaitingApproval(t *testing.T) {
+	env, task := lpShepherdEnv(t, lpNotesFile)
+	lpSetTask(t, env, task.ID, func(x *domain.Task) { x.Status = domain.TaskAwaitingApproval })
+
+	if err := env.e.mergeTask(env.ctx, task.ID, "sha-1"); err != nil {
+		t.Fatalf("mergeTask: %v", err)
+	}
+	got := env.task(task.ID)
+	if got.Status != domain.TaskMerged || got.MergeSHA != "sha-1" {
+		t.Fatalf("task = %s merge %q, want merged at sha-1", got.Status, got.MergeSHA)
+	}
+	if n := len(env.e.loopKickChan(loopDeployWatch)); n != 1 {
+		t.Fatalf("deploy watch kicks = %d, want 1", n)
+	}
+}

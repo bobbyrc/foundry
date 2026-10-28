@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { Run, Task } from '../types';
-import { useTask } from '../queries';
+import { usePausedProjects, useTask } from '../queries';
 import { ApprovalCard } from '../components/ApprovalCard';
 import { Callout } from '../components/Callout';
 import { Empty } from '../components/Empty';
@@ -24,6 +24,7 @@ const RETRYABLE = ['blocked', 'failed', 'cancelled'];
 export function TaskDetail() {
   const { id = '' } = useParams();
   const detail = useTask(id);
+  const pausedProjects = usePausedProjects();
 
   if (detail.isError) return <ErrorLine error={detail.error} />;
   if (!detail.data) return <p className="muted">Loading task…</p>;
@@ -31,6 +32,7 @@ export function TaskDetail() {
   const { task, runs, approvals, children } = detail.data;
   const canCancel = !TERMINAL_NO_CANCEL.includes(task.status);
   const canRetry = RETRYABLE.includes(task.status);
+  const queuedInPausedProject = task.status === 'queued' && pausedProjects.includes(task.project);
 
   return (
     <>
@@ -48,6 +50,9 @@ export function TaskDetail() {
         }
       />
       {task.status === 'blocked' ? <Callout title="Blocked">{task.blocked_reason || 'No reason was recorded.'}</Callout> : null}
+      {queuedInPausedProject ? (
+        <Callout tone="muted">This project is paused in foundry.yaml, so queued work will not start.</Callout>
+      ) : null}
 
       <dl className="meta">
         <MetaItem label="Project">{task.project}</MetaItem>

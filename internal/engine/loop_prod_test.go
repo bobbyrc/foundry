@@ -104,3 +104,19 @@ func TestLoopProdCursorAdvances(t *testing.T) {
 		t.Fatalf("cursor = %q, want %q", st.Cursor, env.now.Format(time.RFC3339))
 	}
 }
+
+// A blocked incident is still open: a later signal must not open a second task for it.
+func TestLoopProdBlockedIncidentStaysOpen(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "", ""))
+	env.obs.obs = []domain.SignalObservation{lpObservation("error", 5, time.Now())}
+	env.run(loopProdWatch)
+	inc := env.tasks(domain.KindIncident)[0]
+	lpSetTask(t, env, inc.ID, func(x *domain.Task) { x.Status = domain.TaskBlocked })
+
+	env.obs.obs = []domain.SignalObservation{lpObservation("error", 7, time.Now().Add(time.Hour))}
+	env.run(loopProdWatch)
+
+	if n := len(env.tasks(domain.KindIncident)); n != 1 {
+		t.Fatalf("got %d incidents while the first is blocked, want 1", n)
+	}
+}

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,6 +38,8 @@ type rtOpts struct {
 	selfProject   string
 	maxConcurrent int
 	maxPerProject int
+	// wrapStore, when set, wraps the engine's store (the test reads the raw store).
+	wrapStore func(store.Store) store.Store
 }
 
 // rtEnv is a real engine wired to an in-memory store, a shared fake SCM and local bare repos.
@@ -110,9 +114,13 @@ agents:
 	demoClone := env.clone[o.projects[0]]
 	env.scm.HeadSHA = func(branch string) string { return rtRevParseQuiet(demoClone, "origin/"+branch) }
 
+	var engStore store.Store = st
+	if o.wrapStore != nil {
+		engStore = o.wrapStore(st)
+	}
 	e, err := New(Deps{
 		Config:     cfg,
-		Store:      st,
+		Store:      engStore,
 		Bus:        events.NewBus(st, logger),
 		Workspaces: workspace.New(filepath.Join(dataDir, "worktrees")),
 		Logger:     logger,
@@ -446,4 +454,190 @@ func TestRunnerReadResultFallbacks(t *testing.T) {
 func TestRunnerFrictionFingerprintNormalises(t *testing.T) {
 	assert.Equal(t, frictionFingerprint("Docs  are WRONG "), frictionFingerprint("docs are wrong"))
 	assert.Len(t, frictionFingerprint("x"), 16)
+}
+
+// rtFailFirstRunUpdate fails its first UpdateRun call, to show that a failed run-row update
+// does not disturb the run being recorded.
+type rtFailFirstRunUpdate struct {
+	store.Store
+	failed atomic.Bool
+}
+
+func (s *rtFailFirstRunUpdate) UpdateRun(ctx context.Context, id string, fn func(*domain.Run) error) (domain.Run, error) {
+	if s.failed.CompareAndSwap(false, true) {
+		return domain.Run{}, errors.New("injected run update failure")
+	}
+	return s.Store.UpdateRun(ctx, id, fn)
+}
+
+func TestRunnerFailedRunUpdateKeepsRun(t *testing.T) {
+	env := rtNewEngine(t, rtOpts{wrapStore: func(s store.Store) store.Store {
+		return &rtFailFirstRunUpdate{Store: s}
+	}})
+	task := env.create(domain.Task{Title: "Add greeting", Body: "[fake:commit]"})
+	env.waitStatus(task.ID, domain.TaskReview)
+
+	runs := env.runs(task.ID)
+	require.Len(t, runs, 1)
+	assert.Equal(t, domain.RunSucceeded, runs[0].Status, "the run is still recorded after a failed update")
+}
+
+// rtConflictScript runs the fake's normal behaviour, except when the prompt carries merge
+// conflicts: then it records the prompt and reports no changes, leaving the markers in place.
+func rtConflictScript(prompts chan<- string) hfake.Script {
+	return func(ctx context.Context, spec harness.Spec, emit func(harness.Event)) (harness.Result, error) {
+		if !strings.Contains(spec.Prompt, "## Merge conflicts to resolve") {
+			return hfake.DefaultScript(ctx, spec, emit)
+		}
+		select {
+		case prompts <- spec.Prompt:
+		default:
+		}
+		dir := filepath.Join(spec.Workdir, domain.OutboxDir)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return harness.Result{IsError: true}, err
+		}
+		report := `{"status":"no_changes","summary":"left the conflicts in place"}`
+		if err := os.WriteFile(filepath.Join(dir, domain.ResultFile), []byte(report), 0o644); err != nil {
+			return harness.Result{IsError: true}, err
+		}
+		return harness.Result{SessionID: "conflict-" + spec.RunID, FinalText: "left the conflicts in place"}, nil
+	}
+}
+
+func TestRunnerMergesBaseIntoPRBranchAndReportsConflicts(t *testing.T) {
+	prompts := make(chan string, 10)
+	env := rtNewEngine(t, rtOpts{script: rtConflictScript(prompts)})
+	task := env.create(domain.Task{Title: "Add greeting", Body: "[fake:commit]"})
+	got := env.waitStatus(task.ID, domain.TaskReview)
+	require.NotZero(t, got.PRNumber)
+	run := env.runs(task.ID)[0]
+
+	// Main gets a file of the same name as the one the branch's run added, with other content.
+	clone := t.TempDir()
+	rtGit(t, "", "clone", env.bare["demo"], clone)
+	file := "fake-" + run.ID + ".txt"
+	require.NoError(t, os.WriteFile(filepath.Join(clone, file), []byte("main side\n"), 0o644))
+	rtGit(t, clone, "add", file)
+	rtGit(t, clone, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "clash")
+	rtGit(t, clone, "push", "origin", "HEAD:main")
+
+	// Re-queue the task: the next run merges main in and must be told about the conflict.
+	_, err := env.st.UpdateTask(env.ctx, task.ID, func(x *domain.Task) error {
+		x.Status = domain.TaskQueued
+		return nil
+	})
+	require.NoError(t, err)
+
+	select {
+	case prompt := <-prompts:
+		assert.Contains(t, prompt, "## Merge conflicts to resolve")
+		assert.Contains(t, prompt, "- "+file)
+	case <-time.After(20 * time.Second):
+		t.Fatal("no run received the merge conflict prompt")
+	}
+
+	blocked := env.waitStatus(task.ID, domain.TaskBlocked)
+	assert.Contains(t, blocked.BlockedReason, "unresolved merge conflicts")
+}
+
+func TestRunnerPublishStopsWhenTaskMovedOn(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	bare := filepath.Join(t.TempDir(), "demo.git")
+	rtSeedRepo(t, bare)
+	r.cfg.Projects["demo"].Repo = bare
+	r.cfg.Projects["demo"].Path = filepath.Join(t.TempDir(), "clone")
+	e := r.engine(nil)
+	p := e.Config().Projects["demo"]
+
+	task := ctTask(t, e, "cancelled mid-run")
+	ctSetTask(t, r, task.ID, func(x *domain.Task) { x.Status = domain.TaskCancelled })
+
+	ws, err := e.d.Workspaces.Prepare(ctx, e.repoFor(p), "foundry/late-publish", "run-late")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(ws.Dir, "late.txt"), []byte("late\n"), 0o644))
+	rtGit(t, ws.Dir, "add", "late.txt")
+	rtGit(t, ws.Dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "late")
+
+	assert.False(t, e.publish(ctx, task, p, ws, domain.RunResult{}), "publish refuses to run for a cancelled task")
+	assert.Empty(t, rtRevParseQuiet(bare, "refs/heads/"+ws.Branch), "nothing is pushed")
+	assert.Empty(t, r.fk.PRs, "no pull request is opened")
+
+	got, err := r.st.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskCancelled, got.Status)
+}
+
+func TestRunnerLateReviewDoesNotApproveCancelledTask(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+
+	parent := ctTask(t, e, "feature")
+	ctSetTask(t, r, parent.ID, func(x *domain.Task) { x.Status = domain.TaskCancelled })
+	review, err := e.createTask(ctx, domain.Task{
+		Project: "demo", Kind: domain.KindReview, ParentID: parent.ID, Title: "review of feature",
+	})
+	require.NoError(t, err)
+	ctSetTask(t, r, review.ID, func(x *domain.Task) { x.Status = domain.TaskRunning })
+
+	rt, err := r.st.GetTask(ctx, review.ID)
+	require.NoError(t, err)
+	pt, err := r.st.GetTask(ctx, parent.ID)
+	require.NoError(t, err)
+	e.applyReview(ctx, rt, &pt, workspace.Workspace{StartSHA: "reviewed-sha"}, domain.RunResult{
+		Status: domain.ResultCompleted, Review: &domain.ReviewVerdict{Approve: true},
+	})
+
+	gotParent, err := r.st.GetTask(ctx, parent.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskCancelled, gotParent.Status)
+	assert.Empty(t, gotParent.ApprovedSHA, "a cancelled task is not approved by a late review")
+
+	gotReview, err := r.st.GetTask(ctx, review.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskDone, gotReview.Status)
+}
+
+func TestRunnerStartTaskDuringShutdownRecordsCancelledRun(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	task := ctTask(t, e, "claimed at shutdown")
+	ctSetTask(t, r, task.ID, func(x *domain.Task) { x.Status = domain.TaskRunning })
+
+	e.lifeMu.Lock()
+	e.stopped = true
+	e.lifeMu.Unlock()
+	e.startTask(ctx, task)
+
+	got, err := r.st.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskRunning, got.Status, "recover re-queues the task on restart")
+
+	runs, err := r.st.ListRuns(ctx, store.RunFilter{TaskID: task.ID})
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	assert.Equal(t, domain.RunCancelled, runs[0].Status)
+	assert.Equal(t, errStopped.Error(), runs[0].Error)
+}
+
+func TestRunnerStartTaskFailureLandsAfterCancel(t *testing.T) {
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	task := ctTask(t, e, "unresolvable agent")
+	ctSetTask(t, r, task.ID, func(x *domain.Task) {
+		x.Status = domain.TaskRunning
+		x.Role = "no-such-agent"
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	e.startTask(ctx, domain.Task{ID: task.ID, Project: "demo", Role: "no-such-agent", Title: task.Title, Kind: task.Kind})
+
+	got, err := r.st.GetTask(context.Background(), task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskBlocked, got.Status, "the block lands even though the request was cancelled")
+	assert.Contains(t, got.BlockedReason, "could not resolve agent")
 }

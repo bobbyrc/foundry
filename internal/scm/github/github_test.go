@@ -246,15 +246,24 @@ func TestFindPR(t *testing.T) {
 func TestMergePR(t *testing.T) {
 	f := newFake()
 	g := NewWithRunner(repo, f.runner())
-	require.NoError(t, g.MergePR(context.Background(), 4))
+	require.NoError(t, g.MergePR(context.Background(), 4, ""))
 	require.Len(t, f.calls, 1)
 	assert.Equal(t, []string{"pr", "merge", "4", "--repo", repo, "--squash", "--delete-branch"}, f.calls[0].args)
 
 	f.errOn["pr merge"] = errors.New("exit status 1: not mergeable")
-	err := g.MergePR(context.Background(), 4)
+	err := g.MergePR(context.Background(), 4, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "merge PR #4")
 	assert.Contains(t, err.Error(), "not mergeable")
+}
+
+func TestMergePRMatchesHeadCommit(t *testing.T) {
+	f := newFake()
+	g := NewWithRunner(repo, f.runner())
+	require.NoError(t, g.MergePR(context.Background(), 4, "abc123"))
+	require.Len(t, f.calls, 1)
+	assert.Equal(t, []string{"pr", "merge", "4", "--repo", repo, "--squash", "--delete-branch",
+		"--match-head-commit", "abc123"}, f.calls[0].args)
 }
 
 func TestCILogFetchesFailedRunsAndTails(t *testing.T) {

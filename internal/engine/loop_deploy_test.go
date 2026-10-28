@@ -166,3 +166,62 @@ func TestLoopDeployStartErrorFailsAndOpensIncident(t *testing.T) {
 		t.Fatalf("got %d incidents, want 1", n)
 	}
 }
+
+// A release still building past the project's deploy timeout fails, without a rollback.
+func TestLoopDeployFailsStuckBuildAfterTimeout(t *testing.T) {
+	env := lpNewEngine(t, lpDeployDoc(t, ""))
+	merged := lpMergedTask(t, env, "Slow build", "sha-9")
+	if _, err := env.st.CreateDeployment(env.ctx, domain.Deployment{
+		Project: "demo", TaskID: merged.ID, Ref: "sha-9", ProviderID: "prov-x",
+		State: domain.DeployDeploying, StartedAt: env.now.Add(-31 * time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	env.run(loopDeployWatch)
+
+	rel := lpDeployments(t, env)[0]
+	if rel.State != domain.DeployFailed || !strings.Contains(rel.Notes, "deploy still not ready after 30m0s") {
+		t.Fatalf("release = %s notes %q, want failed after the 30m timeout", rel.State, rel.Notes)
+	}
+	if len(env.dep.rolledBack) != 0 {
+		t.Fatalf("a stuck build rolled back: %v", env.dep.rolledBack)
+	}
+	if got := env.task(merged.ID); got.Status != domain.TaskBlocked {
+		t.Fatalf("task = %s, want blocked by the failed release", got.Status)
+	}
+}
+
+// The project's own timeout is used when set.
+func TestLoopDeployUsesConfiguredTimeout(t *testing.T) {
+	env := lpNewEngine(t, lpDoc(t, lpPath(t), "    deploy:\n      type: test\n      timeout: 10m\n", ""))
+	if _, err := env.st.CreateDeployment(env.ctx, domain.Deployment{
+		Project: "demo", Ref: "sha-8", ProviderID: "prov-y",
+		State: domain.DeployDeploying, StartedAt: env.now.Add(-11 * time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	env.run(loopDeployWatch)
+
+	if rel := lpDeployments(t, env)[0]; rel.State != domain.DeployFailed || !strings.Contains(rel.Notes, "after 10m0s") {
+		t.Fatalf("release = %s notes %q, want failed after the 10m timeout", rel.State, rel.Notes)
+	}
+}
+
+// A build inside the timeout keeps waiting.
+func TestLoopDeployWaitsInsideTimeout(t *testing.T) {
+	env := lpNewEngine(t, lpDeployDoc(t, ""))
+	if _, err := env.st.CreateDeployment(env.ctx, domain.Deployment{
+		Project: "demo", Ref: "sha-7", ProviderID: "prov-z",
+		State: domain.DeployDeploying, StartedAt: env.now.Add(-5 * time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	env.run(loopDeployWatch)
+
+	if rel := lpDeployments(t, env)[0]; rel.State != domain.DeployDeploying {
+		t.Fatalf("release = %s at 5m, want still deploying", rel.State)
+	}
+}

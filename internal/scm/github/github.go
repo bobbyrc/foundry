@@ -256,9 +256,14 @@ func (g *GitHub) FindPR(ctx context.Context, head string) (scm.PR, bool, error) 
 }
 
 // MergePR squash-merges a pull request and deletes its branch.
-func (g *GitHub) MergePR(ctx context.Context, number int) error {
-	if _, err := g.run(ctx, "", "pr", "merge", strconv.Itoa(number), "--repo", g.Repo,
-		"--squash", "--delete-branch"); err != nil {
+func (g *GitHub) MergePR(ctx context.Context, number int, headSHA string) error {
+	args := []string{"pr", "merge", strconv.Itoa(number), "--repo", g.Repo,
+		"--squash", "--delete-branch"}
+	if headSHA != "" {
+		// gh refuses the merge unless the PR head is still this commit.
+		args = append(args, "--match-head-commit", headSHA)
+	}
+	if _, err := g.run(ctx, "", args...); err != nil {
 		return fmt.Errorf("merge PR #%d: %w", number, err)
 	}
 	return nil

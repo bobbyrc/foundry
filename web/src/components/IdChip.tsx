@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { shortId } from '../lib/format';
 
-/** The first 8 characters of an ID; clicking copies the full ID. */
+/** The last 8 characters of an ID (the head is a timestamp shared across tasks); clicking copies the full ID. */
 export function IdChip({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {

@@ -12,10 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bobbyrc/foundry/internal/api"
+	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/domain"
-
+	"github.com/bobbyrc/foundry/internal/harness"
 	// Registers the "fake" harness type that the test config uses.
-	_ "github.com/bobbyrc/foundry/internal/harness/fake"
+	hfake "github.com/bobbyrc/foundry/internal/harness/fake"
 )
 
 // ctWaitIdle waits until the conversation is no longer busy and returns it.
@@ -159,4 +160,46 @@ func TestChatInstructionsListProjectsAndAgents(t *testing.T) {
 func TestChatRoutedKindsForUnknownAgent(t *testing.T) {
 	r := ctNewRig(t)
 	assert.Equal(t, "none", handledKinds(r.cfg, "nobody"))
+}
+
+func TestChatSendDuringShutdownReleasesBusy(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	conv, err := r.st.CreateConversation(ctx, domain.Conversation{Project: "demo"})
+	require.NoError(t, err)
+
+	e.lifeMu.Lock()
+	e.stopped = true
+	e.lifeMu.Unlock()
+	_, err = e.SendChat(ctx, conv.ID, "hello")
+	assert.True(t, errors.Is(err, errStopped), "a send during shutdown is refused: %v", err)
+
+	got, err := r.st.GetConversation(ctx, conv.ID)
+	require.NoError(t, err)
+	assert.False(t, got.Busy, "the conversation is not left busy")
+}
+
+func TestChatReplyGetsOrchestratorEnv(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	// Set before any reply goroutine exists, so nothing reads these concurrently.
+	e.d.OrchestratorEnv = map[string]string{"FOUNDRY_TOKEN": "orchestrator-token"}
+	envs := make(chan map[string]string, 1)
+	e.d.HarnessFor = func(string, config.Harness) (harness.Harness, error) {
+		return hfake.New(func(_ context.Context, spec harness.Spec, _ func(harness.Event)) (harness.Result, error) {
+			envs <- spec.Env
+			return harness.Result{SessionID: "s", FinalText: "ok"}, nil
+		}), nil
+	}
+
+	conv, err := r.st.CreateConversation(ctx, domain.Conversation{Project: "demo"})
+	require.NoError(t, err)
+	_, err = e.SendChat(ctx, conv.ID, "list the tasks")
+	require.NoError(t, err)
+	ctWaitIdle(t, r, conv.ID)
+
+	env := <-envs
+	assert.Equal(t, "orchestrator-token", env["FOUNDRY_TOKEN"], "the orchestrator gets the API token")
 }

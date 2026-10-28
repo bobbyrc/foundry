@@ -10,9 +10,10 @@ cheap to revisit; the ones most worth a second look are marked **(review)**.
 ## Principles
 
 1. **Agents do judgment, code does gates.** Agents write code, review diffs, triage issues and
-   diagnose incidents. Deterministic Go code pushes branches, opens PRs, decides risk, merges,
-   deploys and rolls back. An agent can never lower a risk rating or merge its own work; it can
-   only raise risk.
+   diagnose incidents. Deterministic Go code commits, pushes branches, opens PRs, decides risk,
+   merges, deploys and rolls back. An agent can never lower a risk rating or merge its own work;
+   it can only raise risk. Worker agents get no API token, so they cannot act on foundry at all;
+   only the orchestrator (the agent you chat with) can, and only through the CLI.
 2. **A permission denial or a stall is terminal for that run.** A run that is denied a tool, or
    produces no output for `limits.stall_timeout`, is stopped, its task becomes `blocked`, and you
    are notified with the exact reason. Foundry never retries a denial or rephrases around it.
@@ -81,10 +82,19 @@ queued ─► running ─► review ─► merged ─► deploying ─► done
 ```
 
 - `running` → the scheduler picked it and a run is live.
-- When the run ends with commits, the shepherd pushes branch `foundry/<task-id-prefix>` and
-  opens a PR; the task moves to `review`.
+- Agents never commit (Codex's sandbox keeps `.git` read-only, so they could not anyway). When
+  the run ends with changes, foundry commits them with the agent's PR title, pushes branch
+  `foundry/<task-id-suffix>-<slug>` and opens a PR; the task moves to `review`.
+- Before a re-run on a branch that already has a PR, foundry merges the default branch in. If
+  that conflicts, the agent is given the conflicted files to resolve; leftover conflict
+  markers fail the attempt instead of being committed.
 - In `review` the shepherd waits for CI, dispatches a `reviewer` run when the policy requires
-  review, then asks the policy: auto-merge → `merged`; otherwise → `awaiting_approval`.
+  review, then asks the policy: auto-merge → `merged`; otherwise → `awaiting_approval`. Every
+  merge is pinned to the PR head commit that CI, review and the policy judged
+  (`gh pr merge --match-head-commit`), and an approval is for one head: if the PR changes after
+  you were asked, foundry withdraws the approval request and re-checks.
+- Every automatic status change is guarded by the status it expects, atomically. A run or loop
+  that finishes after you cancelled or blocked a task cannot revive it.
 - Failing CI or "request changes" from the reviewer re-queues the task for another implementer
   run on the same branch, up to `max_attempts`, then `blocked`.
 - After merge, if the project has a deployer, the deploy watch takes it through `deploying`;
@@ -165,8 +175,15 @@ web/                  React + Vite + TypeScript UI (built into internal/api/webd
   such as Tailscale.
 - Agents never get push credentials from foundry; foundry pushes. Harness permissions are
   configured per agent profile (`claude-code` defaults to `acceptEdits` plus an allowed-tools
-  list; `codex` defaults to `--sandbox workspace-write`).
+  list; `codex` defaults to `--approve-for-me`, its workspace-write sandbox with automatic review of escalations).
 - Secrets for providers come from the environment or `~/.config/foundry/secrets.env`.
+
+### Known limits of the harnesses
+
+- Claude Code reports refused tool calls as `permission_denials`; foundry treats any as a
+  denial. Codex does not report sandbox refusals in machine-readable form (only in prose), so
+  for Codex the "denial is terminal" rule relies on the prompt ("if denied, report blocked")
+  and the stall timeout.
 
 ## Not in v0
 

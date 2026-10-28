@@ -264,6 +264,9 @@ func applyProjectDefaults(c *Config) {
 		if p.Deploy != nil && p.Deploy.VerifyFor.Duration == 0 {
 			p.Deploy.VerifyFor.Duration = 10 * time.Minute
 		}
+		if p.Deploy != nil && p.Deploy.Timeout.Duration == 0 {
+			p.Deploy.Timeout.Duration = 30 * time.Minute
+		}
 		for i := range p.Observe {
 			if p.Observe[i].Name == "" {
 				p.Observe[i].Name = p.Observe[i].Type

@@ -18,7 +18,7 @@ import { StatCard } from '../components/StatCard';
 import { StatusPill } from '../components/StatusPill';
 import { PageHeader } from '../components/PageHeader';
 import { RetryTaskControl, CancelTaskButton } from '../components/TaskActions';
-import { useApprovals, useCancelRun, useRuns, useStats, useTask, useTasks } from '../queries';
+import { useApprovals, useCancelRun, usePausedProjects, useRuns, useStats, useTask, useTasks } from '../queries';
 import type { FoundryEvent, Run, Task } from '../types';
 
 const STALE_OUTPUT_MS = 5 * 60_000;
@@ -28,6 +28,7 @@ export function Overview() {
   const stats = useStats();
   const s = stats.data;
   const byStatus = s?.tasks_by_status ?? {};
+  const paused = usePausedProjects();
 
   return (
     <>
@@ -39,6 +40,9 @@ export function Overview() {
         <StatCard label="Blocked" value={byStatus.blocked} href="/tasks?status=blocked" />
         <StatCard label="Cost today" value={s ? formatCost(s.cost_today_usd) : undefined} href="/runs" />
       </div>
+      {paused.length > 0 ? (
+        <p className="muted small">Paused projects: {paused.join(', ')} — their queued work will not start.</p>
+      ) : null}
       <div className="two-col">
         <div className="col">
           <NeedsYou />

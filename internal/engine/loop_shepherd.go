@@ -15,6 +15,17 @@ import (
 	"github.com/bobbyrc/foundry/internal/store"
 )
 
+// shepherdStatuses are the statuses the shepherd works on. Every transition it makes is guarded
+// by these, so a task that moved on while a network call was in flight is left alone.
+var shepherdStatuses = []domain.TaskStatus{domain.TaskReview, domain.TaskAwaitingApproval}
+
+// notMergeableError is returned by mergeTask when the task is not waiting for a merge.
+type notMergeableError struct{ status domain.TaskStatus }
+
+func (e *notMergeableError) Error() string {
+	return fmt.Sprintf("task is %s, not waiting for a merge", e.status)
+}
+
 // shepherdLoop moves each task in review or awaiting_approval through CI, review, policy and
 // merge. Each task is handled on its own, and one task's error does not stop the others.
 func (e *Engine) shepherdLoop(ctx context.Context, p *config.Project) error {
@@ -24,7 +35,7 @@ func (e *Engine) shepherdLoop(ctx context.Context, p *config.Project) error {
 	}
 	tasks, err := e.d.Store.ListTasks(ctx, store.TaskFilter{
 		Project:  p.Name,
-		Statuses: []domain.TaskStatus{domain.TaskReview, domain.TaskAwaitingApproval},
+		Statuses: shepherdStatuses,
 		Limit:    1000,
 	})
 	if err != nil {
@@ -39,6 +50,16 @@ func (e *Engine) shepherdLoop(ctx context.Context, p *config.Project) error {
 	return errors.Join(errs...)
 }
 
+// freshShepherdTask re-reads a task after a network call. ok is false when the task is no longer
+// in review or awaiting_approval, in which case the caller must stop.
+func (e *Engine) freshShepherdTask(ctx context.Context, id string) (domain.Task, bool, error) {
+	t, err := e.d.Store.GetTask(ctx, id)
+	if err != nil {
+		return t, false, fmt.Errorf("re-read task %s: %w", id, err)
+	}
+	return t, slices.Contains(shepherdStatuses, t.Status), nil
+}
+
 // shepherdTask advances one task. Every return without an error means the task was either
 // left to wait, re-queued, blocked, merged or sent for approval.
 func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project, t domain.Task) error {
@@ -50,29 +71,41 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 	if err != nil {
 		return fmt.Errorf("get PR #%d: %w", t.PRNumber, err)
 	}
+	t, ok, err := e.freshShepherdTask(ctx, t.ID)
+	if err != nil || !ok {
+		return err
+	}
+
 	switch pr.State {
 	case "merged":
-		if err := e.markMerged(ctx, p, t, pr.MergeSHA, "merged outside foundry"); err != nil {
+		applied, err := e.markMerged(ctx, p, t, pr.MergeSHA, "merged outside foundry")
+		if err != nil || !applied {
 			return err
 		}
 		e.decidePendingApprovals(ctx, t.ID, domain.ApprovalApproved, "merged outside foundry")
 		return nil
 	case "closed":
-		if _, err := e.setTask(ctx, t.ID, "PR closed outside foundry", func(x *domain.Task) error {
+		_, applied, err := e.setTaskFrom(ctx, t.ID, shepherdStatuses, "PR closed outside foundry", func(x *domain.Task) error {
 			x.Status = domain.TaskCancelled
 			return nil
-		}); err != nil {
+		})
+		if err != nil || !applied {
 			return err
 		}
 		e.decidePendingApprovals(ctx, t.ID, domain.ApprovalRejected, "PR closed outside foundry")
 		return nil
 	}
 
-	// Awaiting approval: the human decides, not the loop.
+	// Awaiting approval: the human decides, not the loop. Only check that the approval still
+	// applies to this PR head.
 	if t.Status == domain.TaskAwaitingApproval {
-		return nil
+		return e.checkAwaitingApproval(ctx, t, pr)
 	}
 
+	// GitHub is still computing whether the PR merges cleanly; judge it on a later pass.
+	if pr.Mergeable == "unknown" {
+		return nil
+	}
 	if pr.Mergeable == "conflicting" {
 		e.requeueOrBlock(ctx, t.ID, "merge conflict with "+p.DefaultBranch,
 			"Rebase the branch onto origin/"+p.DefaultBranch+", resolve the conflicts, and make the checks pass again.")
@@ -83,6 +116,9 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 	if err != nil {
 		return fmt.Errorf("diff: %w", err)
 	}
+	if t, ok, err = e.freshShepherdTask(ctx, t.ID); err != nil || !ok {
+		return err
+	}
 	d := policy.Evaluate(e.Config().PolicyFor(p.Name), policy.Input{
 		Kind:             t.Kind,
 		Files:            files,
@@ -91,12 +127,12 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 		Labels:           pr.Labels,
 	})
 	if d.Risk != t.Risk || !slices.Equal(d.Reasons, t.RiskReasons) {
-		saved, err := e.setTask(ctx, t.ID, "risk "+string(d.Risk), func(x *domain.Task) error {
+		saved, applied, err := e.setTaskFrom(ctx, t.ID, shepherdStatuses, "risk "+string(d.Risk), func(x *domain.Task) error {
 			x.Risk = d.Risk
 			x.RiskReasons = d.Reasons
 			return nil
 		})
-		if err != nil {
+		if err != nil || !applied {
 			return err
 		}
 		t = saved
@@ -113,6 +149,9 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 			if lerr != nil {
 				log = fmt.Sprintf("(could not fetch the CI log: %v)", lerr)
 			}
+			if _, ok, err := e.freshShepherdTask(ctx, t.ID); err != nil || !ok {
+				return err
+			}
 			e.requeueOrBlock(ctx, t.ID, "CI failed: "+strings.Join(pr.FailingCI, ", "),
 				"```\n"+log+"\n```")
 			return nil
@@ -124,7 +163,13 @@ func (e *Engine) shepherdTask(ctx context.Context, s scm.SCM, p *config.Project,
 	}
 
 	if d.AutoMerge {
-		if err := e.mergeTask(ctx, t); err != nil {
+		// CI, review and policy were judged on pr.HeadSHA; merge only that commit.
+		err := e.mergeTask(ctx, t.ID, pr.HeadSHA)
+		var notMergeable *notMergeableError
+		switch {
+		case errors.As(err, &notMergeable):
+			return nil // the task moved on since the re-read; the next pass sees where it is
+		case err != nil:
 			e.blockTask(ctx, t.ID, "merge failed: "+err.Error())
 		}
 		return nil
@@ -175,25 +220,76 @@ func (e *Engine) ensureReview(ctx context.Context, p *config.Project, t domain.T
 	return err
 }
 
-// requestMergeApproval asks a human to approve the merge, once. The task waits in
-// awaiting_approval until then.
-func (e *Engine) requestMergeApproval(ctx context.Context, p *config.Project, t domain.Task, pr scm.PR, d policy.Decision) error {
+// pendingApprovalsFor lists the pending approvals of one task.
+func (e *Engine) pendingApprovalsFor(ctx context.Context, taskID string) ([]domain.Approval, error) {
 	pending, err := e.d.Store.ListApprovals(ctx, domain.ApprovalPending)
 	if err != nil {
-		return fmt.Errorf("list approvals: %w", err)
+		return nil, fmt.Errorf("list approvals: %w", err)
 	}
+	var out []domain.Approval
 	for _, a := range pending {
-		if a.TaskID != t.ID {
-			continue
+		if a.TaskID == taskID {
+			out = append(out, a)
 		}
-		if t.Status != domain.TaskAwaitingApproval {
-			_, err := e.setTask(ctx, t.ID, "waiting for merge approval", func(x *domain.Task) error {
-				x.Status = domain.TaskAwaitingApproval
+	}
+	return out, nil
+}
+
+// checkAwaitingApproval handles a task waiting for a human. With no pending approval, or with one
+// for a different PR head, the task goes back to review so it is judged again. The human's
+// approval is only for the head it was asked about.
+func (e *Engine) checkAwaitingApproval(ctx context.Context, t domain.Task, pr scm.PR) error {
+	pending, err := e.pendingApprovalsFor(ctx, t.ID)
+	if err != nil {
+		return err
+	}
+	if len(pending) == 0 {
+		_, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskAwaitingApproval},
+			"no merge approval is pending; re-evaluating", func(x *domain.Task) error {
+				x.Status = domain.TaskReview
 				return nil
 			})
-			return err
+		return err
+	}
+	stale := false
+	for _, a := range pending {
+		if a.HeadSHA != pr.HeadSHA {
+			stale = true
 		}
+	}
+	if !stale {
 		return nil
+	}
+	_, applied, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskAwaitingApproval},
+		"pull request changed; re-evaluating", func(x *domain.Task) error {
+			x.Status = domain.TaskReview
+			return nil
+		})
+	if err != nil || !applied {
+		return err
+	}
+	e.decidePendingApprovals(ctx, t.ID, domain.ApprovalRejected, "superseded: the pull request changed")
+	return nil
+}
+
+// requestMergeApproval asks a human to approve the merge, once. The task moves to
+// awaiting_approval first; the approval is created only if that move applied, so a task that
+// moved on is never asked about.
+func (e *Engine) requestMergeApproval(ctx context.Context, p *config.Project, t domain.Task, pr scm.PR, d policy.Decision) error {
+	_, applied, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskReview}, "waiting for merge approval", func(x *domain.Task) error {
+		x.Status = domain.TaskAwaitingApproval
+		return nil
+	})
+	if err != nil || !applied {
+		return err
+	}
+
+	pending, err := e.pendingApprovalsFor(ctx, t.ID)
+	if err != nil {
+		return e.backToReview(ctx, t.ID, err)
+	}
+	if len(pending) > 0 {
+		return nil // already asked; checkAwaitingApproval judges the head on the next pass
 	}
 
 	reason := fmt.Sprintf("Risk **%s**: %s\n\n%s", d.Risk, strings.Join(d.Reasons, "; "), pr.URL)
@@ -203,25 +299,41 @@ func (e *Engine) requestMergeApproval(ctx context.Context, p *config.Project, t 
 		Kind:    "merge",
 		Title:   fmt.Sprintf("Merge: %s (#%d)", t.Title, pr.Number),
 		Reason:  reason,
+		HeadSHA: pr.HeadSHA,
 		Status:  domain.ApprovalPending,
 	})
 	if err != nil {
-		return fmt.Errorf("create approval: %w", err)
+		return e.backToReview(ctx, t.ID, fmt.Errorf("create approval: %w", err))
 	}
 	e.d.Bus.Emit(ctx, domain.EvApprovalRequested, p.Name, t.ID, "", approval.Title, approval)
-	if _, err := e.setTask(ctx, t.ID, "waiting for merge approval", func(x *domain.Task) error {
-		x.Status = domain.TaskAwaitingApproval
-		return nil
-	}); err != nil {
-		return err
-	}
 	e.notify(ctx, notify.PriorityHigh, "Approval needed: "+t.Title, reason, "/approvals")
 	return nil
 }
 
-// mergeTask merges the task's PR, moves the task to merged, emits pr.merged and kicks the
-// deploy watch. Used by the shepherd (auto-merge) and by approval decisions.
-func (e *Engine) mergeTask(ctx context.Context, t domain.Task) error {
+// backToReview undoes requestMergeApproval's move to awaiting_approval after the approval could
+// not be created. It returns cause, with any failure of the undo logged.
+func (e *Engine) backToReview(ctx context.Context, taskID string, cause error) error {
+	if _, _, err := e.setTaskFrom(ctx, taskID, []domain.TaskStatus{domain.TaskAwaitingApproval},
+		"could not request approval; back to review", func(x *domain.Task) error {
+			x.Status = domain.TaskReview
+			return nil
+		}); err != nil {
+		e.d.Logger.Error("move task back to review", "task", taskID, "err", err)
+	}
+	return cause
+}
+
+// mergeTask merges a task's PR at headSHA, moves the task to merged, emits pr.merged and kicks
+// the deploy watch. The shepherd (auto-merge) and approval decisions both call it. The task must
+// be in review or awaiting_approval; otherwise it returns a notMergeableError and merges nothing.
+func (e *Engine) mergeTask(ctx context.Context, taskID, headSHA string) error {
+	t, err := e.d.Store.GetTask(ctx, taskID)
+	if err != nil {
+		return fmt.Errorf("get task %s: %w", taskID, err)
+	}
+	if t.Status != domain.TaskReview && t.Status != domain.TaskAwaitingApproval {
+		return &notMergeableError{status: t.Status}
+	}
 	p, err := e.project(t.Project)
 	if err != nil {
 		return err
@@ -230,33 +342,38 @@ func (e *Engine) mergeTask(ctx context.Context, t domain.Task) error {
 	if err != nil {
 		return fmt.Errorf("scm: %w", err)
 	}
-	if err := s.MergePR(ctx, t.PRNumber); err != nil {
+	if err := s.MergePR(ctx, t.PRNumber, headSHA); err != nil {
 		return fmt.Errorf("merge PR #%d: %w", t.PRNumber, err)
 	}
 	pr, err := s.GetPR(ctx, t.PRNumber)
 	if err != nil {
-		return fmt.Errorf("PR #%d merged but could not be read back: %w", t.PRNumber, err)
+		// The merge happened. Leave the task alone; the next shepherd pass sees the PR merged.
+		e.d.Logger.Error("PR merged but could not be read back", "task", taskID, "pr", t.PRNumber, "err", err)
+		return nil
 	}
-	if err := e.markMerged(ctx, p, t, pr.MergeSHA, fmt.Sprintf("merged PR #%d", t.PRNumber)); err != nil {
+	applied, err := e.markMerged(ctx, p, t, pr.MergeSHA, fmt.Sprintf("merged PR #%d", t.PRNumber))
+	if err != nil || !applied {
 		return err
 	}
 	e.notify(ctx, notify.PriorityLow, "Merged: "+t.Title, pr.URL, "/tasks/"+t.ID)
 	return nil
 }
 
-// markMerged records that a task's PR has merged, emits pr.merged and kicks the deploy watch.
-func (e *Engine) markMerged(ctx context.Context, p *config.Project, t domain.Task, mergeSHA, message string) error {
-	if _, err := e.setTask(ctx, t.ID, message, func(x *domain.Task) error {
+// markMerged moves a task whose PR has merged to merged, emits pr.merged and kicks the deploy
+// watch. applied is false when the task had already moved on (for example, cancelled).
+func (e *Engine) markMerged(ctx context.Context, p *config.Project, t domain.Task, mergeSHA, message string) (bool, error) {
+	_, applied, err := e.setTaskFrom(ctx, t.ID, shepherdStatuses, message, func(x *domain.Task) error {
 		x.Status = domain.TaskMerged
 		x.MergeSHA = mergeSHA
 		return nil
-	}); err != nil {
-		return err
+	})
+	if err != nil || !applied {
+		return false, err
 	}
 	e.d.Bus.Emit(ctx, domain.EvPRMerged, p.Name, t.ID, "",
 		fmt.Sprintf("PR #%d merged: %s", t.PRNumber, t.Title), map[string]string{"merge_sha": mergeSHA})
 	e.kickLoop(loopDeployWatch, p.Name)
-	return nil
+	return true, nil
 }
 
 // decidePendingApprovals resolves every pending approval of a task with status and note. A

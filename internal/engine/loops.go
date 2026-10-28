@@ -46,41 +46,29 @@ func (e *Engine) loopFuncs() map[string]loopFn {
 	}
 }
 
-// loopKicks holds each engine's kick channels. The Engine struct has no field for them, so they
-// live here, keyed by engine.
-var loopKicks = struct {
-	sync.Mutex
-	byEngine map[*Engine]map[string]chan string
-}{byEngine: map[*Engine]map[string]chan string{}}
-
 // loopKickChan returns the channel that carries project names to loop name, creating it on
-// first use so a kick before startLoops is kept.
+// first use under e.kickMu. It is used by startLoops and by kickLoop, so a kick before startLoops
+// is kept.
 func (e *Engine) loopKickChan(name string) chan string {
-	loopKicks.Lock()
-	defer loopKicks.Unlock()
-	chans := loopKicks.byEngine[e]
-	if chans == nil {
-		chans = map[string]chan string{}
-		loopKicks.byEngine[e] = chans
-	}
-	ch := chans[name]
+	e.kickMu.Lock()
+	defer e.kickMu.Unlock()
+	ch := e.kicks[name]
 	if ch == nil {
 		ch = make(chan string, loopKickBuffer)
-		chans[name] = ch
+		e.kicks[name] = ch
 	}
 	return ch
 }
 
 // startLoops starts one goroutine per loop, tracked by e.wg. Each goroutine returns when ctx ends.
+// It starts nothing once shutdown has begun.
 func (e *Engine) startLoops(ctx context.Context) {
 	for _, name := range loopNames {
 		name := name
 		kicks := e.loopKickChan(name)
-		e.wg.Add(1)
-		go func() {
-			defer e.wg.Done()
-			e.loopForever(ctx, name, kicks)
-		}()
+		if !e.goTracked(func() { e.loopForever(ctx, name, kicks) }) {
+			return
+		}
 	}
 }
 
@@ -134,8 +122,11 @@ func (e *Engine) loopTick(ctx context.Context, name string, kicked map[string]bo
 	}
 }
 
-// kickLoop asks a loop to run soon for one project. Never blocks.
+// kickLoop asks a loop to run soon for one project. Never blocks; an unknown loop name is ignored.
 func (e *Engine) kickLoop(name, project string) {
+	if !isLoopName(name) {
+		return
+	}
 	select {
 	case e.loopKickChan(name) <- project:
 	default:

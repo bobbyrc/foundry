@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { Task, TaskKind } from '../types';
-import { useTasks } from '../queries';
+import { usePausedProjects, useTasks } from '../queries';
 import { useParamState } from '../useParamState';
 import { Button } from '../components/Button';
 import { ErrorLine } from '../components/ErrorLine';
@@ -20,43 +20,57 @@ const ACTIVE = ['queued', 'running', 'review', 'awaiting_approval', 'merged', 'd
 const STATUSES = [...ACTIVE, 'done', 'failed', 'cancelled'];
 const KINDS: TaskKind[] = ['feature', 'bugfix', 'issue', 'incident', 'review', 'chore', 'improve', 'question'];
 
-const columns: Column<Task>[] = [
-  { key: 'status', header: 'Status', cell: (t) => <StatusPill status={t.status} /> },
-  {
-    key: 'title',
-    header: 'Title',
-    cell: (t) => (
-      <>
-        <Link to={`/tasks/${t.id}`}>{t.title}</Link>
-        <div className="muted small">
-          <span className="tag">{t.kind}</span> {t.source}
-          {t.source_ref ? ` · ${t.source_ref}` : ''}
-        </div>
-      </>
-    ),
-  },
-  { key: 'project', header: 'Project', cell: (t) => t.project },
-  { key: 'role', header: 'Role', cell: (t) => t.role || '—' },
-  { key: 'risk', header: 'Risk', cell: (t) => <RiskBadge risk={t.risk} /> },
-  {
-    key: 'pr',
-    header: 'PR',
-    cell: (t) =>
-      t.pr_number ? (
-        safeHref(t.pr_url) ? (
-          <a href={safeHref(t.pr_url)} target="_blank" rel="noopener noreferrer">
-            #{t.pr_number}
-          </a>
+/** Queued work in a paused project is not started, so the table says why next to the status. */
+function makeColumns(paused: string[]): Column<Task>[] {
+  return [
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (t) =>
+        t.status === 'queued' && paused.includes(t.project) ? (
+          <>
+            <StatusPill status={t.status} /> <span className="muted small">project paused</span>
+          </>
         ) : (
-          `#${t.pr_number}`
-        )
-      ) : (
-        '—'
+          <StatusPill status={t.status} />
+        ),
+    },
+    {
+      key: 'title',
+      header: 'Title',
+      cell: (t) => (
+        <>
+          <Link to={`/tasks/${t.id}`}>{t.title}</Link>
+          <div className="muted small">
+            <span className="tag">{t.kind}</span> {t.source}
+            {t.source_ref ? ` · ${t.source_ref}` : ''}
+          </div>
+        </>
       ),
-  },
-  { key: 'attempts', header: 'Attempts', cell: (t) => `${t.attempts}/${t.max_attempts}` },
-  { key: 'updated', header: 'Updated', cell: (t) => <RelTime value={t.updated_at} /> },
-];
+    },
+    { key: 'project', header: 'Project', cell: (t) => t.project },
+    { key: 'role', header: 'Role', cell: (t) => t.role || '—' },
+    { key: 'risk', header: 'Risk', cell: (t) => <RiskBadge risk={t.risk} /> },
+    {
+      key: 'pr',
+      header: 'PR',
+      cell: (t) =>
+        t.pr_number ? (
+          safeHref(t.pr_url) ? (
+            <a href={safeHref(t.pr_url)} target="_blank" rel="noopener noreferrer">
+              #{t.pr_number}
+            </a>
+          ) : (
+            `#${t.pr_number}`
+          )
+        ) : (
+          '—'
+        ),
+    },
+    { key: 'attempts', header: 'Attempts', cell: (t) => `${t.attempts}/${t.max_attempts}` },
+    { key: 'updated', header: 'Updated', cell: (t) => <RelTime value={t.updated_at} /> },
+  ];
+}
 
 export function Tasks() {
   const [params, setParams] = useSearchParams();
@@ -80,6 +94,10 @@ export function Tasks() {
   const toggleStatus = (status: string) =>
     setSelected(selected.includes(status) ? selected.filter((s) => s !== status) : [...selected, status]);
   const isActiveSet = selected.length === ACTIVE.length && ACTIVE.every((s) => selected.includes(s));
+
+  // Exactly the active set means the "active" preset is on; only that chip is then highlighted.
+  const paused = usePausedProjects();
+  const columns = useMemo(() => makeColumns(paused), [paused]);
 
   const tasks = useTasks({
     project,
@@ -117,9 +135,11 @@ export function Tasks() {
           active
         </button>
         {STATUSES.map((status) => {
-          const on = selected.includes(status);
+          // While the active preset is on, a member chip is not highlighted; clicking it selects only that status.
+          const on = !isActiveSet && selected.includes(status);
+          const onClick = () => (isActiveSet ? setSelected([status]) : toggleStatus(status));
           return (
-            <button key={status} type="button" className={cx('chip', on && 'chip-on')} aria-pressed={on} onClick={() => toggleStatus(status)}>
+            <button key={status} type="button" className={cx('chip', on && 'chip-on')} aria-pressed={on} onClick={onClick}>
               {status.replace(/_/g, ' ')}
             </button>
           );

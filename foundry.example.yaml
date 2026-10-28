@@ -137,6 +137,7 @@ projects:
         rollback: "vercel rollback $FOUNDRY_ROLLBACK_ID --yes"
       health_url: https://myapp.example.com/healthz   # must answer 2xx during verify_for; empty skips it
       verify_for: 10m                  # watch a release this long before calling it healthy (default 10m)
+      timeout: 30m                     # fail a release still building after this long (default 30m)
       auto_rollback: true              # roll back on a failed verify window (default true)
     observe:
       # Observers feed production problems into prod_watch. Name defaults to type.

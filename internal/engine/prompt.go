@@ -52,8 +52,9 @@ func (e *Engine) buildInstructions(agent config.Agent, p *config.Project) (strin
 
 // buildTaskPrompt is the user turn for a run: the task's facts and body. For a review task it
 // names the pull request under review and includes the task the change was meant to
-// accomplish (the parent's body).
-func buildTaskPrompt(t domain.Task, p *config.Project, parent *domain.Task) string {
+// accomplish (the parent's body). conflicts lists the files that conflicted when foundry merged
+// the default branch into the task's branch; the agent must resolve them.
+func buildTaskPrompt(t domain.Task, p *config.Project, parent *domain.Task, conflicts []string) string {
 	isReview := t.Kind == domain.KindReview && parent != nil
 	var b strings.Builder
 	if isReview {
@@ -86,6 +87,18 @@ func buildTaskPrompt(t domain.Task, p *config.Project, parent *domain.Task) stri
 	if isReview {
 		b.WriteString("## The task the change is meant to accomplish\n\n")
 		b.WriteString(strings.TrimSpace(parent.Body) + "\n\n")
+	}
+
+	if len(conflicts) > 0 {
+		base := "the default branch"
+		if p != nil {
+			base = "origin/" + p.DefaultBranch
+		}
+		fmt.Fprintf(&b, "## Merge conflicts to resolve\n\nFoundry merged %s into this branch and git reported conflicts in:\n", base)
+		for _, f := range conflicts {
+			fmt.Fprintf(&b, "- %s\n", f)
+		}
+		b.WriteString("\nResolve every conflict marker in these files. Do not commit; foundry commits when you finish.\n\n")
 	}
 
 	b.WriteString("## Details\n\n")

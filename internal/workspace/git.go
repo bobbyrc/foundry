@@ -45,3 +45,24 @@ func gitExitCode(ctx context.Context, dir string, args ...string) (int, error) {
 	return 0, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err,
 		strings.TrimSpace(stderr.String()))
 }
+
+// gitOutputAllowExit runs git in dir and returns its trimmed stdout even when git exits non-zero.
+// It is used for commands that print their findings and signal them with the exit status, such
+// as `git diff --check`. Only a failure to run git at all is an error.
+func gitOutputAllowExit(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err,
+				strings.TrimSpace(stderr.String()))
+		}
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}

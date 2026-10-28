@@ -101,14 +101,14 @@ func TestFindPRByHeadAmongOpenPRs(t *testing.T) {
 	require.NoError(t, err)
 	second, err := f.OpenPR(ctx, scm.PRSpec{Head: "h"})
 	require.NoError(t, err)
-	require.NoError(t, f.MergePR(ctx, first.Number))
+	require.NoError(t, f.MergePR(ctx, first.Number, ""))
 
 	pr, ok, err := f.FindPR(ctx, "h")
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, second.Number, pr.Number, "merged PRs are not open")
 
-	require.NoError(t, f.MergePR(ctx, second.Number))
+	require.NoError(t, f.MergePR(ctx, second.Number, ""))
 	_, ok, err = f.FindPR(ctx, "h")
 	require.NoError(t, err)
 	assert.False(t, ok)
@@ -119,7 +119,7 @@ func TestMergePR(t *testing.T) {
 	pr, err := f.OpenPR(ctx, scm.PRSpec{Head: "h"})
 	require.NoError(t, err)
 
-	require.NoError(t, f.MergePR(ctx, pr.Number))
+	require.NoError(t, f.MergePR(ctx, pr.Number, ""))
 	got, err := f.GetPR(ctx, pr.Number)
 	require.NoError(t, err)
 	assert.Equal(t, "merged", got.State)
@@ -127,10 +127,32 @@ func TestMergePR(t *testing.T) {
 	assert.Equal(t, []int{pr.Number}, f.Merged)
 
 	// Merging again is refused and is not recorded twice.
-	assert.Error(t, f.MergePR(ctx, pr.Number))
+	assert.Error(t, f.MergePR(ctx, pr.Number, ""))
 	assert.Equal(t, []int{pr.Number}, f.Merged)
 
-	assert.True(t, errors.Is(f.MergePR(ctx, 77), ErrNotFound))
+	assert.True(t, errors.Is(f.MergePR(ctx, 77, ""), ErrNotFound))
+}
+
+func TestMergePRRefusesChangedHead(t *testing.T) {
+	f := New()
+	head := "aaa"
+	f.HeadSHA = func(string) string { return head }
+	pr, err := f.OpenPR(ctx, scm.PRSpec{Head: "h"})
+	require.NoError(t, err)
+
+	head = "bbb" // a new push after CI and review approved "aaa"
+	err = f.MergePR(ctx, pr.Number, "aaa")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "head changed")
+	got, err := f.GetPR(ctx, pr.Number)
+	require.NoError(t, err)
+	assert.Equal(t, "open", got.State)
+	assert.Empty(t, f.Merged)
+
+	require.NoError(t, f.MergePR(ctx, pr.Number, "bbb"))
+	got, err = f.GetPR(ctx, pr.Number)
+	require.NoError(t, err)
+	assert.Equal(t, "merged", got.State)
 }
 
 func TestMergePRUsesHeadSHAAndMergeErr(t *testing.T) {
@@ -138,7 +160,7 @@ func TestMergePRUsesHeadSHAAndMergeErr(t *testing.T) {
 	f.HeadSHA = func(string) string { return "cafe" }
 	pr, err := f.OpenPR(ctx, scm.PRSpec{Head: "h"})
 	require.NoError(t, err)
-	require.NoError(t, f.MergePR(ctx, pr.Number))
+	require.NoError(t, f.MergePR(ctx, pr.Number, ""))
 	got, err := f.GetPR(ctx, pr.Number)
 	require.NoError(t, err)
 	assert.Equal(t, "cafe", got.MergeSHA)
@@ -147,7 +169,7 @@ func TestMergePRUsesHeadSHAAndMergeErr(t *testing.T) {
 	f2.MergeErr = errors.New("branch protection")
 	pr2, err := f2.OpenPR(ctx, scm.PRSpec{Head: "h"})
 	require.NoError(t, err)
-	err = f2.MergePR(ctx, pr2.Number)
+	err = f2.MergePR(ctx, pr2.Number, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "branch protection")
 	assert.Empty(t, f2.Merged)

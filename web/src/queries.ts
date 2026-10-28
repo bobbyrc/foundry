@@ -1,4 +1,5 @@
 // React Query hooks for every route. Lists refetch every 30 seconds as a fallback to events.
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as api from './api';
 import { ApiError } from './api';
@@ -51,6 +52,12 @@ export function useProjects() {
     queryFn: () => api.listProjects(),
     refetchInterval: LIST_REFRESH_MS,
   });
+}
+
+/** Names of the projects paused in foundry.yaml. Their queued tasks do not start. */
+export function usePausedProjects(): string[] {
+  const projects = useProjects();
+  return useMemo(() => (projects.data ?? []).filter((p) => p.paused).map((p) => p.name), [projects.data]);
 }
 
 export function useTasks(filters: TaskFilters) {

@@ -144,9 +144,10 @@ func (f *Fake) FindPR(_ context.Context, head string) (scm.PR, bool, error) {
 	return clonePR(*found), true, nil
 }
 
-// MergePR merges an open PR. It returns MergeErr when set. The merge commit is the PR's head
+// MergePR merges an open PR. It returns MergeErr when set, and refuses when headSHA is non-empty
+// and is not the PR's current head. The merge commit is the PR's head
 // SHA, or "fake-merge-<n>" when there is none.
-func (f *Fake) MergePR(_ context.Context, number int) error {
+func (f *Fake) MergePR(_ context.Context, number int, headSHA string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.MergeErr != nil {
@@ -160,6 +161,9 @@ func (f *Fake) MergePR(_ context.Context, number int) error {
 		return fmt.Errorf("fake: merge PR #%d: state is %s, not open", number, pr.State)
 	}
 	f.refreshHeadLocked(pr)
+	if headSHA != "" && headSHA != pr.HeadSHA {
+		return fmt.Errorf("fake: merge PR #%d: head changed from %s to %s", number, headSHA, pr.HeadSHA)
+	}
 	pr.State = "merged"
 	pr.MergeSHA = pr.HeadSHA
 	if pr.MergeSHA == "" {

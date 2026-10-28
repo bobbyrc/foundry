@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useStats } from '../queries';
 import { LiveIndicator } from './LiveIndicator';
@@ -30,9 +30,33 @@ function Wordmark() {
 /** Sidebar on wide screens; a top bar with a slide-down drawer under 760px. */
 export function Shell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const stats = useStats();
   const pending = stats.data?.approvals_pending ?? 0;
   const close = () => setMenuOpen(false);
+
+  // While the drawer is open, Escape and a tap outside it close it. Taps on the menu button are
+  // left to its own onClick, which toggles.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (sidebarRef.current?.contains(target) || menuButtonRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
   const badge = pending > 0 ? <span className="count-badge">{pending}</span> : null;
 
   return (
@@ -42,6 +66,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <span className="topbar-right">
           {pending > 0 ? <NavLink to="/approvals" className="topbar-approvals" onClick={close}>{badge}</NavLink> : null}
           <button
+            ref={menuButtonRef}
             type="button"
             className="btn btn-secondary menu-button"
             aria-expanded={menuOpen}
@@ -52,7 +77,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </span>
       </header>
-      <aside id="sidebar" className={`sidebar${menuOpen ? ' open' : ''}`}>
+      <aside ref={sidebarRef} id="sidebar" className={`sidebar${menuOpen ? ' open' : ''}`}>
         <div className="sidebar-brand">
           <Wordmark />
         </div>

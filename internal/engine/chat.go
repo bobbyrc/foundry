@@ -73,8 +73,12 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 	ar := e.registerRun(run.ID, "", conv.Project, cancel)
 	defer e.unregisterRun(run.ID)
 
-	env := make(map[string]string, len(e.d.AgentEnv)+3)
+	// The orchestrator alone gets the foundry API token: it runs the foundry CLI.
+	env := make(map[string]string, len(e.d.AgentEnv)+len(e.d.OrchestratorEnv)+3)
 	for k, v := range e.d.AgentEnv {
+		env[k] = v
+	}
+	for k, v := range e.d.OrchestratorEnv {
 		env[k] = v
 	}
 	env["FOUNDRY_CONVERSATION_ID"] = conv.ID

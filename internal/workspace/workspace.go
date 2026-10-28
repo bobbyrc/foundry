@@ -119,6 +119,9 @@ func (m *Manager) Prepare(ctx context.Context, r Repo, branch, runID string) (Wo
 	}
 	dir := filepath.Join(m.Root, r.Name, runID)
 	baseRef := "origin/" + r.DefaultBranch
+	if err := releaseBranch(ctx, r.Path, branch); err != nil {
+		return Workspace{}, err
+	}
 
 	var start string
 	if _, err := git(ctx, r.Path, "rev-parse", "--verify", "--quiet",
@@ -154,6 +157,65 @@ func (m *Manager) Prepare(ctx context.Context, r Repo, branch, runID string) (Wo
 	}
 	ws.StartSHA = sha
 	return ws, nil
+}
+
+// worktreeEntry is one record of `git worktree list --porcelain`.
+type worktreeEntry struct {
+	path   string
+	branch string // short name, empty when detached or bare
+}
+
+// listWorktrees returns every worktree of the clone, the clone's own checkout first.
+func listWorktrees(ctx context.Context, clone string) ([]worktreeEntry, error) {
+	out, err := git(ctx, clone, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	var entries []worktreeEntry
+	var cur worktreeEntry
+	flush := func() {
+		if cur.path != "" {
+			entries = append(entries, cur)
+		}
+		cur = worktreeEntry{}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case strings.TrimSpace(line) == "":
+			flush()
+		case strings.HasPrefix(line, "worktree "):
+			flush()
+			cur.path = strings.TrimPrefix(line, "worktree ")
+		case strings.HasPrefix(line, "branch refs/heads/"):
+			cur.branch = strings.TrimPrefix(line, "branch refs/heads/")
+		}
+	}
+	flush()
+	return entries, nil
+}
+
+// releaseBranch removes worktrees that still hold branch. Git refuses to check a branch out in a
+// second worktree, and a failed run keeps its worktree, so a retry would otherwise fail at setup.
+// The clone's own checkout (the first entry) is never removed. The caller holds the clone lock.
+func releaseBranch(ctx context.Context, clone, branch string) error {
+	entries, err := listWorktrees(ctx, clone)
+	if err != nil {
+		return fmt.Errorf("list worktrees of %s: %w", clone, err)
+	}
+	for i, e := range entries {
+		if i == 0 || e.branch != branch {
+			continue
+		}
+		if _, err := os.Stat(e.path); err == nil {
+			if _, err := git(ctx, clone, "worktree", "remove", "--force", e.path); err != nil {
+				return fmt.Errorf("remove stale worktree %s of %s: %w", e.path, branch, err)
+			}
+		}
+	}
+	if _, err := git(ctx, clone, "worktree", "prune"); err != nil {
+		return fmt.Errorf("prune worktrees of %s: %w", clone, err)
+	}
+	return nil
 }
 
 // excludeOutbox adds outboxExclude to the repository's shared info/exclude once. The file lives
@@ -197,19 +259,45 @@ func excludeOutbox(ctx context.Context, clonePath string) error {
 	return nil
 }
 
+// ErrUnresolvedConflicts is returned by Commit when files still contain merge conflict markers.
+var ErrUnresolvedConflicts = errors.New("unresolved merge conflicts")
+
 // Commit stages everything in the worktree and commits it. It returns false, with no commit,
-// when nothing changed. The commit uses Foundry's identity only when git has no user.email
+// when nothing changed. A merge in progress is always concluded by the commit, even when the
+// result matches HEAD. Files that still contain conflict markers block the commit with
+// ErrUnresolvedConflicts. The commit uses Foundry's identity only when git has no user.email
 // configured.
 func (m *Manager) Commit(ctx context.Context, ws Workspace, message string) (bool, error) {
 	if _, err := git(ctx, ws.Dir, "add", "-A"); err != nil {
 		return false, err
 	}
-	code, err := gitExitCode(ctx, ws.Dir, "diff", "--cached", "--quiet")
+	check, err := gitOutputAllowExit(ctx, ws.Dir, "diff", "--cached", "--check")
 	if err != nil {
 		return false, err
 	}
-	if code == 0 {
-		return false, nil
+	var markers []string
+	for _, line := range strings.Split(check, "\n") {
+		// Lines look like "pkg/a.txt:3: leftover conflict marker."; whitespace findings are ignored.
+		if at, _, ok := strings.Cut(line, ": leftover conflict marker"); ok {
+			markers = append(markers, at)
+		}
+	}
+	if len(markers) > 0 {
+		return false, fmt.Errorf("%w: %s", ErrUnresolvedConflicts, strings.Join(markers, ", "))
+	}
+
+	mergeCode, err := gitExitCode(ctx, ws.Dir, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+	if err != nil {
+		return false, err
+	}
+	if mergeCode != 0 { // no merge in progress: nothing to commit means no commit
+		code, err := gitExitCode(ctx, ws.Dir, "diff", "--cached", "--quiet")
+		if err != nil {
+			return false, err
+		}
+		if code == 0 {
+			return false, nil
+		}
 	}
 
 	var args []string
@@ -221,6 +309,30 @@ func (m *Manager) Commit(ctx context.Context, ws Workspace, message string) (boo
 		return false, err
 	}
 	return true, nil
+}
+
+// MergeBase merges the default branch (ws.BaseRef) into the worktree's branch, after fetching
+// origin. On success it returns nil, nil. When the merge conflicts, it returns the conflicted
+// paths and leaves the merge in progress, for the agent to resolve. Any other failure aborts the
+// merge and returns the error.
+func (m *Manager) MergeBase(ctx context.Context, r Repo, ws Workspace) ([]string, error) {
+	unlock := m.lockClone(r.Path)
+	defer unlock()
+	if _, err := git(ctx, r.Path, "fetch", "origin", "--prune"); err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", r.Name, err)
+	}
+	_, mergeErr := git(ctx, ws.Dir, "-c", "user.name=Foundry", "-c", "user.email=foundry@localhost",
+		"merge", "--no-edit", ws.BaseRef)
+	if mergeErr == nil {
+		return nil, nil
+	}
+	unmerged, err := git(ctx, ws.Dir, "diff", "--name-only", "--diff-filter=U")
+	if err == nil && unmerged != "" {
+		return strings.Split(unmerged, "\n"), nil
+	}
+	// Abort fails when no merge is in progress; that is fine.
+	_, _ = git(ctx, ws.Dir, "merge", "--abort")
+	return nil, fmt.Errorf("merge %s into %s: %w", ws.BaseRef, ws.Branch, mergeErr)
 }
 
 // HeadSHA returns the commit checked out in the worktree.

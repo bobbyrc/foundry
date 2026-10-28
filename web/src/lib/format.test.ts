@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { formatCost, formatTokens, safeHref, shortId, shortSha } from './format';
 
 describe('ids and shas', () => {
-  it('shortens ids to 8 characters and shas to 7', () => {
-    expect(shortId('0123456789abcdef')).toBe('01234567');
+  it('shows the last 8 characters of an id and the first 7 of a sha', () => {
+    expect(shortId('0123456789abcdef')).toBe('89abcdef');
+    expect(shortId('01a18092-1111-7aaa-8bbb-ccccdddd0001')).toBe('dddd0001');
     expect(shortSha('0123456789abcdef')).toBe('0123456');
   });
 });

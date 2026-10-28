@@ -3,8 +3,10 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
 }
 
-export const shortId = (id: string): string => id.slice(0, 8);
+/** The last 8 characters of an ID. UUIDv7 starts with a timestamp, so its head repeats across tasks. */
+export const shortId = (id: string): string => id.slice(-8);
 
+/** The first 7 characters of a git SHA, which is what git log and GitHub show. */
 export const shortSha = (sha: string): string => sha.slice(0, 7);
 
 /** "$0.42"; amounts under a cent show as "<$0.01". */

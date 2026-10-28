@@ -112,6 +112,8 @@ type Deploy struct {
 	HealthURL string `yaml:"health_url" json:"health_url,omitempty"`
 	// VerifyFor is how long a release is watched before it is called healthy. Default 10m.
 	VerifyFor Duration `yaml:"verify_for" json:"verify_for"`
+	// Timeout fails a release still building after this long. Default 30m.
+	Timeout Duration `yaml:"timeout" json:"timeout"`
 	// AutoRollback rolls back on a failed verify window. Default true.
 	AutoRollback *bool `yaml:"auto_rollback" json:"auto_rollback,omitempty"`
 }

@@ -319,6 +319,12 @@ pre,
   margin-bottom: 12px;
 }
 
+/* Project, Kind and the title search share one control height so their labels line up. */
+.filter-bar select,
+.filter-bar input {
+  height: 34px;
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -413,6 +419,11 @@ pre,
 .callout-info {
   border-color: var(--info);
   background: color-mix(in srgb, var(--info) 10%, var(--panel));
+}
+
+.callout-muted {
+  border-color: var(--border);
+  color: var(--muted);
 }
 
 .error-line {
@@ -1156,7 +1167,10 @@ input[type='checkbox'] {
     text-decoration: none;
   }
 
+  /* Closed, the drawer is not rendered at all: its links are out of the tab order and cannot
+     take taps. Open, it is a solid panel over the page. */
   .sidebar {
+    display: none;
     position: fixed;
     top: 53px;
     left: 0;
@@ -1164,19 +1178,27 @@ input[type='checkbox'] {
     bottom: 0;
     height: auto;
     width: auto;
+    background: var(--panel);
     border-right: 0;
+    border-bottom: 1px solid var(--border);
     overflow-y: auto;
     z-index: 4;
-    opacity: 0;
-    transform: translateY(-8px);
-    pointer-events: none;
-    transition: opacity 0.15s ease, transform 0.15s ease;
   }
 
   .sidebar.open {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
+    display: flex;
+    animation: drawer-in 0.15s ease;
+  }
+
+  @keyframes drawer-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   .sidebar-brand {

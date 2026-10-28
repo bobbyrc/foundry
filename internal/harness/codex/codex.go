@@ -10,9 +10,10 @@ import (
 
 const harnessType = "codex"
 
-// defaultSandboxArgs are used when no sandbox or approval flag was given: workspace writes are
-// allowed, and approval requests are routed to automatic review.
-var defaultSandboxArgs = []string{"--sandbox", "workspace-write", "--approve-for-me"}
+// defaultSandboxArgs are used when no sandbox or approval flag was given. --approve-for-me alone
+// implies the workspace-write sandbox and routes approval requests to automatic review. Codex
+// 0.165 rejects it combined with --sandbox, so --sandbox must not be added here.
+var defaultSandboxArgs = []string{"--approve-for-me"}
 
 // instructionSeparator joins Spec.Instructions and Spec.Prompt on stdin, because codex has no
 // flag for a system prompt.
@@ -97,7 +98,8 @@ func hasSandboxFlag(lists ...[]string) bool {
 	for _, list := range lists {
 		for _, a := range list {
 			switch a {
-			case "--sandbox", "-s", "--dangerously-bypass-approvals-and-sandbox", "--full-auto":
+			case "--sandbox", "-s", "--approve-for-me", "--full-auto",
+				"--dangerously-bypass-approvals-and-sandbox":
 				return true
 			}
 		}

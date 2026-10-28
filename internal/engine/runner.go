@@ -20,27 +20,30 @@ import (
 // synchronously, so the scheduler's count is right on its next pass. Only then does the run's
 // goroutine start.
 func (e *Engine) startTask(ctx context.Context, t domain.Task) {
+	// The task is claimed, so every failure write below must land even if ctx is cancelled
+	// (shutdown): bg does not cancel with ctx.
+	bg := context.WithoutCancel(ctx)
 	cfg := e.Config()
 	p, ok := cfg.Projects[t.Project]
 	if !ok {
-		e.blockTask(ctx, t.ID, fmt.Sprintf("unknown project %q", t.Project))
+		e.blockTask(bg, t.ID, fmt.Sprintf("unknown project %q", t.Project))
 		return
 	}
 	h, agent, err := e.harnessFor(t.Role)
 	if err != nil {
-		e.blockTask(ctx, t.ID, "could not resolve agent "+t.Role+": "+err.Error())
+		e.blockTask(bg, t.ID, "could not resolve agent "+t.Role+": "+err.Error())
 		return
 	}
 
 	var parent *domain.Task
 	if t.Kind == domain.KindReview {
 		if t.ParentID == "" {
-			e.blockTask(ctx, t.ID, "review task has no parent task")
+			e.blockTask(bg, t.ID, "review task has no parent task")
 			return
 		}
-		pt, err := e.d.Store.GetTask(ctx, t.ParentID)
+		pt, err := e.d.Store.GetTask(bg, t.ParentID)
 		if err != nil {
-			e.blockTask(ctx, t.ID, "could not load the reviewed task: "+err.Error())
+			e.blockTask(bg, t.ID, "could not load the reviewed task: "+err.Error())
 			return
 		}
 		parent = &pt
@@ -58,7 +61,7 @@ func (e *Engine) startTask(ctx context.Context, t domain.Task) {
 
 	runCtx, cancel := context.WithTimeout(ctx, cfg.Limits.RunTimeout.Duration)
 	now := e.d.Now().UTC()
-	run, err := e.d.Store.CreateRun(ctx, domain.Run{
+	run, err := e.d.Store.CreateRun(bg, domain.Run{
 		TaskID:       t.ID,
 		Project:      t.Project,
 		Role:         t.Role,
@@ -71,20 +74,50 @@ func (e *Engine) startTask(ctx context.Context, t domain.Task) {
 	})
 	if err != nil {
 		cancel()
-		e.blockTask(ctx, t.ID, "could not create run: "+err.Error())
+		e.blockTask(bg, t.ID, "could not create run: "+err.Error())
 		return
 	}
 	ar := e.registerRun(run.ID, t.ID, t.Project, cancel)
-	e.d.Bus.Emit(ctx, domain.EvRunUpdated, run.Project, run.TaskID, run.ID,
+	e.d.Bus.Emit(bg, domain.EvRunUpdated, run.Project, run.TaskID, run.ID,
 		"run started: "+t.Role+" on "+t.Title, run)
 
-	e.wg.Add(1)
-	go func() {
-		defer e.wg.Done()
+	started := e.goTracked(func() {
 		defer e.unregisterRun(run.ID)
 		defer cancel()
 		e.runTask(runCtx, t, run, ar, p, h, agent, parent)
-	}()
+	})
+	if !started {
+		// Shutting down: the run never starts. The task stays running; recover re-queues it.
+		cancel()
+		e.finishRun(bg, run.ID, domain.RunCancelled, errStopped.Error())
+		e.unregisterRun(run.ID)
+	}
+}
+
+// fromRunning guards the status writes a run makes about its own task: they land only while the
+// task is still running, so a cancel or block made during the run is never overwritten.
+var fromRunning = []domain.TaskStatus{domain.TaskRunning}
+
+// finishRunning is setTaskFrom for a run's own outcome. It reports whether the write was made;
+// false means the task moved on (or the write failed, which is logged).
+func (e *Engine) finishRunning(ctx context.Context, id, message string, fn func(*domain.Task) error) bool {
+	_, applied, err := e.setTaskFrom(ctx, id, fromRunning, message, fn)
+	if err != nil {
+		e.d.Logger.Error("update task", "task", id, "err", err)
+		return false
+	}
+	return applied
+}
+
+// stillRunning reports whether the task is still running. A task the owner cancelled or blocked
+// during the run must not be pushed or given a pull request.
+func (e *Engine) stillRunning(ctx context.Context, id string) bool {
+	t, err := e.d.Store.GetTask(ctx, id)
+	if err != nil {
+		e.d.Logger.Error("read task", "task", id, "err", err)
+		return false
+	}
+	return t.Status == domain.TaskRunning
 }
 
 // runTask runs one agent session for a task and applies its outcome. The task's state is
@@ -132,11 +165,28 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.requeueOrBlock(bg, t.ID, "workspace setup failed", err.Error())
 		return
 	}
+	// A branch with an open PR may have fallen behind the default branch. Merge the base in
+	// before the agent starts, so its conflicts are its to resolve.
+	var conflicts []string
+	if t.PRNumber != 0 {
+		conflicts, err = e.d.Workspaces.MergeBase(ctx, repo, ws)
+		if err != nil {
+			if stopped() {
+				return
+			}
+			e.finishRun(bg, run.ID, domain.RunFailed, "merge base: "+err.Error())
+			e.requeueOrBlock(bg, t.ID, "could not merge "+ws.BaseRef, err.Error())
+			return
+		}
+	}
+
 	_ = os.Remove(filepath.Join(ws.Dir, domain.OutboxDir, domain.ResultFile)) // no stale report
-	run, _ = e.updateRun(bg, run.ID, func(r *domain.Run) error {
+	if r, err := e.updateRun(bg, run.ID, func(r *domain.Run) error {
 		r.Workdir, r.Branch = ws.Dir, ws.Branch
 		return nil
-	})
+	}); err == nil {
+		run = r
+	}
 
 	instructions, err := e.buildInstructions(agent, p)
 	if err != nil {
@@ -144,7 +194,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.blockTask(bg, t.ID, "could not load role prompt: "+err.Error())
 		return
 	}
-	prompt := buildTaskPrompt(t, p, parent)
+	prompt := buildTaskPrompt(t, p, parent, conflicts)
 
 	env := map[string]string{}
 	for k, v := range e.d.AgentEnv {
@@ -177,10 +227,12 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.blockTask(bg, t.ID, "could not start harness: "+err.Error())
 		return
 	}
-	e.updateRun(bg, run.ID, func(r *domain.Run) error {
+	if r, err := e.updateRun(bg, run.ID, func(r *domain.Run) error {
 		r.Status = domain.RunRunning
 		return nil
-	})
+	}); err == nil {
+		run = r
+	}
 
 	res, status, reason := e.supervise(ctx, run, sess, ar, nil)
 	switch status {
@@ -232,7 +284,11 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		commitMsg = t.Title
 	}
 	if _, err := e.d.Workspaces.Commit(bg, ws, commitMsg); err != nil {
-		e.requeueOrBlock(bg, t.ID, "commit failed", err.Error())
+		if errors.Is(err, workspace.ErrUnresolvedConflicts) {
+			e.requeueOrBlock(bg, t.ID, "unresolved merge conflicts", err.Error())
+		} else {
+			e.requeueOrBlock(bg, t.ID, "commit failed", err.Error())
+		}
 		return
 	}
 	head, err := e.d.Workspaces.HeadSHA(bg, ws)
@@ -241,19 +297,23 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		return
 	}
 	if head == ws.StartSHA {
+		var moved bool
 		if t.PRNumber != 0 {
-			e.setTask(bg, t.ID, "no new changes; back to review", func(x *domain.Task) error {
+			moved = e.finishRunning(bg, t.ID, "no new changes; back to review", func(x *domain.Task) error {
 				x.Status = domain.TaskReview
 				return nil
 			})
 		} else {
-			e.setTask(bg, t.ID, "finished without code changes", func(x *domain.Task) error {
+			moved = e.finishRunning(bg, t.ID, "finished without code changes", func(x *domain.Task) error {
 				x.Status = domain.TaskDone
 				return nil
 			})
 		}
+		if !moved {
+			return // the task moved on during the run; nothing more to do
+		}
 	} else if !e.publish(bg, t, p, ws, result) {
-		return // publish has requeued or blocked the task; keep the worktree
+		return // publish has requeued or blocked the task, or it moved on; keep the worktree
 	}
 
 	e.queueFollowups(bg, t, result)
@@ -263,6 +323,9 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 // publish pushes the run's branch, opens the pull request if there is none, and moves the task
 // to review. It reports false when it re-queued or blocked the task instead.
 func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, ws workspace.Workspace, result domain.RunResult) bool {
+	if !e.stillRunning(ctx, t.ID) {
+		return false // the owner cancelled or blocked the task during the run: push nothing
+	}
 	if err := e.d.Workspaces.Push(ctx, e.repoFor(p), ws); err != nil {
 		e.requeueOrBlock(ctx, t.ID, "push failed", err.Error())
 		return false
@@ -289,6 +352,9 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 		if ok {
 			pr = existing
 		} else {
+			if !e.stillRunning(ctx, t.ID) {
+				return false // moved on while the branch was pushed: open no pull request
+			}
 			title := result.PRTitle
 			if title == "" {
 				title = t.Title
@@ -310,7 +376,7 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 		}
 	}
 
-	if _, err := e.setTask(ctx, t.ID, fmt.Sprintf("PR #%d ready for review", pr.Number), func(x *domain.Task) error {
+	if !e.finishRunning(ctx, t.ID, fmt.Sprintf("PR #%d ready for review", pr.Number), func(x *domain.Task) error {
 		x.Status = domain.TaskReview
 		x.Branch = ws.Branch
 		x.PRNumber = pr.Number
@@ -320,8 +386,7 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 		x.ApprovedSHA = "" // a new push invalidates any earlier review
 		x.BlockedReason = ""
 		return nil
-	}); err != nil {
-		e.d.Logger.Error("task to review", "task", t.ID, "err", err)
+	}) {
 		return false
 	}
 	e.kickLoop("pr_shepherd", p.Name)
@@ -355,24 +420,34 @@ func (e *Engine) applyReview(ctx context.Context, rt domain.Task, parent *domain
 	}
 
 	if result.Review.Approve {
-		if _, err := e.setTask(ctx, parent.ID, "approved by reviewer at "+reviewed, func(x *domain.Task) error {
-			x.ApprovedSHA = reviewed
-			if result.Risk != domain.RiskUnknown {
-				base := x.Risk
-				if base == domain.RiskUnknown {
-					base = domain.RiskMedium
+		_, applied, err := e.setTaskFrom(ctx, parent.ID, []domain.TaskStatus{domain.TaskReview},
+			"approved by reviewer at "+reviewed, func(x *domain.Task) error {
+				x.ApprovedSHA = reviewed
+				if result.Risk != domain.RiskUnknown {
+					base := x.Risk
+					if base == domain.RiskUnknown {
+						base = domain.RiskMedium
+					}
+					x.Risk = domain.MaxRisk(base, result.Risk)
+					for _, why := range result.RiskReasons {
+						x.RiskReasons = append(x.RiskReasons, "reviewer: "+why)
+					}
 				}
-				x.Risk = domain.MaxRisk(base, result.Risk)
-				for _, why := range result.RiskReasons {
-					x.RiskReasons = append(x.RiskReasons, "reviewer: "+why)
-				}
-			}
-			return nil
-		}); err != nil {
+				return nil
+			})
+		if err != nil {
 			e.d.Logger.Error("record approval", "task", parent.ID, "err", err)
 			return
 		}
-		e.setTask(ctx, rt.ID, "approved", func(x *domain.Task) error {
+		if !applied {
+			// The parent moved on during the review, so this verdict no longer applies.
+			e.finishRunning(ctx, rt.ID, "task moved on; verdict not applied", func(x *domain.Task) error {
+				x.Status = domain.TaskDone
+				return nil
+			})
+			return
+		}
+		e.finishRunning(ctx, rt.ID, "approved", func(x *domain.Task) error {
 			x.Status = domain.TaskDone
 			return nil
 		})
@@ -380,7 +455,7 @@ func (e *Engine) applyReview(ctx context.Context, rt domain.Task, parent *domain
 		return
 	}
 
-	e.setTask(ctx, rt.ID, "changes requested", func(x *domain.Task) error {
+	e.finishRunning(ctx, rt.ID, "changes requested", func(x *domain.Task) error {
 		x.Status = domain.TaskDone
 		return nil
 	})

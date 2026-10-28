@@ -27,7 +27,7 @@ func TestBuildArgsNewSession(t *testing.T) {
 	args := buildArgs(harness.Config{}, harness.Spec{Workdir: "/work/tree", Prompt: "hi"})
 	assert.Equal(t, []string{
 		"codex", "exec", "--json", "--skip-git-repo-check", "-C", "/work/tree",
-		"--sandbox", "workspace-write", "--approve-for-me", "-",
+		"--approve-for-me", "-",
 	}, args)
 }
 
@@ -38,7 +38,7 @@ func TestBuildArgsNewSessionWithOptions(t *testing.T) {
 	assert.Equal(t, []string{
 		"/opt/codex", "exec", "--json", "--skip-git-repo-check", "-C", "/w",
 		"--model", "gpt-x", "--cfg-arg", "--spec-arg",
-		"--sandbox", "workspace-write", "--approve-for-me", "-",
+		"--approve-for-me", "-",
 	}, args)
 }
 
@@ -52,14 +52,23 @@ func TestBuildArgsResumeSession(t *testing.T) {
 }
 
 func TestBuildArgsSandboxFlagSuppressesDefault(t *testing.T) {
-	for _, flag := range []string{"--sandbox", "-s", "--dangerously-bypass-approvals-and-sandbox", "--full-auto"} {
+	for _, flag := range []string{"--sandbox", "-s", "--approve-for-me", "--full-auto",
+		"--dangerously-bypass-approvals-and-sandbox"} {
 		args := buildArgs(harness.Config{Args: []string{flag}}, harness.Spec{Workdir: "/w"})
-		assert.NotContains(t, args, "--approve-for-me", "flag %s", flag)
 		assert.Equal(t, 1, countOf(args, flag), "flag %s", flag)
+		if flag != "--approve-for-me" {
+			assert.Equal(t, 0, countOf(args, "--approve-for-me"), "flag %s", flag)
+		}
 	}
 	args := buildArgs(harness.Config{}, harness.Spec{Args: []string{"--sandbox", "read-only"}})
 	assert.Equal(t, 1, countOf(args, "--sandbox"))
-	assert.NotContains(t, args, "workspace-write")
+	assert.NotContains(t, args, "--approve-for-me")
+}
+
+func TestBuildArgsNeverPairsSandboxWithApproveForMe(t *testing.T) {
+	args := buildArgs(harness.Config{}, harness.Spec{Workdir: "/w"})
+	assert.Equal(t, 0, countOf(args, "--sandbox"), "codex rejects --sandbox with --approve-for-me")
+	assert.Contains(t, args, "--approve-for-me")
 }
 
 func TestStdinTextAddsInstructions(t *testing.T) {

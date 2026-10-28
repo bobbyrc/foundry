@@ -407,3 +407,113 @@ func TestControllerDecideApprovalMergeFailureBlocksTask(t *testing.T) {
 	assert.Equal(t, domain.TaskBlocked, blocked.Status)
 	assert.Contains(t, blocked.BlockedReason, "merge failed after approval")
 }
+
+func TestControllerCancelBlockedTask(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	task := ctTask(t, e, "stuck")
+	ctSetTask(t, r, task.ID, func(x *domain.Task) { x.Status = domain.TaskBlocked })
+
+	require.NoError(t, e.CancelTask(ctx, task.ID), "a blocked task can be cancelled")
+	got, err := r.st.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskCancelled, got.Status)
+}
+
+func TestControllerCancelTaskCancelsChildren(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	parent := ctTask(t, e, "parent")
+	review, err := e.createTask(ctx, domain.Task{
+		Project: "demo", Kind: domain.KindReview, ParentID: parent.ID, Title: "review of parent",
+	})
+	require.NoError(t, err)
+	ctSetTask(t, r, review.ID, func(x *domain.Task) { x.Status = domain.TaskRunning })
+	approval, err := r.st.CreateApproval(ctx, domain.Approval{
+		TaskID: review.ID, Project: "demo", Kind: "merge", Title: "review", Status: domain.ApprovalPending,
+	})
+	require.NoError(t, err)
+
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	e.runsMu.Lock()
+	e.active["run-review"] = &activeRun{runID: "run-review", taskID: review.ID, cancel: cancelRun}
+	e.runsMu.Unlock()
+
+	require.NoError(t, e.CancelTask(ctx, parent.ID))
+
+	gotReview, err := r.st.GetTask(ctx, review.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskCancelled, gotReview.Status, "the in-flight review is cancelled")
+	assert.Error(t, runCtx.Err(), "the review's live run is stopped")
+	a, err := r.st.GetApproval(ctx, approval.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.ApprovalRejected, a.Status)
+}
+
+func TestControllerCreateTaskRejectsReviewAndZeroesRisk(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+
+	_, err := e.CreateTask(ctx, domain.Task{Project: "demo", Kind: domain.KindReview, Title: "fake review"})
+	assert.True(t, errors.Is(err, api.ErrInvalid), "review tasks are created by foundry: %v", err)
+
+	task, err := e.CreateTask(ctx, domain.Task{
+		Project: "demo", Title: "pre-rated", Risk: domain.RiskHigh, RiskReasons: []string{"client says so"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, domain.RiskUnknown, task.Risk, "an API caller cannot pre-rate risk")
+	assert.Empty(t, task.RiskReasons)
+}
+
+func TestControllerDecideApprovalNeedsAwaitingApproval(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	task := ctTask(t, e, "not yet ready")
+	ctSetTask(t, r, task.ID, func(x *domain.Task) { x.Status = domain.TaskReview })
+	approval, err := r.st.CreateApproval(ctx, domain.Approval{
+		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "merge", Status: domain.ApprovalPending,
+	})
+	require.NoError(t, err)
+
+	_, err = e.DecideApproval(ctx, approval.ID, true, "")
+	assert.True(t, errors.Is(err, api.ErrConflict), "the task is not awaiting approval: %v", err)
+
+	a, err := r.st.GetApproval(ctx, approval.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.ApprovalPending, a.Status, "the approval is left pending")
+}
+
+func TestControllerDecideApprovalStaleHeadReturnsToReview(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	task := ctTask(t, e, "pushed after approval")
+
+	r.fk.HeadSHA = func(string) string { return "sha-new" }
+	pr, err := r.fk.OpenPR(ctx, scm.PRSpec{Head: task.Branch, Base: "main", Title: "pushed after approval"})
+	require.NoError(t, err)
+	ctSetTask(t, r, task.ID, func(x *domain.Task) {
+		x.Status, x.PRNumber = domain.TaskAwaitingApproval, pr.Number
+	})
+	approval, err := r.st.CreateApproval(ctx, domain.Approval{
+		TaskID: task.ID, Project: "demo", Kind: "merge", Title: "merge", HeadSHA: "sha-old",
+		Status: domain.ApprovalPending,
+	})
+	require.NoError(t, err)
+
+	got, err := e.DecideApproval(ctx, approval.ID, true, "")
+	assert.True(t, errors.Is(err, api.ErrConflict), "a changed head is a conflict: %v", err)
+	assert.Contains(t, err.Error(), "the pull request changed after this approval was requested")
+	assert.Equal(t, domain.ApprovalRejected, got.Status)
+	assert.Contains(t, got.Note, "foundry will re-check it")
+
+	stored, err := r.st.GetTask(ctx, task.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.TaskReview, stored.Status, "the shepherd re-evaluates the new head")
+	assert.Equal(t, "open", r.fk.PRs[pr.Number].State, "the pull request is not merged")
+}

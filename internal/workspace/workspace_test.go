@@ -273,3 +273,132 @@ func TestRemove(t *testing.T) {
 	// Removing an already-gone worktree is not an error.
 	require.NoError(t, m.Remove(ctx, repo, ws))
 }
+
+func TestPrepareSameBranchTwiceWithoutRemove(t *testing.T) {
+	repo, m, _ := setup(t)
+	ctx := context.Background()
+
+	// A failed run keeps its worktree, so the retry for the same branch must still set up.
+	ws1, err := m.Prepare(ctx, repo, "foundry/retry", "run1")
+	require.NoError(t, err)
+	ws2, err := m.Prepare(ctx, repo, "foundry/retry", "run2")
+	require.NoError(t, err)
+	assert.NoDirExists(t, ws1.Dir, "the stale worktree is removed")
+	assert.Equal(t, "foundry/retry", runGit(t, ws2.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
+}
+
+// conflictingWorkspace returns a worktree on foundry/m whose README.md conflicts with origin/main.
+func conflictingWorkspace(t *testing.T) (Repo, *Manager, Workspace) {
+	t.Helper()
+	repo, m, seed := setup(t)
+	ctx := context.Background()
+	ws, err := m.Prepare(ctx, repo, "foundry/m", "run1")
+	require.NoError(t, err)
+
+	writeFile(t, filepath.Join(ws.Dir, "README.md"), "branch side\n")
+	committed, err := m.Commit(ctx, ws, "branch edit")
+	require.NoError(t, err)
+	require.True(t, committed)
+
+	writeFile(t, filepath.Join(seed, "README.md"), "main side\n")
+	runGit(t, seed, "-c", "user.name=Seed", "-c", "user.email=seed@example.com", "commit", "-am", "main edit")
+	runGit(t, seed, "push", repo.Remote, "main")
+	return repo, m, ws
+}
+
+func TestMergeBaseCleanMerge(t *testing.T) {
+	repo, m, seed := setup(t)
+	ctx := context.Background()
+	ws, err := m.Prepare(ctx, repo, "foundry/clean", "run1")
+	require.NoError(t, err)
+
+	writeFile(t, filepath.Join(seed, "NEW.md"), "new\n")
+	runGit(t, seed, "add", "-A")
+	runGit(t, seed, "-c", "user.name=Seed", "-c", "user.email=seed@example.com", "commit", "-m", "new")
+	runGit(t, seed, "push", repo.Remote, "main")
+
+	conflicts, err := m.MergeBase(ctx, repo, ws)
+	require.NoError(t, err)
+	assert.Empty(t, conflicts)
+	assert.FileExists(t, filepath.Join(ws.Dir, "NEW.md"))
+}
+
+func TestMergeBaseReportsConflictsAndLeavesMerge(t *testing.T) {
+	repo, m, ws := conflictingWorkspace(t)
+	ctx := context.Background()
+
+	conflicts, err := m.MergeBase(ctx, repo, ws)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"README.md"}, conflicts)
+	_, err = gitExitCodeForTest(ws.Dir, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+	assert.NoError(t, err, "the conflicted merge stays in progress for the agent")
+}
+
+func TestMergeBaseOtherFailureAbortsAndReturnsError(t *testing.T) {
+	repo, m, seed := setup(t)
+	ctx := context.Background()
+	ws, err := m.Prepare(ctx, repo, "foundry/dirty", "run1")
+	require.NoError(t, err)
+
+	writeFile(t, filepath.Join(seed, "pkg", "a.txt"), "upstream\n")
+	runGit(t, seed, "-c", "user.name=Seed", "-c", "user.email=seed@example.com", "commit", "-am", "upstream")
+	runGit(t, seed, "push", repo.Remote, "main")
+	// An uncommitted edit to the same file makes git refuse the merge before any conflict exists.
+	writeFile(t, filepath.Join(ws.Dir, "pkg", "a.txt"), "local edit\n")
+
+	conflicts, err := m.MergeBase(ctx, repo, ws)
+	require.Error(t, err)
+	assert.Nil(t, conflicts)
+	_, err = gitExitCodeForTest(ws.Dir, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+	assert.Error(t, err, "no merge is left in progress")
+}
+
+func TestCommitRefusesLeftoverConflictMarkers(t *testing.T) {
+	repo, m, ws := conflictingWorkspace(t)
+	ctx := context.Background()
+	_, err := m.MergeBase(ctx, repo, ws)
+	require.NoError(t, err)
+	before := runGit(t, ws.Dir, "rev-parse", "HEAD")
+
+	committed, err := m.Commit(ctx, ws, "conclude merge")
+	require.ErrorIs(t, err, ErrUnresolvedConflicts)
+	assert.False(t, committed)
+	assert.Contains(t, err.Error(), "README.md:")
+	assert.Equal(t, before, runGit(t, ws.Dir, "rev-parse", "HEAD"), "nothing was committed")
+}
+
+func TestCommitConcludesResolvedMerge(t *testing.T) {
+	repo, m, ws := conflictingWorkspace(t)
+	ctx := context.Background()
+	_, err := m.MergeBase(ctx, repo, ws)
+	require.NoError(t, err)
+
+	writeFile(t, filepath.Join(ws.Dir, "README.md"), "resolved\n")
+	committed, err := m.Commit(ctx, ws, "merge main")
+	require.NoError(t, err)
+	assert.True(t, committed)
+	_, err = gitExitCodeForTest(ws.Dir, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+	assert.Error(t, err, "the commit concludes the merge")
+	parents := strings.Fields(runGit(t, ws.Dir, "rev-list", "--parents", "-n", "1", "HEAD"))
+	assert.Len(t, parents, 3, "merge commit has two parents")
+}
+
+func TestCommitIgnoresWhitespaceProblems(t *testing.T) {
+	repo, m, _ := setup(t)
+	ctx := context.Background()
+	ws, err := m.Prepare(ctx, repo, "foundry/ws", "run1")
+	require.NoError(t, err)
+
+	writeFile(t, filepath.Join(ws.Dir, "README.md"), "hello   \n")
+	committed, err := m.Commit(ctx, ws, "trailing space")
+	require.NoError(t, err)
+	assert.True(t, committed)
+}
+
+// gitExitCodeForTest runs git in dir and returns an error when it exits non-zero.
+func gitExitCodeForTest(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}

@@ -62,8 +62,9 @@ type SCM interface {
 	GetPR(ctx context.Context, number int) (PR, error)
 	// FindPR returns the open PR for head branch, or ok=false.
 	FindPR(ctx context.Context, head string) (pr PR, ok bool, err error)
-	// MergePR squash-merges and deletes the branch.
-	MergePR(ctx context.Context, number int) error
+	// MergePR squash-merges and deletes the branch. When headSHA is non-empty the merge only
+	// happens if the PR head is still that commit (the one CI, review and policy approved).
+	MergePR(ctx context.Context, number int, headSHA string) error
 	// CILog returns a tail of the failing checks' logs, for the agent fixing them.
 	CILog(ctx context.Context, number int, maxBytes int) (string, error)
 
