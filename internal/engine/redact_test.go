@@ -31,3 +31,11 @@ func TestRedactSecretsMatchesWholeNameSegments(t *testing.T) {
 		t.Fatalf("redactSecrets = %q, want %q", got, want)
 	}
 }
+
+func TestRedactSecretsLeavesSessionIDs(t *testing.T) {
+	env := []string{"CLAUDE_CODE_SESSION_ID=6c312bb6-8f3f-4eb5", "SESSION_SECRET=s3cr3t-value-1"}
+	got := redactSecrets("dir /tmp/6c312bb6-8f3f-4eb5/x and s3cr3t-value-1", env)
+	if want := "dir /tmp/6c312bb6-8f3f-4eb5/x and ***"; got != want {
+		t.Fatalf("redactSecrets = %q, want %q", got, want)
+	}
+}

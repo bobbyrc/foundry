@@ -11,7 +11,9 @@ import (
 // secretEnvWords mark an environment variable as holding a secret when one of them is a whole
 // segment of its name, split on underscores: GH_TOKEN, SENTRY_AUTH_TOKEN and DATABASE_PASSWORD
 // match, GIT_AUTHOR_NAME does not. Matching substrings instead would also catch AUTHOR and MONKEY.
-var secretEnvWords = []string{"TOKEN", "TOKENS", "SECRET", "SECRETS", "PASSWORD", "PASSWD", "PASS", "KEY", "KEYS", "APIKEY", "CREDENTIAL", "CREDENTIALS", "AUTH", "DSN", "COOKIE", "SESSION", "PAT"}
+// SESSION is not a word: session IDs (CLAUDE_CODE_SESSION_ID) are not secrets, and redacting them
+// mangled the paths that contain them; a session secret is named SESSION_SECRET or SESSION_KEY.
+var secretEnvWords = []string{"TOKEN", "TOKENS", "SECRET", "SECRETS", "PASSWORD", "PASSWD", "PASS", "KEY", "KEYS", "APIKEY", "CREDENTIAL", "CREDENTIALS", "AUTH", "DSN", "COOKIE", "PAT"}
 
 // minSecretLen is the shortest secret value redactSecrets replaces.
 const minSecretLen = 8
