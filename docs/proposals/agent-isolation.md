@@ -34,6 +34,11 @@ reads. Those are good, but they are judgment calls by another model, not a bound
 | **C. Keep as is**, document the risk, rely on harness safety layers | none (convention) | none | nothing |
 | **D. Token hardening only**: API token readable only by the daemon user (requires A anyway) or replaced by a short-lived per-session token handed to the browser | partial | small | nothing |
 
+Foundry is self-hosted now, and a paid managed version is planned (`docs/design.md`, "Product
+direction"). For the managed version, B (containers or VMs per run) is required, not optional:
+customers' agents would otherwise share one machine and one user. Whatever is chosen for
+self-hosting should not make B harder to add.
+
 ## Recommendation
 
 **A first, B later.** A separate user is a real boundary at low cost and works with every
