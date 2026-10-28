@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -180,6 +181,11 @@ func (c *Config) Validate() error {
 		case strings.Contains(h, "/"):
 			add("%s: must not include a path, not %q", prefix, h)
 		}
+	}
+
+	// Notifications link to the server with this URL, so a bare "host:port" would make broken links.
+	if u, err := url.Parse(c.Server.PublicURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		add("server.public_url %q must be an absolute http or https URL", c.Server.PublicURL)
 	}
 
 	for i, n := range c.Notify {

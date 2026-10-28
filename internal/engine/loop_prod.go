@@ -136,12 +136,14 @@ func (e *Engine) handleObservation(ctx context.Context, p *config.Project, sourc
 		return nil
 	}
 
+	body := fmt.Sprintf("Level: %s\nCount: %d\nCulprit: %s\nURL: %s\nFirst seen: %s\nLast seen: %s\nRelease: %s\n",
+		s.Level, s.Count, s.Culprit, s.URL, s.FirstSeen.Format(time.RFC3339), s.LastSeen.Format(time.RFC3339), s.Release)
+	body += evidenceSection(serviceLogsEvidence(ctx, p))
 	t, err := e.createTask(ctx, domain.Task{
-		Project: p.Name,
-		Kind:    domain.KindIncident,
-		Title:   title,
-		Body: fmt.Sprintf("Level: %s\nCount: %d\nCulprit: %s\nURL: %s\nFirst seen: %s\nLast seen: %s\nRelease: %s\n",
-			s.Level, s.Count, s.Culprit, s.URL, s.FirstSeen.Format(time.RFC3339), s.LastSeen.Format(time.RFC3339), s.Release),
+		Project:   p.Name,
+		Kind:      domain.KindIncident,
+		Title:     title,
+		Body:      body,
 		Source:    "signal",
 		SourceRef: ref,
 		Priority:  10,

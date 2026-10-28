@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,8 +118,25 @@ func applyServerDefaults(c *Config) {
 	}
 	c.Server.DataDir = expandHome(c.Server.DataDir)
 	if c.Server.PublicURL == "" {
-		c.Server.PublicURL = "http://" + c.Server.Addr
+		c.Server.PublicURL = LocalURL(c.Server.Addr)
 	}
+}
+
+// LocalURL is the http URL a client on this machine uses to reach a server listening on addr.
+// A wildcard or empty host (0.0.0.0, ::, ":7777") is replaced by loopback, because the server's
+// Host header check accepts localhost, 127.0.0.1 and ::1 but rejects a wildcard address with 421.
+func LocalURL(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "http://" + addr
+	}
+	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
+		host = "127.0.0.1"
+		if ip != nil && ip.To4() == nil {
+			host = "::1"
+		}
+	}
+	return "http://" + net.JoinHostPort(host, port)
 }
 
 func applyLimitDefaults(c *Config) {

@@ -228,7 +228,7 @@ func apiBaseURL(cfg *config.Config) string {
 		return v
 	}
 	if cfg != nil {
-		return "http://" + cfg.Server.Addr
+		return config.LocalURL(cfg.Server.Addr)
 	}
 	return defaultAPIBase
 }

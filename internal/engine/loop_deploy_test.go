@@ -1,11 +1,15 @@
 package engine
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/deploy"
 	"github.com/bobbyrc/foundry/internal/domain"
 )
@@ -126,7 +130,7 @@ func TestLoopDeployHealthFailuresRollBack(t *testing.T) {
 	if rel.State != domain.DeployRolledBack {
 		t.Fatalf("release = %s, want rolled_back", rel.State)
 	}
-	if !strings.Contains(rel.Notes, "health check failing") || !strings.Contains(rel.Notes, "rolled back to prev-sh") {
+	if !strings.Contains(rel.Notes, "health check failing at "+health.srv.URL+": 3 consecutive failed checks") || !strings.Contains(rel.Notes, "rolled back to prev-sh") {
 		t.Fatalf("notes = %q, want the health reason and the rollback", rel.Notes)
 	}
 	if len(env.dep.rolledBack) != 1 || env.dep.rolledBack[0] != [2]string{previous.ProviderID, previous.Ref} {
@@ -223,5 +227,255 @@ func TestLoopDeployWaitsInsideTimeout(t *testing.T) {
 
 	if rel := lpDeployments(t, env)[0]; rel.State != domain.DeployDeploying {
 		t.Fatalf("release = %s at 5m, want still deploying", rel.State)
+	}
+}
+
+// lpOutputDeployer is lpDeployer with a canned deploy output on every handle.
+type lpOutputDeployer struct {
+	*lpDeployer
+	output string
+}
+
+func (d lpOutputDeployer) Deploy(ctx context.Context, ref string) (deploy.Handle, error) {
+	h, err := d.lpDeployer.Deploy(ctx, ref)
+	h.Output = d.output
+	return h, err
+}
+
+// lpWithOutput makes the env's deployer print output on every release.
+func lpWithOutput(env *lpEnv, output string) {
+	env.e.d.DeployerFor = func(*config.Project) (deploy.Deployer, error) {
+		return lpOutputDeployer{lpDeployer: env.dep, output: output}, nil
+	}
+}
+
+// lpFailReleaseWithOutput starts a release, then makes the provider report it failed, so the
+// release fails through failRelease with the evidence gathered.
+func lpFailReleaseWithOutput(t *testing.T, env *lpEnv) domain.Deployment {
+	t.Helper()
+	lpMergedTask(t, env, "Break things", "sha-ev")
+	env.run(loopDeployWatch) // starts the release
+	env.dep.status = deploy.Status{State: deploy.StateError, Message: "build exploded"}
+	env.run(loopDeployWatch) // provider reports the build failed
+	rel := lpDeployments(t, env)[0]
+	if rel.State != domain.DeployFailed {
+		t.Fatalf("release = %s, want failed", rel.State)
+	}
+	return rel
+}
+
+func TestLoopDeployStoresDeployOutputOnRelease(t *testing.T) {
+	env := lpNewEngine(t, lpDeployDoc(t, ""))
+	lpWithOutput(env, "uploading\n{\"id\":\"prov-1\"}\n")
+	lpMergedTask(t, env, "Add notes", "sha-out")
+
+	env.run(loopDeployWatch)
+
+	rel := lpDeployments(t, env)[0]
+	if want := "== deploy output ==\nuploading\n{\"id\":\"prov-1\"}\n"; rel.Log != want {
+		t.Fatalf("log = %q, want %q", rel.Log, want)
+	}
+}
+
+func TestLoopDeployFailureIncidentHasOutputAndServiceLogs(t *testing.T) {
+	doc := lpDoc(t, t.TempDir(), "    deploy:\n      type: test\n      logs: echo service-line-1; echo service-line-2\n", "")
+	env := lpNewEngine(t, doc)
+	lpWithOutput(env, "compiling app\nlinking app\n")
+
+	rel := lpFailReleaseWithOutput(t, env)
+
+	for _, want := range []string{
+		"== deploy output ==\ncompiling app\nlinking app\n",
+		"== service logs (echo service-line-1; echo service-line-2) ==\nservice-line-1\nservice-line-2",
+	} {
+		if !strings.Contains(rel.Log, want) {
+			t.Fatalf("release log %q does not contain %q", rel.Log, want)
+		}
+	}
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 {
+		t.Fatalf("got %d incidents, want 1", len(incidents))
+	}
+	body := incidents[0].Body
+	if !strings.Contains(body, "\n## Evidence\n\n```\n== deploy output ==\ncompiling app\nlinking app\n") ||
+		!strings.Contains(body, "service-line-2\n```\n") {
+		t.Fatalf("incident body has no evidence section with both outputs:\n%s", body)
+	}
+}
+
+func TestLoopDeployServiceLogsFailureIsReported(t *testing.T) {
+	doc := lpDoc(t, t.TempDir(), "    deploy:\n      type: test\n      logs: echo partial-logs; echo nope >&2; exit 4\n", "")
+	env := lpNewEngine(t, doc)
+
+	rel := lpFailReleaseWithOutput(t, env)
+
+	if rel.State != domain.DeployFailed || !strings.Contains(rel.Notes, "build exploded") {
+		t.Fatalf("release = %s notes %q, want failed with the provider's reason", rel.State, rel.Notes)
+	}
+	if !strings.Contains(rel.Log, "partial-logs\nnope\nlogs command failed: exit status 4") {
+		t.Fatalf("release log %q does not report the logs failure", rel.Log)
+	}
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 || !strings.Contains(incidents[0].Body, "logs command failed: exit status 4") {
+		t.Fatalf("incident evidence does not report the logs failure: %+v", incidents)
+	}
+	if got := env.task(lpDeployTaskID(t, env)); got.Status != domain.TaskBlocked {
+		t.Fatalf("task = %s, want blocked by the failed release", got.Status)
+	}
+}
+
+func TestLoopDeployServiceLogsTimeoutIsReported(t *testing.T) {
+	old := serviceLogsTimeout
+	serviceLogsTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { serviceLogsTimeout = old })
+
+	doc := lpDoc(t, t.TempDir(), "    deploy:\n      type: test\n      logs: sleep 30\n", "")
+	env := lpNewEngine(t, doc)
+
+	start := time.Now()
+	rel := lpFailReleaseWithOutput(t, env)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("release handling took %s, the logs command was not bounded", elapsed)
+	}
+	if !strings.Contains(rel.Log, "logs command failed: timed out after 200ms") {
+		t.Fatalf("release log %q does not report the timeout", rel.Log)
+	}
+}
+
+func TestLoopDeployServiceLogsRunInProjectDirWithProjectEnv(t *testing.T) {
+	dir := t.TempDir()
+	doc := lpDoc(t, dir, "    env:\n      LP_LOG_ENV: from-project\n    deploy:\n      type: test\n      logs: pwd -P; echo \"$LP_LOG_ENV\"\n", "")
+	env := lpNewEngine(t, doc)
+
+	rel := lpFailReleaseWithOutput(t, env)
+
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(rel.Log, resolved+"\nfrom-project") {
+		t.Fatalf("release log %q, want the logs run in %s with the project env", rel.Log, resolved)
+	}
+}
+
+func TestLoopDeployEvidenceRedactsProjectSecrets(t *testing.T) {
+	doc := lpDoc(t, t.TempDir(), "    env:\n      STAGING_API_TOKEN: tok-1234567890\n    deploy:\n      type: test\n      logs: echo \"token is $STAGING_API_TOKEN\"\n", "")
+	env := lpNewEngine(t, doc)
+	lpWithOutput(env, "deploying with tok-1234567890\n")
+
+	rel := lpFailReleaseWithOutput(t, env)
+
+	if !strings.Contains(rel.Log, "***") || strings.Contains(rel.Log, "tok-1234567890") {
+		t.Fatalf("release log %q, want the token redacted", rel.Log)
+	}
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 {
+		t.Fatalf("got %d incidents, want 1", len(incidents))
+	}
+	if body := incidents[0].Body; !strings.Contains(body, "***") || strings.Contains(body, "tok-1234567890") {
+		t.Fatalf("incident body, want the token redacted:\n%s", body)
+	}
+}
+
+func TestLoopDeployRollbackFailureRedactsSecrets(t *testing.T) {
+	health := lpNewHealth(t)
+	doc := lpDoc(t, lpPath(t), "    env:\n      STAGING_API_TOKEN: tok-1234567890\n    deploy:\n      type: test\n      verify_for: 10m\n      health_url: "+health.srv.URL+"\n", "")
+	env := lpNewEngine(t, doc)
+	if _, err := env.st.CreateDeployment(env.ctx, domain.Deployment{
+		Project: "demo", Ref: "prev-sha", ProviderID: "prov-old", State: domain.DeployHealthy,
+		StartedAt: env.now.Add(-time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lpMergedTask(t, env, "Break things", "sha-secret")
+	// The test deployer runs no commands, so the rollback error carries the secret directly, as
+	// a rollback command's output tail would. Only failed health checks roll back.
+	env.dep.rollbackErr = errors.New("rollback failed tok-1234567890")
+
+	env.run(loopDeployWatch)
+	env.dep.status = deploy.Status{State: deploy.StateReady}
+	env.run(loopDeployWatch)
+	health.code.Store(500)
+	env.run(loopDeployWatch)
+	env.run(loopDeployWatch)
+	env.run(loopDeployWatch) // third failure in a row: rollback is attempted and fails
+
+	rel := lpDeployments(t, env)[0]
+	if !strings.Contains(rel.Notes, "ROLLBACK FAILED") {
+		t.Fatalf("notes %q, want the rollback failure", rel.Notes)
+	}
+	if !strings.Contains(rel.Notes, "***") || strings.Contains(rel.Notes, "tok-1234567890") {
+		t.Fatalf("notes %q, want the token redacted", rel.Notes)
+	}
+	incidents := env.tasks(domain.KindIncident)
+	if len(incidents) != 1 {
+		t.Fatalf("got %d incidents, want 1", len(incidents))
+	}
+	if body := incidents[0].Body; !strings.Contains(body, "***") || strings.Contains(body, "tok-1234567890") {
+		t.Fatalf("incident body, want the token redacted:\n%s", body)
+	}
+}
+
+func TestLoopDeployNoLogsCommandAddsNoEvidence(t *testing.T) {
+	env := lpNewEngine(t, lpDeployDoc(t, ""))
+	env.dep.status = deploy.Status{State: deploy.StateError, Message: "boom"}
+	lpMergedTask(t, env, "Plain", "sha-plain")
+	env.run(loopDeployWatch)
+	env.run(loopDeployWatch)
+
+	if rel := lpDeployments(t, env)[0]; rel.Log != "" {
+		t.Fatalf("log = %q, want empty for a noop-style output and no logs command", rel.Log)
+	}
+	if body := env.tasks(domain.KindIncident)[0].Body; strings.Contains(body, "## Evidence") {
+		t.Fatalf("incident has an evidence section with nothing to show:\n%s", body)
+	}
+}
+
+func TestEvidenceSectionKeepsNewestOutput(t *testing.T) {
+	long := strings.Repeat("a", 20<<10) + "NEWEST"
+	section := evidenceSection(long)
+	if len(section) > evidenceCap+64 {
+		t.Fatalf("section is %d bytes, want about %d", len(section), evidenceCap)
+	}
+	if !strings.Contains(section, "earlier output truncated") || !strings.HasSuffix(strings.TrimSuffix(section, "```\n"), "NEWEST\n") {
+		t.Fatalf("section did not keep the newest output: ...%s", section[len(section)-40:])
+	}
+
+	fenced := evidenceSection("before\n```\ninside\n````\nafter")
+	if !strings.Contains(fenced, "\n`````\n") {
+		t.Fatalf("fence does not outlast the backticks in the evidence:\n%s", fenced)
+	}
+}
+
+// lpDeployTaskID returns the merged task's ID for the one release in env.
+func lpDeployTaskID(t *testing.T, env *lpEnv) string {
+	t.Helper()
+	rel := lpDeployments(t, env)[0]
+	if rel.TaskID == "" {
+		t.Fatalf("release %s has no task", rel.ID)
+	}
+	return rel.TaskID
+}
+
+func TestLoopDeployHealthFailureReasonNamesURLCountAndElapsed(t *testing.T) {
+	health := lpNewHealth(t)
+	env := lpNewEngine(t, lpDeployDoc(t, health.srv.URL))
+	lpMergedTask(t, env, "Break things", "sha-2")
+
+	env.run(loopDeployWatch)
+	env.dep.status = deploy.Status{State: deploy.StateReady}
+	env.run(loopDeployWatch) // verifying from env.now
+	health.code.Store(500)
+
+	for range deployHealthAttempts {
+		env.now = env.now.Add(30 * time.Second)
+		env.run(loopDeployWatch)
+	}
+
+	rel := lpDeployments(t, env)[0]
+	want := fmt.Sprintf("health check failing at %s: %d consecutive failed checks, 1m30s after verification started: ",
+		health.srv.URL, deployHealthAttempts)
+	if !strings.Contains(rel.Notes, want) {
+		t.Fatalf("release = %s, notes = %q, want notes containing %q", rel.State, rel.Notes, want)
 	}
 }

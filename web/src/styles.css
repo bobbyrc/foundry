@@ -708,7 +708,12 @@ input[type='checkbox'] {
 }
 
 .table td {
-  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.table td .mono,
+.table td .id-chip {
+  white-space: nowrap;
 }
 
 /* ---- meta grid ---- */
@@ -1210,6 +1215,15 @@ input[type='checkbox'] {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   padding: 16px 20px;
+}
+
+.modal-wide {
+  width: min(1000px, 100%);
+}
+
+.modal-wide pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .modal-header {

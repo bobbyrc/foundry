@@ -100,7 +100,7 @@ loops:
 
 	assert.Equal(t, "0.0.0.0:9000", cfg.Server.Addr)
 	assert.Equal(t, "/var/lib/foundry", cfg.Server.DataDir)
-	assert.Equal(t, "http://0.0.0.0:9000", cfg.Server.PublicURL)
+	assert.Equal(t, "http://127.0.0.1:9000", cfg.Server.PublicURL)
 	assert.Equal(t, 5, cfg.Limits.MaxAttempts)
 	assert.Equal(t, 3, cfg.Limits.MaxConcurrentRuns)
 	assert.Equal(t, "codex", cfg.Agents["reviewer"].Harness)
@@ -297,4 +297,28 @@ func TestExecIntakeDefaults(t *testing.T) {
 	src = cfg.Projects["app"].Intake[0]
 	assert.Equal(t, "chore", src.Kind, "a set kind is kept")
 	assert.Equal(t, 5*time.Second, src.Timeout.Duration, "a set timeout is kept")
+}
+
+func TestLocalURL(t *testing.T) {
+	cases := map[string]string{
+		"127.0.0.1:7777": "http://127.0.0.1:7777",
+		"0.0.0.0:7777":   "http://127.0.0.1:7777",
+		":7777":          "http://127.0.0.1:7777",
+		"[::]:7777":      "http://[::1]:7777",
+		"localhost:7777": "http://localhost:7777",
+		"foundry.lan:80": "http://foundry.lan:80",
+		"[::1]:7777":     "http://[::1]:7777",
+		"garbage":        "http://garbage",
+	}
+	for addr, want := range cases {
+		assert.Equal(t, want, LocalURL(addr), addr)
+	}
+}
+
+func TestDefaultPublicURLUsesLoopbackForWildcardAddr(t *testing.T) {
+	cfg, err := Parse([]byte("server:\n  addr: 0.0.0.0:7777\n"), "")
+	require.NoError(t, err)
+
+	assert.Equal(t, "0.0.0.0:7777", cfg.Server.Addr)
+	assert.Equal(t, "http://127.0.0.1:7777", cfg.Server.PublicURL)
 }

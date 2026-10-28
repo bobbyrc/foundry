@@ -4,15 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bobbyrc/foundry/internal/config"
 	"github.com/bobbyrc/foundry/internal/deploy"
 	"github.com/bobbyrc/foundry/internal/domain"
 	"github.com/bobbyrc/foundry/internal/notify"
 	"github.com/bobbyrc/foundry/internal/store"
+	"github.com/bobbyrc/foundry/internal/sysproc"
 )
 
 const (
@@ -26,7 +31,19 @@ const (
 	deployProbeTitles = 3
 	// defaultDeployTimeout fails a release still building after this long, when the config sets none.
 	defaultDeployTimeout = 30 * time.Minute
+	// serviceLogsTail is how many trailing bytes of the project's deploy.logs output are kept.
+	serviceLogsTail = 8 << 10
+	// evidenceCap is how many trailing bytes of a release's evidence go into an incident body.
+	evidenceCap = 12 << 10
 )
+
+// releaseFailedPrefix starts the reason of a merged task that is blocked because its release
+// failed. resolveShippedTasks finds those tasks by it.
+const releaseFailedPrefix = "release failed: "
+
+// serviceLogsTimeout bounds one run of the project's deploy.logs command. It is a variable so
+// tests can shorten it.
+var serviceLogsTimeout = 30 * time.Second
 
 // deployHealthTally counts consecutive failed health checks per deployment ID. It lives in
 // process memory on purpose: a restart resets the count, which only delays a rollback.
@@ -137,6 +154,7 @@ func (e *Engine) startRelease(ctx context.Context, p *config.Project, dep deploy
 	if _, err := e.setDeployment(ctx, d.ID, func(x *domain.Deployment) error {
 		x.ProviderID = handle.ID
 		x.URL = handle.URL
+		x.Log = deployOutputEvidence(redactSecrets(handle.Output, evidenceEnv(p)))
 		x.State = domain.DeployDeploying
 		return nil
 	}); err != nil {
@@ -198,7 +216,11 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 		if err := deploy.CheckHealth(ctx, dp.HealthURL, deployHealthTimeout); err != nil {
 			if deployHealth.fail(d.ID) >= deployHealthAttempts {
 				deployHealth.pass(d.ID)
-				return e.failRelease(ctx, p, dep, d, "health check failing: "+err.Error(), true)
+				reason := fmt.Sprintf("health check failing at %s: %d consecutive failed checks", dp.HealthURL, deployHealthAttempts)
+				if d.VerifyingSince != nil {
+					reason += fmt.Sprintf(", %s after verification started", e.d.Now().Sub(*d.VerifyingSince).Round(time.Second))
+				}
+				return e.failRelease(ctx, p, dep, d, reason+": "+err.Error(), true)
 			}
 			return nil
 		}
@@ -255,8 +277,43 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 			}
 		}
 	}
+	e.resolveShippedTasks(ctx, p, d.Ref)
 	e.notify(ctx, notify.PriorityLow, "Deployed: "+label, healthy.URL, "/deploys")
 	return nil
+}
+
+// resolveShippedTasks marks a blocked task done when its own release failed but a later healthy
+// release contains its merge commit: the code shipped, so the failed release no longer holds the
+// task back. Errors are logged, never returned, because a healthy release must not be undone by
+// this bookkeeping.
+func (e *Engine) resolveShippedTasks(ctx context.Context, p *config.Project, ref string) {
+	blocked, err := e.d.Store.ListTasks(ctx, store.TaskFilter{
+		Project: p.Name, Statuses: []domain.TaskStatus{domain.TaskBlocked},
+	})
+	if err != nil {
+		e.d.Logger.Warn("deploy watch: list blocked tasks", "project", p.Name, "err", err)
+		return
+	}
+	for _, t := range blocked {
+		if !strings.HasPrefix(t.BlockedReason, releaseFailedPrefix) || t.MergeSHA == "" {
+			continue
+		}
+		shipped, err := e.d.Workspaces.IsAncestor(ctx, e.repoFor(p), t.MergeSHA, ref)
+		if err != nil {
+			e.d.Logger.Warn("deploy watch: check task commit", "task", t.ID, "err", err)
+			continue
+		}
+		if !shipped {
+			continue
+		}
+		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskBlocked}, "released in "+deployShortRef(ref), func(x *domain.Task) error {
+			x.Status = domain.TaskDone
+			x.BlockedReason = ""
+			return nil
+		}); err != nil {
+			e.d.Logger.Warn("deploy watch: mark shipped task done", "task", t.ID, "err", err)
+		}
+	}
 }
 
 // failRelease marks a release failed or rolled back, opens an incident task with the evidence,
@@ -265,6 +322,8 @@ func (e *Engine) advanceVerifying(ctx context.Context, p *config.Project, dep de
 func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.Deployer, d domain.Deployment, reason string, rollbackEligible bool) error {
 	notes := reason
 	state := domain.DeployFailed
+	// Service logs are read before any rollback, so they show the release that failed.
+	logs := serviceLogsEvidence(ctx, p)
 	if rollbackEligible && p.Deploy.RollbackEnabled() {
 		prev, err := e.d.Store.LastHealthyDeployment(ctx, p.Name)
 		switch {
@@ -282,9 +341,16 @@ func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.
 		}
 	}
 
+	// One redaction point, before anything is stored or sent. The reason is deploy output, and the
+	// rollback error can carry the output tail of a failed rollback command, so both are covered.
+	env := evidenceEnv(p)
+	reason = redactSecrets(reason, env)
+	notes = redactSecrets(notes, env)
+
 	failed, err := e.setDeployment(ctx, d.ID, func(x *domain.Deployment) error {
 		x.State = state
 		x.Notes = notes
+		x.Log = appendEvidence(x.Log, logs)
 		return nil
 	})
 	if err != nil {
@@ -310,6 +376,7 @@ func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.
 	if task != nil {
 		body += fmt.Sprintf("- Merged task: %s (PR #%d %s)\n", task.ID, task.PRNumber, task.PRURL)
 	}
+	body += evidenceSection(failed.Log)
 	incident, err := e.createTask(ctx, domain.Task{
 		Project:   p.Name,
 		Kind:      domain.KindIncident,
@@ -327,7 +394,7 @@ func (e *Engine) failRelease(ctx context.Context, p *config.Project, dep deploy.
 	}
 
 	if task != nil {
-		e.blockTask(ctx, task.ID, "release failed: "+notes+"; incident task "+incidentID)
+		e.blockTask(ctx, task.ID, releaseFailedPrefix+notes+"; incident task "+incidentID)
 	}
 	e.notify(ctx, notify.PriorityHigh, "Release failed: "+label, notes, "/deploys")
 	return errors.Join(errs...)
@@ -363,4 +430,150 @@ func deployShortRef(ref string) string {
 		return ref[:7]
 	}
 	return ref
+}
+
+// deployOutputEvidence is the first part of a release's log: the tail of its deploy command's
+// output. A release whose command printed nothing has no log.
+func deployOutputEvidence(output string) string {
+	if output == "" {
+		return ""
+	}
+	return "== deploy output ==\n" + output
+}
+
+// serviceLogsEvidence runs the project's deploy.logs command and returns its section of the
+// evidence: the last 8KB of its output, plus the reason if it failed or timed out. It returns ""
+// when the project has no logs command. A failing logs command never fails the caller. The whole
+// section is redacted, so the command line in its header is covered too.
+func serviceLogsEvidence(ctx context.Context, p *config.Project) string {
+	if p.Deploy == nil || p.Deploy.Logs == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("== service logs (" + p.Deploy.Logs + ") ==\n")
+	out, err := runServiceLogs(ctx, p)
+	b.WriteString(out)
+	if err != nil {
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString("logs command failed: " + err.Error() + "\n")
+	} else if out == "" {
+		b.WriteString("(no output)\n")
+	}
+	return redactSecrets(b.String(), evidenceEnv(p))
+}
+
+// runServiceLogs runs the project's deploy.logs command with sh -c in the project directory. The
+// environment is foundry's, then the project's env. It returns the last 8KB of stdout and stderr
+// together, and the error if the command failed or ran past serviceLogsTimeout.
+func runServiceLogs(ctx context.Context, p *config.Project) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, serviceLogsTimeout)
+	defer cancel()
+
+	out := &tailBuffer{max: serviceLogsTail}
+	cmd := exec.CommandContext(ctx, "sh", "-c", p.Deploy.Logs)
+	cmd.Dir = p.Path
+	cmd.Env = append(os.Environ(), projectEnvPairs(p.Env)...)
+	// Stdout and Stderr are the same writer, so os/exec calls it from one goroutine at a time.
+	cmd.Stdout = out
+	cmd.Stderr = out
+	sysproc.Configure(cmd)
+	err := cmd.Start()
+	if err == nil {
+		err = sysproc.Wait(cmd)
+	}
+	if ctx.Err() == context.DeadlineExceeded {
+		err = fmt.Errorf("timed out after %s", serviceLogsTimeout)
+	}
+	return strings.TrimRight(out.String(), "\n"), err
+}
+
+// projectEnvPairs turns a project's env into sorted KEY=value pairs.
+func projectEnvPairs(env map[string]string) []string {
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	pairs := make([]string, 0, len(keys))
+	for _, k := range keys {
+		pairs = append(pairs, k+"="+env[k])
+	}
+	return pairs
+}
+
+// tailBuffer keeps the last max bytes written to it. It is not safe for concurrent use.
+type tailBuffer struct {
+	max int
+	buf []byte
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > 2*b.max {
+		b.buf = append([]byte(nil), b.buf[len(b.buf)-b.max:]...)
+	}
+	return len(p), nil
+}
+
+// String returns the last max bytes written, starting on a rune boundary.
+func (b *tailBuffer) String() string {
+	return lastBytes(string(b.buf), b.max)
+}
+
+// lastBytes returns the last n bytes of s, starting on a rune boundary.
+func lastBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	i := len(s) - n
+	for i < len(s) && !utf8.RuneStart(s[i]) {
+		i++
+	}
+	return s[i:]
+}
+
+// appendEvidence adds a section to a release's log, on its own line.
+func appendEvidence(log, section string) string {
+	switch {
+	case section == "":
+		return log
+	case log == "":
+		return section
+	case strings.HasSuffix(log, "\n"):
+		return log + section
+	default:
+		return log + "\n" + section
+	}
+}
+
+// evidenceSection renders evidence as a "## Evidence" section of an incident body, in a code
+// fence that a backtick run inside the evidence cannot close early. Past evidenceCap only the
+// newest output is kept, and the section says so. It returns "" for no evidence.
+func evidenceSection(evidence string) string {
+	if evidence == "" {
+		return ""
+	}
+	const truncated = "...(earlier output truncated)\n"
+	text := evidence
+	if len(text) > evidenceCap {
+		text = truncated + lastBytes(evidence, evidenceCap-len(truncated))
+	}
+	fence := strings.Repeat("`", max(3, longestBacktickRun(text)+1))
+	return "\n## Evidence\n\n" + fence + "\n" + text + "\n" + fence + "\n"
+}
+
+// longestBacktickRun returns the length of the longest run of backticks in s.
+func longestBacktickRun(s string) int {
+	longest, run := 0, 0
+	for _, r := range s {
+		if r == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	return longest
 }

@@ -70,6 +70,7 @@ type Stats struct {
 	ActiveRuns       int            `json:"active_runs"`
 	ApprovalsPending int            `json:"approvals_pending"`
 	CostTodayUSD     float64        `json:"cost_today_usd"`
+	DailyBudgetUSD   float64        `json:"daily_budget_usd"`
 	Paused           bool           `json:"paused"`
 }
 
@@ -486,6 +487,7 @@ func (s *server) stats(w http.ResponseWriter, r *http.Request) {
 		ActiveRuns:       len(active),
 		ApprovalsPending: len(pending),
 		CostTodayUSD:     cost,
+		DailyBudgetUSD:   s.opts.Controller.Config().Limits.DailyBudgetUSD,
 		Paused:           s.opts.Controller.Paused(),
 	})
 }

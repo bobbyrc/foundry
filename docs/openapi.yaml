@@ -1034,7 +1034,7 @@ components:
 
     Stats:
       type: object
-      required: [tasks_by_status, active_runs, approvals_pending, cost_today_usd, paused]
+      required: [tasks_by_status, active_runs, approvals_pending, cost_today_usd, daily_budget_usd, paused]
       properties:
         tasks_by_status:
           type: object
@@ -1049,6 +1049,9 @@ components:
         cost_today_usd:
           type: number
           description: Reported agent cost of runs that started since local midnight.
+        daily_budget_usd:
+          type: number
+          description: "`limits.daily_budget_usd`; 0 when unlimited. New runs stop once `cost_today_usd` reaches it."
         paused:
           type: boolean
 
@@ -1332,6 +1335,9 @@ components:
           $ref: '#/components/schemas/DeployState'
         notes:
           type: string
+        log:
+          type: string
+          description: 'Evidence gathered for this release: the deploy output tail and, on failure, the deploy.logs output. Secrets are redacted.'
         verifying_since:
           type: string
           format: date-time

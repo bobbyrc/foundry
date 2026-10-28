@@ -89,9 +89,23 @@ opening a PR that CI would reject:
         timeout: 10m        # default 10m
 ```
 
+**Setup.** `setup` lists commands foundry runs in each fresh worktree before the agent starts, for
+example to install dependencies the agent needs to build and test. It runs on every attempt, so
+make the commands idempotent (`npm ci` rather than a one-off install). A failing setup command
+fails the attempt and re-queues the task with the command's output; the agent never runs:
+
+```yaml
+    setup:
+      - name: web deps
+        run: "cd web && npm ci --prefer-offline --no-audit"
+        timeout: 5m         # default 10m
+```
+
 **Environment.** Agents get a small allowlisted environment, not foundry's own, so `GH_TOKEN` and
 similar secrets are not passed on. A harness can name extra variables to pass through with
-`inherit_env: [NAME, ...]`. Worker agents are never given the foundry API token.
+`inherit_env: [NAME, ...]`. Worker agents are never given the foundry API token. Setup and checks
+run with that same environment (the allowlist, the harness's `inherit_env` and the project's `env`),
+not foundry's, because they execute code the agent may have written.
 
 **Budget.** `limits.daily_budget_usd` stops new task runs once the day's reported cost reaches it.
 A run's cost is recorded when it ends, so runs in flight count only after they finish. Codex

@@ -84,6 +84,11 @@ type Engine struct {
 	budgetMu  sync.Mutex
 	budgetDay string
 
+	// issueReportMu makes reportToIssue's read-comment-save of its cursor one step. Each terminal
+	// write starts its own goroutine, so two writes of the same status would otherwise both read
+	// an empty cursor and both post.
+	issueReportMu sync.Mutex
+
 	// baseCtx is Run's context: work not tied to a request (chat replies) derives from it so
 	// shutdown cancels it. Set at the start of Run; nil before.
 	baseCtx context.Context

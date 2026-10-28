@@ -164,10 +164,30 @@ deploy:
   auto_rollback: true
 ```
 
+Evidence for incidents. A release keeps the tail of its deploy command's output (the `command` type
+keeps the last 4 KB of stdout and stderr). When a release fails, or a production problem opens an
+incident, foundry also runs the project's `deploy.logs` command (`sh -c`, in the project's clone, 30
+second limit) and keeps its last 8 KB, or the reason it failed. Both go into the incident's
+`## Evidence` section. A failing logs command is reported there and does not stop the release from
+being handled.
+
 ### `command`
 
 Runs shell commands (`sh -c`) in the project's local clone. Use it for any platform that has a CLI or
 API you can call from a script.
+
+A `deploy` or `rollback` command may start long-running processes, such as a service in the
+background. They keep running after the command succeeds. If the command fails or hits its
+`timeout`, foundry kills them. The command's stdout and stderr go to temporary files, not pipes, so a
+background process keeps its output working after the command exits: it is not cut off by a closed
+pipe and does not hold foundry waiting. Redirecting its output (`> app.log 2>&1 &`) is still a good
+idea: without it, whatever the service prints after the command exits goes to a deleted temporary
+file that keeps growing until the service stops. The `deploy` result is read from the last non-empty line of stdout, and the incident
+evidence is the last 4 KB of stdout followed by stderr. Before evidence (deploy output, `logs` output,
+failure notes) is stored or handed to an agent, foundry replaces secret values with `***`: the value
+of every environment variable (foundry's own and the project's `env`) whose name has a segment such
+as `TOKEN`, `SECRET`, `PASSWORD`, `KEY` or `AUTH`, and any URL with credentials in it. Values shorter
+than 8 characters are left alone.
 
 | Option     | Required | Default | Meaning                                                              |
 |------------|----------|---------|----------------------------------------------------------------------|
@@ -426,7 +446,9 @@ projects:
   the skipped lines. The run still succeeds.
 - A non-zero exit or a timeout is an error for that source. Its items from that run are not used,
   and the error shows as the loop's last error in the web UI. Other sources still run.
-- Stdout is kept up to 1 MB; the rest is dropped. The last 4 KB of stderr is kept for errors.
+- Stdout is kept up to 1 MB. If the output is longer, the run reports an error and the items after
+  the cap are dropped; complete lines before the cap still create tasks. The last 4 KB of stderr is
+  kept for errors.
 
 ### Dedupe by id
 

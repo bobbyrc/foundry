@@ -346,7 +346,7 @@ func serveEnvs(exe, addr, token string) (agent, orchestrator map[string]string) 
 		"PATH": filepath.Dir(exe) + string(os.PathListSeparator) + os.Getenv("PATH"),
 	}
 	orchestrator = map[string]string{
-		"FOUNDRY_API":   "http://" + addr,
+		"FOUNDRY_API":   config.LocalURL(addr),
 		"FOUNDRY_TOKEN": token,
 	}
 	return agent, orchestrator

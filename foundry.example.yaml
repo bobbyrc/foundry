@@ -11,7 +11,7 @@
 server:
   addr: 127.0.0.1:7777                 # address the HTTP API and UI listen on (default 127.0.0.1:7777)
   data_dir: ~/.local/share/foundry     # database, logs and default clones live here (default shown)
-  public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>)
+  public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>, with 0.0.0.0 or :: shown as loopback)
 
 # Limits: caps on how much runs at once and how long a run may go.
 limits:
@@ -43,6 +43,10 @@ harnesses:
     args: ["--model", "fast"]                        # extra arguments appended to command
     env:                                             # added to the environment of each run
       MY_AGENT_MODE: "headless"
+    # Agents get only an allowlist of foundry's environment (PATH, HOME, LANG, ...), so tokens
+    # foundry holds (GH_TOKEN and the like) never reach them. inherit_env passes named variables
+    # through; give an agent only what it needs, and never foundry's own GitHub token.
+    inherit_env: ["MY_AGENT_API_KEY"]
 
 # Agents: roles. Each role runs on one harness with one model and one set of instructions.
 # The six built-in roles (orchestrator, implementer, reviewer, triager, sre, improver) are
@@ -131,6 +135,16 @@ projects:
       Run `mise exec -- go test -race ./...` before you report done.
     env:                               # added to each agent session for this project
       FOUNDRY_PROJECT: foundry
+    # Setup and checks run with the agent's environment (the allowlist, the harness's inherit_env
+    # and this project's env), not foundry's, because they run code the agent may have written.
+    # setup:                           # run in each fresh worktree before the agent starts
+    #   - name: web deps
+    #     run: cd web && npm ci --prefer-offline --no-audit
+    #     timeout: 5m
+    # checks:                          # run after the agent, before foundry commits and pushes
+    #   - name: test                   # a failing check re-queues the task with its output
+    #     run: mise exec -- go test -race ./...
+    #     timeout: 10m                 # default 10m
     # intake:                          # external queues that become tasks; see docs/plugins.md, "Intake sources"
     #   - name: inbox                  # lowercase letters, digits, - and _; unique per project
     #     command: cat ~/foundry-inbox.jsonl   # prints one JSON item per line: {"id","title","body","kind","priority","role"}
@@ -154,11 +168,14 @@ projects:
     deploy:
       type: command                    # runs the commands under options below
       options:
-        # Shell commands for the "command" deploy type.
+        # Shell commands for the "command" deploy type. A deploy may start a long-running service in
+        # the background: it keeps running after a successful deploy, and foundry kills it if the
+        # deploy fails or times out. Redirect its output (e.g. "> app.log 2>&1 &").
         deploy: "vercel deploy --prod --yes"
         # $FOUNDRY_ROLLBACK_ID is set by foundry to the release to roll back to.
         rollback: "vercel rollback $FOUNDRY_ROLLBACK_ID --yes"
       health_url: https://myapp.example.com/healthz   # must answer 2xx during verify_for; empty skips it
+      logs: tail -n 200 /path/to/app.log   # prints recent service logs; attached to failed releases and incidents
       verify_for: 10m                  # watch a release this long before calling it healthy (default 10m)
       timeout: 30m                     # fail a release still building after this long (default 30m)
       auto_rollback: true              # roll back on a failed verify window (default true)

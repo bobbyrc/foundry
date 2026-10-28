@@ -20,6 +20,8 @@ const (
 type Handle struct {
 	ID  string // the provider's deployment ID
 	URL string
+	// Output is the tail of what the deploy printed (≤ 4KB), kept as evidence for incidents.
+	Output string
 }
 
 type Status struct {

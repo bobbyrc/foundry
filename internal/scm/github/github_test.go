@@ -381,7 +381,7 @@ func TestListIssues(t *testing.T) {
 		UpdatedAt: time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC),
 	}, issues[0])
 	assert.Equal(t, []string{"issue", "list", "--repo", repo, "--state", "open", "--limit", "100",
-		"--json", "number,url,title,body,state,labels,author,createdAt,updatedAt",
+		"--json", "number,url,title,body,state,labels,author,createdAt,updatedAt,comments",
 		"--label", "friction"}, f.calls[0].args)
 
 	_, err = g.ListIssues(context.Background(), "", "closed")
@@ -399,7 +399,7 @@ func TestSearchIssues(t *testing.T) {
 	assert.NotNil(t, issues)
 	assert.Empty(t, issues)
 	assert.Equal(t, []string{"issue", "list", "--repo", repo, "--state", "all", "--search", "flaky test",
-		"--limit", "20", "--json", "number,url,title,body,state,labels,author,createdAt,updatedAt"},
+		"--limit", "20", "--json", "number,url,title,body,state,labels,author,createdAt,updatedAt,comments"},
 		f.calls[0].args)
 }
 
@@ -443,6 +443,44 @@ func TestCommentIssue(t *testing.T) {
 	require.Len(t, f.calls, 1)
 	assert.Equal(t, []string{"issue", "comment", "8", "--repo", repo, "--body-file", "-"}, f.calls[0].args)
 	assert.Equal(t, "hello there", f.calls[0].stdin)
+}
+
+func TestCloseIssueClosesOpenIssueWithComment(t *testing.T) {
+	f := newFake()
+	f.on["issue view 8"] = `{"state":"OPEN"}`
+	g := NewWithRunner(repo, f.runner())
+	require.NoError(t, g.CloseIssue(context.Background(), 8, "Fixed by #12 (merged by foundry into `staging`)."))
+	require.Len(t, f.calls, 2)
+	assert.Equal(t, []string{"issue", "view", "8", "--repo", repo, "--json", "state"}, f.calls[0].args)
+	assert.Equal(t, []string{"issue", "close", "8", "--repo", repo, "--reason", "completed",
+		"--comment", "Fixed by #12 (merged by foundry into `staging`)."}, f.calls[1].args)
+	assert.Empty(t, f.calls[1].stdin)
+}
+
+func TestCloseIssueSkipsAlreadyClosedIssue(t *testing.T) {
+	f := newFake()
+	f.on["issue view 8"] = `{"state":"CLOSED"}`
+	g := NewWithRunner(repo, f.runner())
+	require.NoError(t, g.CloseIssue(context.Background(), 8, "again"))
+	assert.Equal(t, 0, f.countCalls("issue", "close"))
+}
+
+func TestCloseIssueWrapsViewAndCloseErrors(t *testing.T) {
+	f := newFake()
+	f.errOn["issue view 8"] = errors.New("no such issue")
+	g := NewWithRunner(repo, f.runner())
+	err := g.CloseIssue(context.Background(), 8, "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "view issue #8")
+	assert.Contains(t, err.Error(), "no such issue")
+
+	f = newFake()
+	f.on["issue view 8"] = `{"state":"OPEN"}`
+	f.errOn["issue close 8"] = errors.New("forbidden")
+	g = NewWithRunner(repo, f.runner())
+	err = g.CloseIssue(context.Background(), 8, "x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "close issue #8")
 }
 
 func TestEditLabelsAddAndRemove(t *testing.T) {
@@ -522,4 +560,22 @@ func TestUpdatePRBodyWrapsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "update body of PR #12")
 	assert.ErrorContains(t, err, "boom")
+}
+
+func TestListIssuesDecodesComments(t *testing.T) {
+	f := newFake()
+	f.on["issue list"] = `[{"number":3,"url":"u","title":"t","body":"b","state":"OPEN","labels":[],
+		"author":{"login":"bob"},"createdAt":"2026-10-01T10:00:00Z","updatedAt":"2026-10-01T10:00:00Z",
+		"comments":[
+		{"author":{"login":"owner"},"authorAssociation":"OWNER","body":"spec","createdAt":"2026-10-02T10:00:00Z"},
+		{"author":{"login":"rando"},"authorAssociation":"NONE","body":"spam","createdAt":"2026-10-03T10:00:00Z"}]}]`
+	g := NewWithRunner(repo, f.runner())
+
+	issues, err := g.ListIssues(context.Background(), "", "open")
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, []scm.IssueComment{
+		{Author: "owner", Association: "OWNER", Body: "spec", CreatedAt: time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC)},
+		{Author: "rando", Association: "NONE", Body: "spam", CreatedAt: time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)},
+	}, issues[0].Comments)
 }

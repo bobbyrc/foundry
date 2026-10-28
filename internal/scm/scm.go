@@ -48,6 +48,16 @@ type Issue struct {
 	Author    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Comments  []IssueComment
+}
+
+// IssueComment is one comment on an issue. Association is GitHub's authorAssociation as-is
+// (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE, ...).
+type IssueComment struct {
+	Author      string
+	Association string
+	Body        string
+	CreatedAt   time.Time
 }
 
 type IssueSpec struct {
@@ -75,5 +85,7 @@ type SCM interface {
 	SearchIssues(ctx context.Context, query string) ([]Issue, error)
 	CreateIssue(ctx context.Context, spec IssueSpec) (Issue, error)
 	CommentIssue(ctx context.Context, number int, body string) error
+	// CloseIssue closes an issue as completed with a comment (no-op if already closed).
+	CloseIssue(ctx context.Context, number int, comment string) error
 	EditLabels(ctx context.Context, number int, add, remove []string) error
 }

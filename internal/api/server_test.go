@@ -590,6 +590,7 @@ func TestStats(t *testing.T) {
 	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: "t", Project: "foundry", Kind: "merge", Status: domain.ApprovalPending})
 	require.NoError(t, err)
 	x.ctl.paused = true
+	x.ctl.cfg.Limits.DailyBudgetUSD = 25
 
 	rec := x.call(t, http.MethodGet, "/api/v1/stats", "")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -601,6 +602,7 @@ func TestStats(t *testing.T) {
 	assert.Equal(t, 1, s.ActiveRuns)
 	assert.Equal(t, 1, s.ApprovalsPending)
 	assert.InDelta(t, 1.5, s.CostTodayUSD, 1e-9, "runs from before today are excluded")
+	assert.Equal(t, 25.0, s.DailyBudgetUSD)
 	assert.True(t, s.Paused)
 }
 

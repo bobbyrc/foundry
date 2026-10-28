@@ -69,3 +69,9 @@ jobs:
       - name: Build
         working-directory: web
         run: npm run build
+
+      # The Go job never builds the UI, so the built-index.html CSP check only runs here.
+      - uses: jdx/mise-action@v2
+
+      - name: CSP check on built UI
+        run: mise exec -- go test -run TestCSPAllowsBuiltUIWithoutInlineScripts ./internal/api/

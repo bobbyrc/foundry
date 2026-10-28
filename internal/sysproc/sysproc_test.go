@@ -204,3 +204,58 @@ func TestWaitTimeoutWithBackgroundChildIsError(t *testing.T) {
 	require.Error(t, Wait(cmd), "a timed-out command must stay an error")
 	assert.Less(t, time.Since(start), 4*time.Second)
 }
+
+func TestWaitKeepOnSuccessKeepsBackgroundChildAfterSuccess(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "sleep 30 & echo $! > "+pidFile+"; echo ok")
+	Configure(cmd)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	require.NoError(t, cmd.Start())
+
+	start := time.Now()
+	require.NoError(t, WaitKeepOnSuccess(cmd), "a 0 exit must succeed even though a child holds stdout")
+	assert.Less(t, time.Since(start), 3*time.Second)
+	assert.Equal(t, "ok", strings.TrimSpace(out.String()))
+
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	grandchild, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
+	assert.True(t, alive(grandchild), "a process started by a successful command must keep running")
+}
+
+func TestWaitKeepOnSuccessNonZeroExitKillsBackgroundChild(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "sleep 30 & echo $! > "+pidFile+"; exit 3")
+	Configure(cmd)
+	require.NoError(t, cmd.Start())
+	err := WaitKeepOnSuccess(cmd)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit status 3")
+
+	raw, readErr := os.ReadFile(pidFile)
+	require.NoError(t, readErr)
+	grandchild, convErr := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, convErr)
+	assert.True(t, waitGone(grandchild, 2*time.Second), "a failed command's leftovers must be killed")
+}
+
+func TestWaitKeepOnSuccessTimeoutKillsBackgroundChild(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", "sleep 30 & echo $! > "+pidFile+"; sleep 30")
+	Configure(cmd)
+	require.NoError(t, cmd.Start())
+	start := time.Now()
+	require.Error(t, WaitKeepOnSuccess(cmd), "a timed-out command must stay an error")
+	assert.Less(t, time.Since(start), 4*time.Second)
+
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	grandchild, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	assert.True(t, waitGone(grandchild, 2*time.Second), "a timed-out command's leftovers must be killed")
+}

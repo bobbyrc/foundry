@@ -148,3 +148,28 @@ func TestExecIntakeTimeoutKillsCommand(t *testing.T) {
 		t.Fatalf("RunLoop took %s, want the 1s timeout to kill the command", elapsed)
 	}
 }
+
+func TestExecIntakeOutputOverCapIsAnErrorAndKeepsCompleteLines(t *testing.T) {
+	// The third line is longer than the cap, so the output is cut in the middle of it.
+	cmd := lpIntakeScript(t, `
+echo '{"id":"a","title":"First"}'
+echo '{"id":"b","title":"Second"}'
+echo '{"id":"big","title":"'
+head -c 1100000 /dev/zero | tr '\0' 'x'
+echo '"}'
+`)
+	env := lpNewEngine(t, lpIntakeDoc(t, lpIntakeSource("inbox", cmd, "", "")))
+
+	err := env.e.RunLoop(env.ctx, loopExecIntake, "demo")
+	if err == nil || !strings.Contains(err.Error(), "exceeded") {
+		t.Fatalf("RunLoop error = %v, want an over-cap error", err)
+	}
+
+	refs := map[string]bool{}
+	for _, tk := range env.tasks("") {
+		refs[tk.SourceRef] = true
+	}
+	if len(refs) != 2 || !refs["intake:inbox:a"] || !refs["intake:inbox:b"] {
+		t.Fatalf("task refs = %v, want the two complete lines before the cap", refs)
+	}
+}

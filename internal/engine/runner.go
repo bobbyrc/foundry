@@ -213,6 +213,22 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	env["FOUNDRY_ROLE"] = t.Role
 	env["FOUNDRY_OUTBOX"] = filepath.Join(ws.Dir, domain.OutboxDir)
 	env["FOUNDRY_BASE_REF"] = ws.BaseRef
+	// Setup and checks run with the agent's environment, not foundry's: they execute code the
+	// agent may have written, so foundry's tokens (GH_TOKEN and the like) must not reach them.
+	cmdEnv := sysproc.AgentEnv(e.Config().Harness[agent.Harness].InheritEnv, env)
+
+	if len(p.Setup) > 0 {
+		if f := runCommands(ctx, p.Setup, ws.Dir, cmdEnv); f != nil {
+			if stopped() {
+				return
+			}
+			e.finishRun(bg, run.ID, domain.RunFailed, "setup failed: "+f.name)
+			e.d.Bus.Emit(bg, domain.EvSystem, t.Project, t.ID, run.ID,
+				fmt.Sprintf("setup %s failed: %v", f.name, f.err), nil)
+			e.requeueOrBlock(bg, t.ID, "setup failed: "+f.name, f.context())
+			return
+		}
+	}
 
 	sess, err := h.Start(ctx, harness.Spec{
 		RunID:        run.ID,
@@ -283,7 +299,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	}
 
 	// completed or no_changes: the project's checks gate what is committed and pushed.
-	if f := runChecks(ctx, p, ws.Dir); f != nil {
+	if f := runCommands(ctx, p.Checks, ws.Dir, cmdEnv); f != nil {
 		if ctx.Err() != nil {
 			stopped() // the run was cancelled or timed out; that is its outcome
 			return
@@ -426,7 +442,7 @@ const defaultCheckTimeout = 10 * time.Minute
 // checkOutputTail is how much of a failing check's output is kept for the next attempt.
 const checkOutputTail = 8 << 10
 
-// checkFailure is the first project check that failed.
+// checkFailure is the first project command (a check or a setup command) that failed.
 type checkFailure struct {
 	name   string
 	output string // the tail of the check's combined stdout and stderr
@@ -447,15 +463,12 @@ func (f *checkFailure) context() string {
 	return body
 }
 
-// runChecks runs the project's checks in order in dir and stops at the first that fails. Each
-// check is `sh -c` with foundry's environment plus the project's env, and its own timeout. It
-// returns nil when every check passes.
-func runChecks(ctx context.Context, p *config.Project, dir string) *checkFailure {
-	env := os.Environ()
-	for k, v := range p.Env {
-		env = append(env, k+"="+v)
-	}
-	for _, c := range p.Checks {
+// runCommands runs cmds in order in dir and stops at the first that fails. Each command is
+// `sh -c` with its own timeout and runs with exactly env. Callers pass the agent's environment,
+// because these commands execute code the agent may have written, and foundry's own tokens must
+// not be reachable from them. It returns nil when every command passes.
+func runCommands(ctx context.Context, cmds []config.Check, dir string, env []string) *checkFailure {
+	for _, c := range cmds {
 		timeout := c.Timeout.Duration
 		if timeout <= 0 {
 			timeout = defaultCheckTimeout

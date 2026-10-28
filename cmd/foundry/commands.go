@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -90,15 +91,27 @@ func cmdStatus(e *env, args []string) error {
 	return writeStatus(e.out, snap)
 }
 
+// costToday renders today's cost, against the daily budget when one is set.
+func costToday(s client.Stats) string {
+	out := fmt.Sprintf("$%.2f", s.CostTodayUSD)
+	if s.DailyBudgetUSD > 0 {
+		out += fmt.Sprintf(" of $%.2f daily budget", s.DailyBudgetUSD)
+		if s.CostTodayUSD >= s.DailyBudgetUSD {
+			out += " (budget reached — no new runs until midnight)"
+		}
+	}
+	return out
+}
+
 func writeStatus(w io.Writer, s statusSnapshot) error {
 	if s.Control.Paused {
-		fmt.Fprintln(w, "Factory: PAUSED. No runs start and no loops act until `foundry resume`.")
+		fmt.Fprintln(w, "Factory: PAUSED. No new runs start and no new work is picked up; release verification/rollback and production watching continue. `foundry resume` to continue.")
 	} else {
 		fmt.Fprintln(w, "Factory: running.")
 	}
 	fmt.Fprintf(w, "Tasks: %s\n", joinNonZero(s.Stats.TasksByStatus))
-	fmt.Fprintf(w, "Active runs: %d   Pending approvals: %d   Cost today: $%.2f\n\n",
-		s.Stats.ActiveRuns, s.Stats.ApprovalsPending, s.Stats.CostTodayUSD)
+	fmt.Fprintf(w, "Active runs: %d   Pending approvals: %d   Cost today: %s\n\n",
+		s.Stats.ActiveRuns, s.Stats.ApprovalsPending, costToday(s.Stats))
 
 	fmt.Fprintln(w, "Needs you:")
 	n := 0
@@ -219,7 +232,7 @@ func cmdVersion(e *env, args []string) error {
 	if err := requireArgs(args, 0, "version"); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.out, "foundry %s\n", version)
+	fmt.Fprintf(e.out, "foundry %s (%s %s/%s)\n", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	return nil
 }
 
@@ -339,9 +352,13 @@ func taskList(e *env, args []string) error {
 	}
 	rows := make([][]string, 0, len(tasks))
 	for _, t := range tasks {
-		rows = append(rows, []string{t.ID, string(t.Status), string(t.Kind), t.Project, truncate(t.Title, titleWidth)})
+		pr := "-"
+		if t.PRNumber > 0 {
+			pr = fmt.Sprintf("#%d", t.PRNumber)
+		}
+		rows = append(rows, []string{t.ID, string(t.Status), string(t.Kind), t.Project, pr, orDash(string(t.Risk)), truncate(t.Title, titleWidth)})
 	}
-	table(e.out, []string{"ID", "STATUS", "KIND", "PROJECT", "TITLE"}, rows)
+	table(e.out, []string{"ID", "STATUS", "KIND", "PROJECT", "PR", "RISK", "TITLE"}, rows)
 	return nil
 }
 
@@ -943,7 +960,7 @@ func setPaused(e *env, args []string, pause bool) error {
 	ctx := context.Background()
 	if pause {
 		_, err = c.Pause(ctx)
-		fmt.Fprintln(e.out, "paused: no runs start and no loops act until `foundry resume`")
+		fmt.Fprintln(e.out, "paused: no new runs start; release verification/rollback and production watching continue (`foundry resume` to continue)")
 	} else {
 		_, err = c.Resume(ctx)
 		fmt.Fprintln(e.out, "resumed")

@@ -90,7 +90,7 @@ case the approval is recorded as rejected and the task goes back to review so fo
 
 // Stats
 {"tasks_by_status":{"queued":3,...},"active_runs":1,"approvals_pending":0,
- "cost_today_usd":1.23,"paused":false}
+ "cost_today_usd":1.23,"daily_budget_usd":25,"paused":false}
 
 // LoopView
 {"name":"pr_shepherd","project":"foundry","enabled":true,"every":"1m",

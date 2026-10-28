@@ -74,7 +74,7 @@ func (g *GitHub) OpenPR(ctx context.Context, spec scm.PRSpec) (scm.PR, error) {
 	if spec.Draft {
 		args = append(args, "--draft")
 	}
-	out, err := g.run(ctx, spec.Body, args...)
+	out, err := g.run(ctx, quoteMentions(spec.Body), args...)
 	if err != nil {
 		return scm.PR{}, fmt.Errorf("open PR %s -> %s: %w", spec.Head, spec.Base, err)
 	}
@@ -258,7 +258,7 @@ func (g *GitHub) FindPR(ctx context.Context, head string) (scm.PR, bool, error) 
 
 // UpdatePRBody replaces the description of a pull request. The body goes in on stdin.
 func (g *GitHub) UpdatePRBody(ctx context.Context, number int, body string) error {
-	if _, err := g.run(ctx, body, "pr", "edit", strconv.Itoa(number), "--repo", g.Repo,
+	if _, err := g.run(ctx, quoteMentions(body), "pr", "edit", strconv.Itoa(number), "--repo", g.Repo,
 		"--body-file", "-"); err != nil {
 		return fmt.Errorf("update body of PR #%d: %w", number, err)
 	}
@@ -428,13 +428,19 @@ type issueJSON struct {
 	Author    *loginJSON `json:"author"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
+	Comments  []struct {
+		Author            *loginJSON `json:"author"`
+		AuthorAssociation string     `json:"authorAssociation"`
+		Body              string     `json:"body"`
+		CreatedAt         time.Time  `json:"createdAt"`
+	} `json:"comments"`
 }
 
 type loginJSON struct {
 	Login string `json:"login"`
 }
 
-const issueFields = "number,url,title,body,state,labels,author,createdAt,updatedAt"
+const issueFields = "number,url,title,body,state,labels,author,createdAt,updatedAt,comments"
 
 // ListIssues lists issues with the given label (all labels when empty) in state, which is
 // passed to gh as-is ("open", "closed" or "all"; empty means open).
@@ -486,6 +492,13 @@ func decodeIssues(out []byte) ([]scm.Issue, error) {
 		if r.Author != nil {
 			is.Author = r.Author.Login
 		}
+		for _, c := range r.Comments {
+			ic := scm.IssueComment{Association: c.AuthorAssociation, Body: c.Body, CreatedAt: c.CreatedAt}
+			if c.Author != nil {
+				ic.Author = c.Author.Login
+			}
+			is.Comments = append(is.Comments, ic)
+		}
 		issues = append(issues, is)
 	}
 	return issues, nil
@@ -500,7 +513,7 @@ func (g *GitHub) CreateIssue(ctx context.Context, spec scm.IssueSpec) (scm.Issue
 	for _, l := range spec.Labels {
 		args = append(args, "--label", l)
 	}
-	out, err := g.run(ctx, spec.Body, args...)
+	out, err := g.run(ctx, quoteMentions(spec.Body), args...)
 	if err != nil {
 		return scm.Issue{}, fmt.Errorf("create issue %q: %w", spec.Title, err)
 	}
@@ -521,9 +534,34 @@ func (g *GitHub) CreateIssue(ctx context.Context, spec scm.IssueSpec) (scm.Issue
 
 // CommentIssue posts body as a comment on an issue or pull request.
 func (g *GitHub) CommentIssue(ctx context.Context, number int, body string) error {
-	if _, err := g.run(ctx, body, "issue", "comment", strconv.Itoa(number), "--repo", g.Repo,
-		"--body-file", "-"); err != nil {
+	if _, err := g.run(ctx, quoteMentions(body), "issue", "comment", strconv.Itoa(number),
+		"--repo", g.Repo, "--body-file", "-"); err != nil {
 		return fmt.Errorf("comment on #%d: %w", number, err)
+	}
+	return nil
+}
+
+// CloseIssue closes an issue as completed and leaves comment on it. An issue that is already
+// closed is left alone, so the comment is posted at most once. comment is passed as a flag
+// value, not through a shell, so it needs no quoting.
+func (g *GitHub) CloseIssue(ctx context.Context, number int, comment string) error {
+	out, err := g.run(ctx, "", "issue", "view", strconv.Itoa(number), "--repo", g.Repo,
+		"--json", "state")
+	if err != nil {
+		return fmt.Errorf("view issue #%d: %w", number, err)
+	}
+	var cur struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(out, &cur); err != nil {
+		return fmt.Errorf("decode issue #%d: %w", number, err)
+	}
+	if strings.EqualFold(cur.State, "closed") {
+		return nil
+	}
+	if _, err := g.run(ctx, "", "issue", "close", strconv.Itoa(number), "--repo", g.Repo,
+		"--reason", "completed", "--comment", quoteMentions(comment)); err != nil {
+		return fmt.Errorf("close issue #%d: %w", number, err)
 	}
 	return nil
 }

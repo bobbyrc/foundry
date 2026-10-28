@@ -142,6 +142,7 @@ export interface Deployment {
   url?: string;
   state: DeployState;
   notes?: string;
+  log?: string;
   verifying_since?: string;
   started_at: string;
   updated_at: string;

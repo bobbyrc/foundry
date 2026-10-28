@@ -256,6 +256,21 @@ func TestCommentIssueOnIssueAndPR(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrNotFound))
 }
 
+func TestCloseIssueClosesOnceWithComment(t *testing.T) {
+	f := New()
+	issue := f.AddIssue("i", "")
+	require.NoError(t, f.CloseIssue(ctx, issue.Number, "fixed"))
+	assert.Equal(t, "closed", f.Issues[issue.Number].State)
+	assert.Equal(t, []string{"fixed"}, f.Comments[issue.Number])
+
+	require.NoError(t, f.CloseIssue(ctx, issue.Number, "again"))
+	assert.Equal(t, []string{"fixed"}, f.Comments[issue.Number], "closing a closed issue adds nothing")
+
+	err := f.CloseIssue(ctx, 500, "nobody")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrNotFound))
+}
+
 func TestEditLabelsOnIssueAndPR(t *testing.T) {
 	f := New()
 	issue := f.AddIssue("i", "", "a", "b")

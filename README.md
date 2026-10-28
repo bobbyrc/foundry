@@ -91,10 +91,10 @@ the web UI build); `gh` logged in (`gh auth status`); and the `claude` and/or `c
 and logged in.
 
 ```sh
-# Build the web UI first, then the binary, which embeds it.
-(cd web && npm install && npm run build)
-mise exec -- go build -o foundry ./cmd/foundry
+# Builds the web UI, then the binary with it embedded and the version stamped (OUT=path to relocate).
+mise exec -- scripts/build.sh
 
+# Manual fallback: (cd web && npm ci && npm run build) && go build -o foundry ./cmd/foundry
 ./foundry init --project myproject --repo you/myproject   # writes ~/.config/foundry/foundry.yaml
 ./foundry doctor     # checks your setup: config, git, gh, harness CLIs, daemon
 ./foundry serve      # run the daemon; leave it running in its own terminal
@@ -105,6 +105,8 @@ mise exec -- go build -o foundry ./cmd/foundry
 Put `foundry` on your PATH to drop the `./`. Before you point foundry at a real repository, follow
 [docs/getting-started.md](docs/getting-started.md): it starts with a throwaway repository and a
 paused project.
+
+To use the web UI on a phone, add it to the home screen; see [docs/ui.md](docs/ui.md#install-on-a-phone).
 
 ### Run it as a service
 
