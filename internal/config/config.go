@@ -149,6 +149,9 @@ type Deploy struct {
 	Options map[string]any `yaml:"options" json:"options,omitempty"`
 	// HealthURL must answer 2xx during the verify window. Empty skips the HTTP check.
 	HealthURL string `yaml:"health_url" json:"health_url,omitempty"`
+	// Logs is a shell command that prints the service's recent logs (e.g. "tail -n 200
+	// /var/log/app.log", "vercel logs <url>"). Its output tail is attached to incidents.
+	Logs string `yaml:"logs" json:"logs,omitempty"`
 	// VerifyFor is how long a release is watched before it is called healthy. Default 10m.
 	VerifyFor Duration `yaml:"verify_for" json:"verify_for"`
 	// Timeout fails a release still building after this long. Default 30m.
