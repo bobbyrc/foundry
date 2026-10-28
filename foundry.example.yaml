@@ -36,6 +36,8 @@ harnesses:
     args: ["--model", "fast"]                        # extra arguments appended to command
     env:                                             # added to the environment of each run
       MY_AGENT_MODE: "headless"
+    inherit_env: ["GH_TOKEN", "MY_AGENT_API_KEY"]    # variables passed through from foundry's own environment; agents
+                                                     # otherwise get only a small allowlist (PATH, HOME, USER, LANG, ...)
 
 # Agents: roles. Each role runs on one harness with one model and one set of instructions.
 # The six built-in roles (orchestrator, implementer, reviewer, triager, sre, improver) are
@@ -124,6 +126,10 @@ projects:
       Run `mise exec -- go test -race ./...` before you report done.
     env:                               # added to each agent session for this project
       FOUNDRY_PROJECT: foundry
+    checks:                            # commands foundry runs in the worktree before pushing an agent's work
+      - name: test                     # shown in the task log
+        run: mise exec -- go test -race ./...   # run with sh -c, using the project's env
+        timeout: 10m                   # default 10m
     # No deploy block: merged work is not released by foundry.
     paused: false                      # true stops new runs and loop-created tasks (default false)
 
