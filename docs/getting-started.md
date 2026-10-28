@@ -71,6 +71,11 @@ clone from step 3. Foundry runs agents there, so it must be a real git checkout.
 Every other key is optional and has a default. `foundry.example.yaml` in the repository lists every
 option with its default.
 
+**Adding another project.** You do not need to edit the file by hand for a second repository. Run
+`./foundry project add NAME --repo OWNER/NAME`, with `--path` and `--branch` optional, and it adds
+the project under `projects:` and keeps the file's comments. It refuses a name that already exists.
+Then run `./foundry config --reload` (or restart `foundry serve`) so the daemon starts using it.
+
 **Per-project agents.** A project can change the agent roles for itself. Under `agents:`, give a
 role name the fields to change (`harness`, `model`, `prompt`, `args`, `description`); the fields you
 leave out keep the global role's values, and a name the global config does not define adds a role

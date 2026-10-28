@@ -61,7 +61,7 @@ func commandList() []command {
 		{"events", "show history, or follow the event stream", cmdEvents},
 		{"loops", "list recurring loops", cmdLoops},
 		{"loop", "run a loop now: loop run NAME [--project P]", cmdLoop},
-		{"project", "pause or resume one project: project pause|resume NAME", cmdProject},
+		{"project", "add a project to the config, or pause or resume one: project add|pause|resume", cmdProject},
 		{"pause", "stop starting runs and loops", cmdPause},
 		{"resume", "resume a paused factory", cmdResume},
 		{"chat", "message the orchestrator and print its reply", cmdChat},

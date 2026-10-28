@@ -891,17 +891,20 @@ func cmdLoop(e *env, args []string) error {
 
 // ---- pause, resume ----
 
-// cmdProject pauses or resumes one project: `foundry project pause NAME`.
+// cmdProject adds a project to the config, or pauses or resumes one: `foundry project add NAME`,
+// `foundry project pause NAME`.
 func cmdProject(e *env, args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: foundry project pause|resume NAME")
+		return usagef("usage: foundry project add|pause|resume NAME")
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
+	case "add":
+		return addProject(e, rest)
 	case "pause", "resume":
 		return setProjectPaused(e, sub, rest)
 	}
-	return usagef("unknown project command %q (want pause or resume)", sub)
+	return usagef("unknown project command %q (want add, pause or resume)", sub)
 }
 
 func setProjectPaused(e *env, sub string, args []string) error {
