@@ -171,31 +171,44 @@ func cmdProjects(e *env, args []string) error {
 func cmdAgents(e *env, args []string) error {
 	fs := newFlagSet("agents", e)
 	jsonOut := fs.Bool("json", false, "print the raw JSON")
+	all := fs.Bool("all", false, "include removed agents (disabled in the config)")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
-	if err := requireArgs(positional, 0, "agents [--json]"); err != nil {
+	if err := requireArgs(positional, 0, "agents [--all] [--json]"); err != nil {
 		return err
 	}
 	c, err := apiClient()
 	if err != nil {
 		return err
 	}
-	agents, err := c.Agents(context.Background())
+	views, err := c.Agents(context.Background(), "")
 	if err != nil {
 		return err
+	}
+	// A removed agent is hidden by default: the orchestrator reads this list to choose roles.
+	agents := make([]client.AgentView, 0, len(views))
+	for _, a := range views {
+		if a.Disabled && !*all {
+			continue
+		}
+		agents = append(agents, a)
 	}
 	if *jsonOut {
 		return printJSON(e.out, agents)
 	}
 	rows := make([][]string, 0, len(agents))
 	for _, a := range agents {
+		origin := string(a.Origin)
+		if a.Disabled {
+			origin = "removed"
+		}
 		rows = append(rows, []string{
-			a.Name, orDash(a.Harness), orDash(a.Model), orDash(strings.Join(a.Kinds, ",")), truncate(a.Description, 70),
+			a.Name, orDash(origin), orDash(a.Harness), orDash(a.Model), orDash(strings.Join(a.Kinds, ",")), truncate(a.Description, 70),
 		})
 	}
-	table(e.out, []string{"ROLE", "HARNESS", "MODEL", "KINDS", "DESCRIPTION"}, rows)
+	table(e.out, []string{"ROLE", "ORIGIN", "HARNESS", "MODEL", "KINDS", "DESCRIPTION"}, rows)
 	return nil
 }
 

@@ -186,17 +186,22 @@ func ApplyChanges(text []byte, changes []Change) ([]byte, error) {
 // setAt sets the value at path under root, creating missing mappings on the way.
 func setAt(root *yaml.Node, path []string, value any) error {
 	parent := root
+	var parentKey *yaml.Node // the key whose value is parent; nil at the document root
+	inFlow := false          // a node above parent is flow style, so parent stays as written
 	for depth, seg := range path[:len(path)-1] {
-		child, err := step(parent, seg, dotted(path[:depth+1]), true)
+		child, err := step(parent, parentKey, inFlow, seg, dotted(path[:depth+1]), true)
 		if err != nil {
 			return err
 		}
+		parentKey = keyNode(parent, seg)
+		inFlow = inFlow || parent.Style&yaml.FlowStyle != 0
 		parent = child
 	}
 	var val yaml.Node
 	if err := val.Encode(normalizeNumbers(value)); err != nil {
 		return fmt.Errorf("%s: encode value: %w", dotted(path), err)
 	}
+	blockStyle(&val)
 	last := path[len(path)-1]
 	at := dotted(path)
 	switch parent.Kind {
@@ -207,6 +212,9 @@ func setAt(root *yaml.Node, path []string, value any) error {
 			return nil
 		}
 		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: last}
+		if !inFlow {
+			openBlock(parent, parentKey)
+		}
 		parent.Content = append(parent.Content, key, &val)
 		return nil
 	case yaml.SequenceNode:
@@ -215,6 +223,9 @@ func setAt(root *yaml.Node, path []string, value any) error {
 		case !ok:
 			return fmt.Errorf("%s: %q is not a list index", at, last)
 		case i == len(parent.Content):
+			if !inFlow {
+				openBlock(parent, parentKey)
+			}
 			parent.Content = append(parent.Content, &val)
 			return nil
 		case i < len(parent.Content):
@@ -231,7 +242,7 @@ func setAt(root *yaml.Node, path []string, value any) error {
 func deleteAt(root *yaml.Node, path []string) error {
 	parent := root
 	for depth, seg := range path[:len(path)-1] {
-		child, err := step(parent, seg, dotted(path[:depth+1]), false)
+		child, err := step(parent, nil, false, seg, dotted(path[:depth+1]), false)
 		if err != nil {
 			return err
 		}
@@ -260,7 +271,9 @@ func deleteAt(root *yaml.Node, path []string) error {
 
 // step returns the child of parent named seg. With create, a missing mapping key is added as an
 // empty mapping, and a null value is turned into one; without it, a missing child is an error.
-func step(parent *yaml.Node, seg, at string, create bool) (*yaml.Node, error) {
+// parentKey is the key that holds parent, passed on to openBlock. inFlow says a node above parent
+// is flow style, in which case parent is left as written.
+func step(parent, parentKey *yaml.Node, inFlow bool, seg, at string, create bool) (*yaml.Node, error) {
 	switch parent.Kind {
 	case yaml.MappingNode:
 		if i := mappingIndex(parent, seg); i >= 0 {
@@ -275,6 +288,9 @@ func step(parent *yaml.Node, seg, at string, create bool) (*yaml.Node, error) {
 		}
 		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: seg}
 		v := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		if !inFlow {
+			openBlock(parent, parentKey)
+		}
 		parent.Content = append(parent.Content, key, v)
 		return v, nil
 	case yaml.SequenceNode:
@@ -309,6 +325,51 @@ func listIndex(seg string) (int, bool) {
 
 func isNull(n *yaml.Node) bool {
 	return n.Kind == yaml.ScalarNode && n.ShortTag() == "!!null"
+}
+
+// blockStyle makes a value that onlet writes read as block YAML, the form people edit by hand:
+// mappings and lists are block style, and a multi-line string is a literal block, one text line
+// per file line. yaml.v3 writes a multi-line string as a quoted line with \n escapes when it sits
+// inside a flow mapping, so keeping the value out of flow style matters.
+func blockStyle(n *yaml.Node) {
+	switch n.Kind {
+	case yaml.MappingNode, yaml.SequenceNode:
+		n.Style = 0
+	case yaml.ScalarNode:
+		if n.ShortTag() == "!!str" && strings.Contains(n.Value, "\n") {
+			n.Style = yaml.LiteralStyle
+		}
+	}
+	for _, c := range n.Content {
+		blockStyle(c)
+	}
+}
+
+// openBlock turns a flow mapping or list (such as "agents: {}") into block style. Call it only on
+// a node the change is adding an entry to, so that untouched flow nodes keep their style. A node
+// nested inside a flow ancestor stays flow, because opening the ancestors would restyle siblings
+// the change does not touch. When the flow node has a line comment, it moves to its key (key is
+// nil at the document root), so the comment stays on the "agents:" line and not on the next key.
+// Callers skip openBlock when a flow ancestor exists; see setAt.
+func openBlock(n, key *yaml.Node) {
+	if n.Style&yaml.FlowStyle == 0 {
+		return
+	}
+	n.Style &^= yaml.FlowStyle
+	if key != nil && n.LineComment != "" && key.LineComment == "" {
+		key.LineComment, n.LineComment = n.LineComment, ""
+	}
+}
+
+// keyNode returns the key node for seg in a mapping parent, or nil.
+func keyNode(parent *yaml.Node, seg string) *yaml.Node {
+	if parent.Kind != yaml.MappingNode {
+		return nil
+	}
+	if i := mappingIndex(parent, seg); i >= 0 {
+		return parent.Content[i]
+	}
+	return nil
 }
 
 // copyComments keeps the comments of the value being replaced, so a comment beside a setting

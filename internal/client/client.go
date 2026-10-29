@@ -93,15 +93,23 @@ type ProjectControl struct {
 	PausedBy string `json:"paused_by"`
 }
 
-// AgentView is one entry of GET /agents: a role and the harness it runs on.
+// AgentView is one entry of GET /agents. It mirrors api.AgentView; see there for the fields.
 type AgentView struct {
-	Name        string   `json:"name"`
-	Harness     string   `json:"harness"`
-	HarnessType string   `json:"harness_type"`
-	Model       string   `json:"model"`
-	Prompt      string   `json:"prompt"`
-	Description string   `json:"description"`
-	Kinds       []string `json:"kinds"`
+	Name              string             `json:"name"`
+	Origin            config.AgentOrigin `json:"origin"`
+	Disabled          bool               `json:"disabled"`
+	Harness           string             `json:"harness"`
+	HarnessType       string             `json:"harness_type"`
+	Model             string             `json:"model"`
+	Prompt            string             `json:"prompt"`
+	PromptText        string             `json:"prompt_text"`
+	PromptError       string             `json:"prompt_error,omitempty"`
+	PromptUpdates     bool               `json:"prompt_updates"`
+	BuiltinPromptText string             `json:"builtin_prompt_text,omitempty"`
+	Description       string             `json:"description"`
+	Args              []string           `json:"args"`
+	Kinds             []string           `json:"kinds"`
+	Uses              []config.AgentUse  `json:"uses"`
 }
 
 // LoopView is one entry of GET /loops.
@@ -375,10 +383,12 @@ func (c *Client) RunLoop(ctx context.Context, name, project string) error {
 	return c.do(ctx, http.MethodPost, "/loops/"+url.PathEscape(name)+"/run", q, nil, nil)
 }
 
-// Agents calls GET /agents.
-func (c *Client) Agents(ctx context.Context) ([]AgentView, error) {
+// Agents calls GET /agents. An empty project gives the global view; a project gives its merged view.
+func (c *Client) Agents(ctx context.Context, project string) ([]AgentView, error) {
+	q := url.Values{}
+	setIf(q, "project", project)
 	var out []AgentView
-	err := c.do(ctx, http.MethodGet, "/agents", nil, nil, &out)
+	err := c.do(ctx, http.MethodGet, "/agents", q, nil, &out)
 	return out, err
 }
 

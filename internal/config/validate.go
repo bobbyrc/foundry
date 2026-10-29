@@ -42,9 +42,10 @@ func (c *Config) Validate() error {
 		if _, ok := c.Harness[a.Harness]; !ok {
 			add("agents.%s.harness: unknown harness %q", name, a.Harness)
 		}
-		if a.Prompt == "" {
-			add("agents.%s.prompt: must not be empty", name)
-		}
+		addPromptProblem(add, "agents."+name, a)
+	}
+	if a, ok := c.Agents["orchestrator"]; ok && a.Disabled {
+		add("agents.orchestrator.disabled: %s", orchestratorDisableMsg)
 	}
 
 	for kind, agent := range c.Routing {
@@ -53,6 +54,9 @@ func (c *Config) Validate() error {
 		}
 		if _, ok := c.Agents[agent]; !ok {
 			add("routing.%s: unknown agent %q", kind, agent)
+		} else if c.Agents[agent].Disabled && isTaskKind(kind) {
+			add("agents.%s.disabled: %s still uses it (%s); route %s to another agent first",
+				agent, routeText(kind, c.IsDefaultRoute(kind)), KindUse(kind), kind)
 		}
 	}
 
@@ -92,8 +96,17 @@ func (c *Config) Validate() error {
 			if _, ok := c.Harness[a.Harness]; !ok {
 				add("%s.agents.%s.harness: unknown harness %q", prefix, role, a.Harness)
 			}
-			if a.Prompt == "" {
+			// A project override that sets both prompts is reported below, at the override.
+			if a.Prompt == "" && a.PromptText == "" {
 				add("%s.agents.%s.prompt: must not be empty", prefix, role)
+			}
+		}
+		for role, ov := range p.Agents {
+			if ov.Prompt != "" && ov.PromptText != "" {
+				add("%s.agents.%s: set prompt or prompt_text, not both", prefix, role)
+			}
+			if role == "orchestrator" && ov.Disabled {
+				add("%s.agents.orchestrator.disabled: %s", prefix, orchestratorDisableMsg)
 			}
 		}
 		for kind, role := range p.Routing {
@@ -102,6 +115,39 @@ func (c *Config) Validate() error {
 			}
 			if _, ok := agents[role]; !ok {
 				add("%s.routing.%s: unknown agent %q", prefix, kind, role)
+			}
+		}
+		// Only conflicts the project causes are reported here. A route inherited from the global
+		// routing that uses a globally disabled agent is already reported above.
+		kinds := map[string]bool{}
+		for kind := range c.Routing {
+			kinds[kind] = true
+		}
+		for kind := range p.Routing {
+			kinds[kind] = true
+		}
+		for kind := range kinds {
+			if !isTaskKind(kind) {
+				continue
+			}
+			role, ok := c.routeFor(name, domain.TaskKind(kind))
+			if !ok || !agents[role].Disabled {
+				continue
+			}
+			_, own := p.Routing[kind]
+			globallyOff := c.Agents[role].Disabled
+			switch {
+			case !own && globallyOff:
+				continue
+			case p.Agents[role].Disabled && !globallyOff:
+				mark := ""
+				if !own && c.IsDefaultRoute(kind) {
+					mark = " (built-in default)"
+				}
+				add("%s.agents.%s.disabled: routing.%s%s still uses it (%s); set %s.routing.%s to another agent first",
+					prefix, role, kind, mark, KindUse(kind), prefix, kind)
+			default:
+				add("%s.routing.%s: agent %q is disabled; route %s to another agent first", prefix, kind, role, kind)
 			}
 		}
 		seenSource := map[string]bool{}
@@ -208,6 +254,29 @@ func (c *Config) Validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// orchestratorDisableMsg explains why the orchestrator cannot be turned off. Chat talks to it.
+const orchestratorDisableMsg = "chat needs the orchestrator; edit it instead of removing it"
+
+// addPromptProblem reports a role whose instructions are missing or doubled. path is the role's
+// settings path, such as "agents.docs".
+func addPromptProblem(add func(string, ...any), path string, a Agent) {
+	switch {
+	case a.Prompt != "" && a.PromptText != "":
+		add("%s: set prompt or prompt_text, not both", path)
+	case a.Prompt == "" && a.PromptText == "":
+		add("%s.prompt: must not be empty", path)
+	}
+}
+
+// routeText names a task route in a message, adding the built-in default mark when the
+// default routing supplies it.
+func routeText(kind string, byDefault bool) string {
+	if byDefault {
+		return "routing." + kind + " (built-in default)"
+	}
+	return "routing." + kind
 }
 
 // isTaskKind reports whether kind names a domain.TaskKind.

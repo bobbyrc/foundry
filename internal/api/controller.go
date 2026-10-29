@@ -41,6 +41,11 @@ type Controller interface {
 	// SendChat appends a user message and starts the orchestrator's reply, which arrives as
 	// chat.delta events and a final chat.message event. ErrConflict while a reply is running.
 	SendChat(ctx context.Context, conversationID, text string) (domain.ChatMessage, error)
+
+	// AgentPrompt is an agent's instructions: its inline PromptText, else the file or builtin
+	// its Prompt names. BuiltinPrompt is the embedded prompt of one built-in agent.
+	AgentPrompt(a config.Agent) (string, error)
+	BuiltinPrompt(name string) (string, error)
 }
 
 type LoopView struct {

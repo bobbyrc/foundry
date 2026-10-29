@@ -227,3 +227,19 @@ prompts.
 - [x] DESIGN.md refreshed from the built pages (task line, spec sheet, per-page CSS files); drift
       it found fixed (composer outline, count label face, colour-only rail and loop states)
 
+
+# Customizable agents — 2026-10-28
+
+Design: `docs/proposals/customizable-agents.md`. Phase 1 plan (checkboxes live there):
+`docs/superpowers/plans/2026-10-28-customizable-agents-phase1.md`.
+
+- [x] Phase 1: customizable agents (Tasks 1–6 of the plan, plus 4b and a final-review fix wave)
+- [ ] Phase 2: model-economy defaults (plan to be written after phase 1 lands)
+
+## Review (phase 1)
+
+- CI set green on the branch head: go vet, gofmt, 21 Go packages, web typecheck/tests (188)/build.
+- Browser walk-through against a throwaway daemon at desktop and phone width, as owner and viewer.
+- Open follow-ups: `onlet agents` prints kinds, not uses; project-only agents are not on the Agents
+  page; editing an entry replaces it whole, dropping comments inside it; env-expanded agent
+  descriptions and project instructions reach agents (issue draft pending owner approval).

@@ -177,48 +177,73 @@ func applyHarnessDefaults(c *Config) {
 	}
 }
 
-func applyAgentDefaults(c *Config) {
-	if c.Agents == nil {
-		c.Agents = map[string]Agent{}
-	}
-	defaults := map[string]Agent{
+// BuiltinAgents returns the six built-in agents by name, with prompts written as
+// "builtin:<name>". Each call returns a fresh map.
+func BuiltinAgents() map[string]Agent {
+	return map[string]Agent{
 		"orchestrator": {
 			Harness:     "claude",
 			Model:       "opus",
 			Prompt:      "builtin:orchestrator",
-			Description: "The agent you chat with. Plans work and delegates it to other roles; never edits code itself.",
+			Description: "The agent you chat with. Turns what you ask for into tasks for the other agents and reports back; never edits code.",
 		},
 		"implementer": {
 			Harness:     "codex",
 			Prompt:      "builtin:implementer",
-			Description: "Writes code for features, bug fixes, issues and chores, with tests, and commits it on the task branch.",
+			Description: "Writes and tests the code change for a feature, bug fix, issue or chore; on a re-run, fixes the CI failure or review findings first.",
 		},
 		"reviewer": {
 			Harness:     "claude",
 			Model:       "sonnet",
 			Prompt:      "builtin:reviewer",
-			Description: "Reviews a pull request's diff for defects and risk; approves or requests changes.",
+			Description: "Reviews each pull request's diff for defects and risk before merge, without the author's reasoning; approves or requests changes.",
 		},
 		"triager": {
 			Harness:     "claude",
 			Model:       "sonnet",
 			Prompt:      "builtin:triager",
-			Description: "Answers questions and triages issues: reproduces, scopes, and splits them into tasks.",
+			Description: "Answers questions about the code, and triages bug reports: reproduces them and splits them into well-scoped follow-up tasks.",
 		},
 		"sre": {
 			Harness:     "claude",
 			Model:       "sonnet",
 			Prompt:      "builtin:sre",
-			Description: "Investigates production incidents from observability data and ships the smallest safe fix.",
+			Description: "Investigates a failed deploy or production error from its evidence, finds the root cause and ships the smallest safe fix.",
 		},
 		"improver": {
 			Harness:     "codex",
 			Prompt:      "builtin:improver",
-			Description: "Fixes friction in the factory and the codebase: tooling, docs, flaky tests, agent instructions.",
+			Description: "Fixes the cause of friction agents report and of problems retrospectives find: tooling, docs, flaky tests, agent instructions.",
 		},
 	}
-	for name, a := range defaults {
-		if _, ok := c.Agents[name]; !ok {
+}
+
+// applyAgentDefaults adds the built-in agents the file does not name, and sets each agent's
+// Origin. An entry that names a built-in and sets nothing but Disabled turns that agent off
+// without changing it. Any other entry that names a built-in replaces it whole.
+func applyAgentDefaults(c *Config) {
+	if c.Agents == nil {
+		c.Agents = map[string]Agent{}
+	}
+	builtins := BuiltinAgents()
+	for name, def := range builtins {
+		a, ok := c.Agents[name]
+		switch {
+		case !ok:
+			def.Origin = OriginBuiltin
+			c.Agents[name] = def
+		case onlyDisabled(a):
+			def.Disabled = a.Disabled
+			def.Origin = OriginBuiltin
+			c.Agents[name] = def
+		default:
+			a.Origin = OriginEdited
+			c.Agents[name] = a
+		}
+	}
+	for name, a := range c.Agents {
+		if _, ok := builtins[name]; !ok {
+			a.Origin = OriginCustom
 			c.Agents[name] = a
 		}
 	}
@@ -226,6 +251,12 @@ func applyAgentDefaults(c *Config) {
 	for name, a := range c.Agents {
 		c.Agents[name] = resolvePrompt(dir, a)
 	}
+}
+
+// onlyDisabled reports whether a sets no field but possibly Disabled.
+func onlyDisabled(a Agent) bool {
+	return a.Harness == "" && a.Model == "" && a.Prompt == "" && a.PromptText == "" &&
+		len(a.Args) == 0 && a.Description == ""
 }
 
 // configDir is the directory of the config file, or "" when the config has no path.
@@ -260,11 +291,19 @@ func applyRoutingDefaults(c *Config) {
 		string(domain.KindImprove):  "improver",
 		string(domain.KindQuestion): "triager",
 	}
+	c.defaultRoutes = map[string]bool{}
 	for kind, agent := range defaults {
 		if _, ok := c.Routing[kind]; !ok {
 			c.Routing[kind] = agent
+			c.defaultRoutes[kind] = true
 		}
 	}
+}
+
+// IsDefaultRoute reports whether the route for kind came from the built-in defaults rather than
+// from the file.
+func (c *Config) IsDefaultRoute(kind string) bool {
+	return c.defaultRoutes[kind]
 }
 
 func applyPolicyDefaults(c *Config) {

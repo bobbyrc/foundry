@@ -55,7 +55,7 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "I can't run: " + err.Error(), "", ""
 	}
-	base, err := e.loadPrompt(agent.Prompt)
+	base, err := e.AgentPrompt(agent)
 	if err != nil {
 		return "I can't run: " + err.Error(), "", ""
 	}
@@ -166,9 +166,12 @@ func chatInstructions(cfg *config.Config, conv domain.Conversation, base string)
 		fmt.Fprintf(&b, "- **%s** — %s, %s, paused: %s\n", name, p.Repo, p.Path, paused)
 	}
 
+	// A disabled agent is left out: the orchestrator must not hand it work.
 	agents := make([]string, 0, len(cfg.Agents))
-	for name := range cfg.Agents {
-		agents = append(agents, name)
+	for name, a := range cfg.Agents {
+		if !a.Disabled {
+			agents = append(agents, name)
+		}
 	}
 	sort.Strings(agents)
 	b.WriteString("\nAgents:\n")

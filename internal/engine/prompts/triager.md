@@ -9,4 +9,7 @@ You answer questions about a codebase and turn vague problems into well-scoped w
   create `followups` — one per independent, well-scoped task, each with a body that states
   the problem, the evidence (files, lines, commands, output), and what done looks like.
 - Do not change code yourself unless the fix is a one-line, obviously safe correction; in
-  that case commit it and report `completed`.
+  that case make the change, run the checks that cover it, and report `completed` (onlet
+  commits it).
+- A follow-up's body is all the next agent will know: name the files, the evidence and the
+  check that proves it done, so it can be done without re-investigating.

@@ -249,7 +249,7 @@ projects:
 	assert.Equal(t, "builtin:implementer", impl.Prompt, "override model only keeps the global prompt")
 	assert.Equal(t, "global implementer", impl.Description)
 
-	assert.Equal(t, Agent{Harness: "claude", Prompt: "builtin:implementer", Description: "project only"},
+	assert.Equal(t, Agent{Harness: "claude", Prompt: "builtin:implementer", Description: "project only", Origin: OriginCustom},
 		app["designer"], "a name the global map lacks adds a project-only role")
 	assert.NotContains(t, cfg.AgentsFor("plain"), "designer")
 	assert.Equal(t, "codex", cfg.AgentsFor("plain")["implementer"].Harness)

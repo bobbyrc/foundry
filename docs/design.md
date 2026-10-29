@@ -89,7 +89,14 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
   policy, deployer, observers. Defined in config.
 - **Agent profile (role)** — a named recipe: which harness, which model, which prompt file,
   extra args. Built-in roles: `orchestrator` (the agent you chat with), `implementer`, `reviewer`,
-  `triager`, `sre`, `improver`. Any role can be redefined or added in config.
+  `triager`, `sre`, `improver`. Any role can be redefined or added in config. Each role has an
+  **origin**: `builtin` (unchanged default), `edited` (a built-in the file replaces) or `custom`
+  (added by the file). Its instructions are a Markdown file (`prompt`) or inline text
+  (`prompt_text`), never both. `disabled: true` turns a role off without deleting it, so a
+  built-in can be removed from use and restored later. A project override can disable a role for
+  that project, but cannot re-enable one disabled globally. Turning a role off is refused while a route
+  (global, or a project's own) still uses it, so the owner moves those routes first. The
+  orchestrator cannot be turned off, because chat needs it.
 - **Harness** — an adapter that runs one agent CLI non-interactively and streams its output:
   `claude-code`, `codex`, `exec` (anything else), `fake` (tests).
 - **Task** — a unit of work for one role in one project, with a kind (`feature`, `bugfix`,

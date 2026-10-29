@@ -73,7 +73,7 @@ export function NewTaskModal({ open, onClose, defaultProject }: { open: boolean;
         <Field label="Role" hint="Leave on routing default to let onlet pick the agent.">
           <select value={role} onChange={(event) => setRole(event.target.value)}>
             <option value="">Routing default</option>
-            {(agents.data ?? []).map((agent) => (
+            {(agents.data ?? []).filter((agent) => !agent.disabled).map((agent) => (
               <option key={agent.name} value={agent.name}>
                 {agent.name}
               </option>

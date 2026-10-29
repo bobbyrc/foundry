@@ -13,21 +13,34 @@ import (
 //go:embed prompts/*.md
 var promptFS embed.FS
 
+// BuiltinPrompt returns the embedded prompts/<name>.md, or an error for an unknown name.
+func (e *Engine) BuiltinPrompt(name string) (string, error) {
+	b, err := promptFS.ReadFile("prompts/" + name + ".md")
+	if err != nil {
+		return "", fmt.Errorf("unknown builtin prompt %q", name)
+	}
+	return string(b), nil
+}
+
 // loadPrompt returns a role prompt: "builtin:<name>" from the embedded prompts directory, or
 // the contents of a Markdown file path (read on every call, so edits apply without restart).
 func (e *Engine) loadPrompt(ref string) (string, error) {
 	if name, ok := strings.CutPrefix(ref, "builtin:"); ok {
-		b, err := promptFS.ReadFile("prompts/" + name + ".md")
-		if err != nil {
-			return "", fmt.Errorf("unknown builtin prompt %q", name)
-		}
-		return string(b), nil
+		return e.BuiltinPrompt(name)
 	}
 	b, err := os.ReadFile(ref)
 	if err != nil {
 		return "", fmt.Errorf("read prompt %s: %w", ref, err)
 	}
 	return string(b), nil
+}
+
+// AgentPrompt is the agent's own instructions: PromptText, else the builtin or file Prompt.
+func (e *Engine) AgentPrompt(a config.Agent) (string, error) {
+	if a.PromptText != "" {
+		return a.PromptText, nil
+	}
+	return e.loadPrompt(a.Prompt)
 }
 
 // commonPrompt returns prompts/common.md, the rules and report contract every worker gets.
@@ -39,7 +52,7 @@ func (e *Engine) commonPrompt() string {
 // buildInstructions is the system-prompt text for an agent on a project: its role prompt, the
 // common prompt, then the project's own instructions.
 func (e *Engine) buildInstructions(agent config.Agent, p *config.Project) (string, error) {
-	role, err := e.loadPrompt(agent.Prompt)
+	role, err := e.AgentPrompt(agent)
 	if err != nil {
 		return "", err
 	}
