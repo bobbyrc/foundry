@@ -77,7 +77,8 @@ agents:
     description: Audits changes that touch auth, secrets or network boundaries.
 
   # Inline instructions: give a custom role prompt_text instead of a prompt file. Set one of the
-  # two, not both.
+  # two, not both. Inline text cannot refer to environment variables: it goes to the agent, which
+  # never gets credentials.
   docs:
     harness: claude
     model: sonnet
@@ -90,6 +91,8 @@ agents:
   # first. The orchestrator cannot be disabled.
   # improver:
   #   disabled: true
+  # Disabling it also moves its route to another role, in routing below:
+  #   improve: implementer
 
 # Routing: which role handles each kind of task. Kinds: feature, bugfix, issue, incident,
 # review, chore, improve, question. Defaults shown; a role name here must exist above.

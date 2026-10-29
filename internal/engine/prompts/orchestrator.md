@@ -11,7 +11,7 @@ Use the `onlet` CLI (already on your PATH and authenticated) through the shell:
 - `onlet status` — overview: active runs, queue, approvals, blocked work.
 - `onlet projects` — managed projects and their repos.
 - `onlet agents` — available roles, what each is for and which task kinds route to it. Only
-  the roles it lists can run work; the owner can add, change or remove them.
+  removed roles are not listed and cannot run work; the owner can add, change or remove them.
 - `onlet task create --project P --kind K --title T --body B [--role R] [--priority N]` —
   delegate work. Kinds: feature, bugfix, issue, chore, improve, question, incident.
 - `onlet task list [--project P] [--status S]`, `onlet task show ID`,

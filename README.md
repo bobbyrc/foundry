@@ -19,7 +19,8 @@ by chat, from a web UI, or with the `onlet` command.
   `implementer`, `reviewer`, `triager`, `sre` and `improver`. You can edit a built-in role, turn it
   off with `disabled: true` (it cannot be turned off while a route still uses it, and the
   orchestrator cannot be turned off), or add a custom role. A role's instructions are a Markdown
-  file (`prompt`) or written inline in the config (`prompt_text`).
+  file (`prompt`) or written inline in the config (`prompt_text`). Inline instructions cannot use
+  `${NAME}` references, because they are given to the agent, which never gets credentials.
 - **Harness**: the adapter that runs one agent CLI non-interactively and streams its output back.
 - **Run**: one attempt at a task by one agent session, in its own git worktree (a second checkout
   of the repository on its own branch).

@@ -301,8 +301,10 @@ export function useDeleteUser() {
 // ---- config editing (owner only). The document and the raw file are read fresh on demand, and
 // saves never refetch them by themselves: the editor refetches after it has handled the result. ----
 
-/** The file as JSON with its schema, for the visual editor. No refetch on focus: edits are kept. */
-/** Owners only: the server refuses the document to anyone else, so pass `enabled` false for them. */
+/**
+ * The file as JSON with its schema, for the visual editor. No refetch on focus: edits are kept.
+ * Owners only: the server refuses the document to anyone else, so pass `enabled` false for them.
+ */
 export function useConfigDocument(enabled = true) {
   return useQuery({
     queryKey: keys.configDocument,

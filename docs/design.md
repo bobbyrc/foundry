@@ -93,7 +93,8 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
   **origin**: `builtin` (unchanged default), `edited` (a built-in the file replaces) or `custom`
   (added by the file). Its instructions are a Markdown file (`prompt`) or inline text
   (`prompt_text`), never both. `disabled: true` turns a role off without deleting it, so a
-  built-in can be removed from use and restored later. Turning a role off is refused while a route
+  built-in can be removed from use and restored later. A project override can disable a role for
+  that project, but cannot re-enable one disabled globally. Turning a role off is refused while a route
   (global, or a project's own) still uses it, so the owner moves those routes first. The
   orchestrator cannot be turned off, because chat needs it.
 - **Harness** — an adapter that runs one agent CLI non-interactively and streams its output:
