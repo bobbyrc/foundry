@@ -238,6 +238,7 @@ func (c *Config) AgentsFor(project string) map[string]Agent {
 	for name, ov := range p.Agents {
 		base, ok := out[name]
 		if !ok {
+			ov.Origin = OriginCustom
 			out[name] = ov
 			continue
 		}
@@ -247,14 +248,23 @@ func (c *Config) AgentsFor(project string) map[string]Agent {
 		if ov.Model != "" {
 			base.Model = ov.Model
 		}
+		// Prompt and PromptText replace each other, so the agent never has both.
 		if ov.Prompt != "" {
 			base.Prompt = ov.Prompt
+			base.PromptText = ""
+		}
+		if ov.PromptText != "" {
+			base.PromptText = ov.PromptText
+			base.Prompt = ""
 		}
 		if len(ov.Args) > 0 {
 			base.Args = ov.Args
 		}
 		if ov.Description != "" {
 			base.Description = ov.Description
+		}
+		if ov.Disabled {
+			base.Disabled = true
 		}
 		out[name] = base
 	}
@@ -277,6 +287,9 @@ func (c *Config) AgentForProject(project string, kind domain.TaskKind, role stri
 		if !ok {
 			return "", Agent{}, fmt.Errorf("config: unknown agent role %q", role)
 		}
+		if a.Disabled {
+			return "", Agent{}, fmt.Errorf("config: agent %q is disabled", role)
+		}
 		return role, a, nil
 	}
 	name, ok := c.routeFor(project, kind)
@@ -286,6 +299,9 @@ func (c *Config) AgentForProject(project string, kind domain.TaskKind, role stri
 	a, ok := agents[name]
 	if !ok {
 		return "", Agent{}, fmt.Errorf("config: routing %q names unknown agent %q", kind, name)
+	}
+	if a.Disabled {
+		return "", Agent{}, fmt.Errorf("config: agent %q is disabled", name)
 	}
 	return name, a, nil
 }

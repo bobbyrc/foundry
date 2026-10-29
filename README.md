@@ -16,7 +16,10 @@ by chat, from a web UI, or with the `onlet` command.
 - **Task**: one unit of work for one project, such as a feature, a bug fix or an incident.
 - **Role** (agent profile): a named recipe for who does a task: which agent CLI runs it, which
   model, and which instructions. Built-in roles are `orchestrator` (the agent you chat with),
-  `implementer`, `reviewer`, `triager`, `sre` and `improver`.
+  `implementer`, `reviewer`, `triager`, `sre` and `improver`. You can edit a built-in role, turn it
+  off with `disabled: true` (it cannot be turned off while a route still uses it, and the
+  orchestrator cannot be turned off), or add a custom role. A role's instructions are a Markdown
+  file (`prompt`) or written inline in the config (`prompt_text`).
 - **Harness**: the adapter that runs one agent CLI non-interactively and streams its output back.
 - **Run**: one attempt at a task by one agent session, in its own git worktree (a second checkout
   of the repository on its own branch).

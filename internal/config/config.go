@@ -29,6 +29,8 @@ type Config struct {
 	Path string `yaml:"-" json:"path"`
 
 	expanded []string `yaml:"-" json:"-"` // values substituted for ${NAME} references at load time; redacted wherever they appear
+	// defaultRoutes records the task kinds whose routing was filled from the built-in defaults.
+	defaultRoutes map[string]bool `yaml:"-" json:"-"`
 }
 
 type Server struct {
@@ -99,10 +101,21 @@ type Agent struct {
 	Harness string `yaml:"harness" json:"harness"`
 	Model   string `yaml:"model" json:"model,omitempty"`
 	// Prompt is "builtin:<name>" or a path to a Markdown file (relative to the config file).
-	Prompt string   `yaml:"prompt" json:"prompt"`
-	Args   []string `yaml:"args" json:"args,omitempty"`
+	// Set Prompt or PromptText, not both.
+	Prompt string `yaml:"prompt" json:"prompt"`
+	// PromptText is the agent's instructions written inline in the config file, for a custom
+	// agent that has no Markdown file.
+	PromptText string   `yaml:"prompt_text" json:"prompt_text,omitempty"`
+	Args       []string `yaml:"args" json:"args,omitempty"`
 	// Description is shown in the UI and given to the orchestrator so it can pick roles.
 	Description string `yaml:"description" json:"description,omitempty"`
+	// Disabled removes the agent from use: no task is routed to it and it cannot be named
+	// directly. A built-in agent can be disabled this way but not deleted. Disabling is refused
+	// while a route still uses the agent, so move those routes first.
+	Disabled bool `yaml:"disabled" json:"disabled,omitempty"`
+	// Origin says where the agent came from: builtin, edited (a built-in with changes) or custom.
+	// It is computed from the file, not read from it.
+	Origin AgentOrigin `yaml:"-" json:"origin"`
 }
 
 type Rule struct {

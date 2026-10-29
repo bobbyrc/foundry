@@ -76,6 +76,21 @@ agents:
     args: ["--max-turns", "40"]        # extra harness arguments for this role only
     description: Audits changes that touch auth, secrets or network boundaries.
 
+  # Inline instructions: give a custom role prompt_text instead of a prompt file. Set one of the
+  # two, not both.
+  docs:
+    harness: claude
+    model: sonnet
+    prompt_text: |
+      Write and fix the project's documentation. Keep it short and accurate.
+    description: Writes and fixes documentation.
+
+  # Turn a built-in role off with disabled: true. Its settings are kept, so it can be turned back
+  # on. Disabling is refused while a route still uses the role; route those kinds elsewhere
+  # first. The orchestrator cannot be disabled.
+  # improver:
+  #   disabled: true
+
 # Routing: which role handles each kind of task. Kinds: feature, bugfix, issue, incident,
 # review, chore, improve, question. Defaults shown; a role name here must exist above.
 routing:
