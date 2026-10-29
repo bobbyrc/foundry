@@ -145,7 +145,7 @@ as in `onlet task create -h`.
 | `status` | what is running, and what needs you |
 | `projects` | list managed projects |
 | `project add\|pause\|resume` | add a project to the config, or pause or resume one |
-| `agents` | list agent roles |
+| `agents [--all]` | list agent roles; `--all` also shows removed (disabled) ones |
 | `config` | print the redacted config, or `--reload` it |
 | `task` | create, list, show, cancel and retry tasks |
 | `run` | list, show, cancel and print logs of agent runs |

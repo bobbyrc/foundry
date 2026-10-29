@@ -74,15 +74,32 @@ type Stats struct {
 	Paused           bool           `json:"paused"`
 }
 
-// AgentView describes one configured agent role.
+// AgentView describes one agent role as GET /agents shows it: where its settings come from,
+// the instructions it runs with, and what it is used for. Anyone who can read the view sees
+// PromptText and BuiltinPromptText in full, so prompts must never hold secrets.
 type AgentView struct {
-	Name        string   `json:"name"`
-	Harness     string   `json:"harness"`
-	HarnessType string   `json:"harness_type"`
-	Model       string   `json:"model"`
-	Prompt      string   `json:"prompt"`
-	Description string   `json:"description"`
-	Kinds       []string `json:"kinds"`
+	Name        string             `json:"name"`
+	Origin      config.AgentOrigin `json:"origin"`
+	Disabled    bool               `json:"disabled"`
+	Harness     string             `json:"harness"`
+	HarnessType string             `json:"harness_type"`
+	Model       string             `json:"model"`
+	// Prompt is the reference the agent was configured with: "builtin:<name>" or a file path,
+	// and "" when the instructions are written inline.
+	Prompt string `json:"prompt"`
+	// PromptText is the resolved instructions. It is empty when PromptError is set.
+	PromptText  string `json:"prompt_text"`
+	PromptError string `json:"prompt_error,omitempty"`
+	// PromptUpdates is true when the agent runs the built-in prompt of its own name, so a new
+	// onlet release changes its instructions.
+	PromptUpdates bool `json:"prompt_updates"`
+	// BuiltinPromptText is the built-in prompt of this name, set only for a built-in whose
+	// instructions the file replaces, so the owner can compare the two.
+	BuiltinPromptText string            `json:"builtin_prompt_text,omitempty"`
+	Description       string            `json:"description"`
+	Args              []string          `json:"args"`
+	Kinds             []string          `json:"kinds"`
+	Uses              []config.AgentUse `json:"uses"`
 }
 
 // conversationDetail is the body of GET /conversations/{id}.
@@ -418,26 +435,52 @@ func (s *server) setProjectPaused(paused bool) http.HandlerFunc {
 	}
 }
 
+// listAgents returns the global agent view, or with ?project= that project's merged view.
 func (s *server) listAgents(w http.ResponseWriter, r *http.Request) {
-	cfg := s.opts.Controller.Config()
+	ctl := s.opts.Controller
+	cfg := ctl.Config()
+	project := r.URL.Query().Get("project")
+	if project != "" && cfg.Projects[project] == nil {
+		s.fail(w, invalidf("unknown project %q", project))
+		return
+	}
+	agents := cfg.AgentsFor(project)
+	uses := cfg.AgentUses(project)
 	kindsByAgent := make(map[string][]string)
 	for kind, agent := range cfg.Routing {
 		kindsByAgent[agent] = append(kindsByAgent[agent], kind)
 	}
-	out := make([]AgentView, 0, len(cfg.Agents))
-	for _, name := range sortedKeys(cfg.Agents) {
-		a := cfg.Agents[name]
+	builtins := config.BuiltinAgents()
+	out := make([]AgentView, 0, len(agents))
+	for _, name := range sortedKeys(agents) {
+		a := agents[name]
 		kinds := kindsByAgent[name]
 		sort.Strings(kinds)
-		out = append(out, AgentView{
-			Name:        name,
-			Harness:     a.Harness,
-			HarnessType: cfg.Harness[a.Harness].Type,
-			Model:       a.Model,
-			Prompt:      a.Prompt,
-			Description: a.Description,
-			Kinds:       nonNil(kinds),
-		})
+		v := AgentView{
+			Name:          name,
+			Origin:        a.Origin,
+			Disabled:      a.Disabled,
+			Harness:       a.Harness,
+			HarnessType:   cfg.Harness[a.Harness].Type,
+			Model:         a.Model,
+			Prompt:        a.Prompt,
+			PromptUpdates: a.Prompt == "builtin:"+name && a.PromptText == "",
+			Description:   a.Description,
+			Args:          nonNil(a.Args),
+			Kinds:         nonNil(kinds),
+			Uses:          nonNil(uses[name]),
+		}
+		if text, err := ctl.AgentPrompt(a); err != nil {
+			v.PromptError = err.Error()
+		} else {
+			v.PromptText = text
+		}
+		if _, isBuiltin := builtins[name]; isBuiltin && !v.PromptUpdates {
+			if text, err := ctl.BuiltinPrompt(name); err == nil {
+				v.BuiltinPromptText = text
+			}
+		}
+		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

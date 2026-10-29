@@ -93,7 +93,7 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `GET /friction` | `?project=&limit=` | `[]Friction` |
 | `GET /loops` | | `[]LoopView` |
 | `POST /loops/{name}/run` | `?project=` | 202 |
-| `GET /agents` | | `[]AgentView` |
+| `GET /agents` | `?project=` (that project's merged view; an unknown project is 400) | `[]AgentView` |
 | `GET /config` | | `Config` with every `env` value (projects and harnesses) and every deploy, observer or notifier option whose key contains `token`, `secret`, `password` or `key` replaced by `"***"` |
 | `POST /config/reload` | | 204 |
 | `GET /conversations` | | `[]Conversation` |
@@ -157,9 +157,20 @@ case the approval is recorded as rejected and the task goes back to review so on
  "last_run_at":"…","last_error":""}
 
 // AgentView
-{"name":"implementer","harness":"codex","harness_type":"codex","model":"",
- "prompt":"builtin:implementer","description":"…","kinds":["feature","bugfix"]}
+{"name":"implementer","origin":"builtin","disabled":false,"harness":"codex","harness_type":"codex",
+ "model":"","prompt":"builtin:implementer","prompt_text":"# Role: implementer…","prompt_updates":true,
+ "description":"…","args":[],"kinds":["feature","bugfix"],
+ "uses":[{"kind":"feature","description":"builds features"}]}
 ```
+
+An `AgentView` says where the agent's settings come from. `origin` is `builtin` (the factory's own,
+unchanged), `edited` (a built-in that the config replaces) or `custom` (added by the config). A
+`disabled` agent is removed from use, so its `uses` is `[]`. `prompt_text` is the instructions the
+agent runs with, resolved from `prompt` or the inline text; when a file cannot be read,
+`prompt_error` says why and `prompt_text` is empty. `prompt_updates` is true when the agent runs
+the built-in prompt of its own name. For an `edited` built-in, `builtin_prompt_text` holds that
+built-in prompt so the two can be compared. Anyone who can read this route sees these prompts in
+full, because every run is given them verbatim, so a prompt must never hold a secret.
 
 ## Event stream
 

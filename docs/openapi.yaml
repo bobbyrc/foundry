@@ -307,6 +307,16 @@ paths:
       operationId: listAgents
       tags: [agents]
       summary: List configured agent roles.
+      description: >-
+        Without `project`, the global view. With `project`, that project's merged view (its agent
+        overrides applied, and its own routing in `uses`). Disabled agents are listed too, with
+        `disabled: true`.
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: Agents sorted by name.
@@ -316,6 +326,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/AgentView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -2149,11 +2161,24 @@ components:
 
     AgentView:
       type: object
-      description: One configured agent role.
-      required: [name, harness, harness_type, model, prompt, description, kinds]
+      description: >-
+        One agent role. Anyone who can read it sees `prompt_text` and `builtin_prompt_text` in
+        full, since every run is given its instructions verbatim, so prompts must never hold
+        secrets.
+      required: [name, origin, disabled, harness, harness_type, model, prompt, prompt_text,
+        prompt_updates, description, args, kinds, uses]
       properties:
         name:
           type: string
+        origin:
+          type: string
+          enum: [builtin, edited, custom]
+          description: >-
+            `builtin` is the factory's own agent, unchanged. `edited` is a built-in whose config
+            replaces it. `custom` is an agent the config adds.
+        disabled:
+          type: boolean
+          description: The agent is removed from use; no task is routed to it.
         harness:
           type: string
           description: Name of the harness entry in the config.
@@ -2164,14 +2189,45 @@ components:
           type: string
         prompt:
           type: string
-          description: "`builtin:<name>` or a path to a Markdown file."
+          description: "`builtin:<name>` or a path to a Markdown file; empty when the instructions are inline."
+        prompt_text:
+          type: string
+          description: The resolved instructions. Empty when `prompt_error` is set.
+        prompt_error:
+          type: string
+          description: Why the instructions could not be read, such as a missing file.
+        prompt_updates:
+          type: boolean
+          description: True when the agent runs the built-in prompt of its own name, so a new release changes it.
+        builtin_prompt_text:
+          type: string
+          description: For a built-in whose instructions the config replaces, the built-in prompt for comparison.
         description:
           type: string
-        kinds:
+        args:
           type: array
-          description: Task kinds routed to this agent.
           items:
             type: string
+        kinds:
+          type: array
+          description: Global task kinds routed to this agent.
+          items:
+            type: string
+        uses:
+          type: array
+          description: What the agent is used for. Empty for a disabled agent.
+          items:
+            type: object
+            required: [description]
+            properties:
+              kind:
+                type: string
+                description: Task kind; absent for chat and delegation.
+              project:
+                type: string
+                description: The project whose own routing sets the route; absent for the global routing.
+              description:
+                type: string
 
     LoopView:
       type: object

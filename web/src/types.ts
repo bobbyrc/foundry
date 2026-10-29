@@ -215,12 +215,26 @@ export interface LoopView {
 
 export interface AgentView {
   name: string;
+  origin: 'builtin' | 'edited' | 'custom';
+  disabled: boolean;
   harness: string;
   harness_type: string;
   model: string;
   prompt: string;
+  prompt_text: string;
+  prompt_error?: string;
+  prompt_updates: boolean;
+  builtin_prompt_text?: string;
   description: string;
+  args: string[];
   kinds: string[];
+  uses: AgentUse[];
+}
+
+export interface AgentUse {
+  kind?: string;
+  project?: string;
+  description: string;
 }
 
 export interface Stats {

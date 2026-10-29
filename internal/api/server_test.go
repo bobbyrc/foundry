@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -181,6 +182,29 @@ func (f *fakeCtl) SendChat(_ context.Context, convID, text string) (domain.ChatM
 		return domain.ChatMessage{}, err
 	}
 	return domain.ChatMessage{ID: "msg-1", ConversationID: convID, Role: "user", Text: text}, nil
+}
+
+// BuiltinPrompt and AgentPrompt stand in for the engine's embedded prompts (the engine imports
+// this package, so the test cannot import it). A built-in reads as "# Role: <name>".
+func (f *fakeCtl) BuiltinPrompt(name string) (string, error) {
+	if _, ok := config.BuiltinAgents()[name]; !ok {
+		return "", fmt.Errorf("unknown builtin prompt %q", name)
+	}
+	return "# Role: " + name + "\n", nil
+}
+
+func (f *fakeCtl) AgentPrompt(a config.Agent) (string, error) {
+	if a.PromptText != "" {
+		return a.PromptText, nil
+	}
+	if name, ok := strings.CutPrefix(a.Prompt, "builtin:"); ok {
+		return f.BuiltinPrompt(name)
+	}
+	b, err := os.ReadFile(a.Prompt)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func testConfig() *config.Config {
