@@ -57,6 +57,9 @@ func Load(path string) (*Config, error) {
 // resolve relative agent prompt paths; an empty path resolves them against the working
 // directory. An empty document is valid and yields the defaults.
 func Parse(data []byte, path string) (*Config, error) {
+	if err := checkPromptRefs(data); err != nil {
+		return nil, err
+	}
 	expanded, values, err := expandEnv(data)
 	if err != nil {
 		return nil, err
@@ -74,6 +77,54 @@ func Parse(data []byte, path string) (*Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+// promptTexts maps an agent name to its prompt_text as written in the file.
+type promptTexts map[string]struct {
+	PromptText *string `yaml:"prompt_text"`
+}
+
+// rawPrompts is the part of the file that checkPromptRefs reads.
+type rawPrompts struct {
+	Agents   promptTexts `yaml:"agents"`
+	Projects map[string]struct {
+		Agents promptTexts `yaml:"agents"`
+	} `yaml:"projects"`
+}
+
+// checkPromptRefs refuses a ${NAME} reference in an inline prompt. An inline prompt goes to the
+// agent verbatim, and an agent never gets credentials, so the reference is refused whether or
+// not the variable is set. It reads the bytes before expandEnv runs, so the message names the
+// prompt rather than an unset variable. A file that does not decode here is left for Parse's
+// strict decode to report.
+func checkPromptRefs(data []byte) error {
+	var raw rawPrompts
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	var errs []error
+	report := func(prefix string, agents promptTexts) {
+		names := make([]string, 0, len(agents))
+		for name := range agents {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			if text := agents[name].PromptText; text != nil && envRef.MatchString(*text) {
+				errs = append(errs, fmt.Errorf("%sagents.%s.prompt_text: must not contain ${NAME} references; agent prompts are given to agents, which never get credentials", prefix, name))
+			}
+		}
+	}
+	report("", raw.Agents)
+	projects := make([]string, 0, len(raw.Projects))
+	for name := range raw.Projects {
+		projects = append(projects, name)
+	}
+	sort.Strings(projects)
+	for _, name := range projects {
+		report("projects."+name+".", raw.Projects[name].Agents)
+	}
+	return errors.Join(errs...)
 }
 
 // minSecretLen is the shortest substituted value that Redacted masks. Shorter values are too

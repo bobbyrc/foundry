@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -438,13 +439,18 @@ func (s *server) setProjectPaused(paused bool) http.HandlerFunc {
 // listAgents returns the global agent view, or with ?project= that project's merged view.
 func (s *server) listAgents(w http.ResponseWriter, r *http.Request) {
 	ctl := s.opts.Controller
-	cfg := ctl.Config()
+	raw := ctl.Config()
+	// The view is built from the redacted copy, so a value substituted for ${NAME} never
+	// reaches the response. Prompt files are read through the raw agents, since a prompt path
+	// may contain a substituted value that the redacted copy masks.
+	cfg := raw.Redacted()
 	project := r.URL.Query().Get("project")
 	if project != "" && cfg.Projects[project] == nil {
 		s.fail(w, invalidf("unknown project %q", project))
 		return
 	}
 	agents := cfg.AgentsFor(project)
+	rawAgents := raw.AgentsFor(project)
 	uses := cfg.AgentUses(project)
 	kindsByAgent := make(map[string][]string)
 	for kind, agent := range cfg.Routing {
@@ -456,6 +462,7 @@ func (s *server) listAgents(w http.ResponseWriter, r *http.Request) {
 		a := agents[name]
 		kinds := kindsByAgent[name]
 		sort.Strings(kinds)
+		ownBuiltin := a.Prompt == "builtin:"+name && a.PromptText == ""
 		v := AgentView{
 			Name:          name,
 			Origin:        a.Origin,
@@ -464,18 +471,21 @@ func (s *server) listAgents(w http.ResponseWriter, r *http.Request) {
 			HarnessType:   cfg.Harness[a.Harness].Type,
 			Model:         a.Model,
 			Prompt:        a.Prompt,
-			PromptUpdates: a.Prompt == "builtin:"+name && a.PromptText == "",
+			PromptUpdates: strings.HasPrefix(a.Prompt, "builtin:") && a.PromptText == "",
 			Description:   a.Description,
 			Args:          nonNil(a.Args),
 			Kinds:         nonNil(kinds),
 			Uses:          nonNil(uses[name]),
 		}
-		if text, err := ctl.AgentPrompt(a); err != nil {
+		// Inline text comes from the redacted copy; a file is read from its raw path.
+		if a.PromptText != "" {
+			v.PromptText = a.PromptText
+		} else if text, err := ctl.AgentPrompt(rawAgents[name]); err != nil {
 			v.PromptError = err.Error()
 		} else {
 			v.PromptText = text
 		}
-		if _, isBuiltin := builtins[name]; isBuiltin && !v.PromptUpdates {
+		if _, isBuiltin := builtins[name]; isBuiltin && !ownBuiltin {
 			if text, err := ctl.BuiltinPrompt(name); err == nil {
 				v.BuiltinPromptText = text
 			}
