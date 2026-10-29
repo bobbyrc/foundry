@@ -227,3 +227,11 @@ prompts.
 - [x] DESIGN.md refreshed from the built pages (task line, spec sheet, per-page CSS files); drift
       it found fixed (composer outline, count label face, colour-only rail and loop states)
 
+
+# Customizable agents — 2026-10-28
+
+Design: `docs/proposals/customizable-agents.md`. Phase 1 plan (checkboxes live there):
+`docs/superpowers/plans/2026-10-28-customizable-agents-phase1.md`.
+
+- [ ] Phase 1: customizable agents (Tasks 1–6 of the plan)
+- [ ] Phase 2: model-economy defaults (plan to be written after phase 1 lands)
