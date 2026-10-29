@@ -33,6 +33,20 @@ export function formFromAgent(a: AgentView): AgentForm {
   };
 }
 
+/** An empty form for a new agent. */
+export function blankForm(): AgentForm {
+  return {
+    name: '',
+    description: '',
+    harness: '',
+    model: '',
+    args: [],
+    promptMode: 'text',
+    promptRef: '',
+    promptText: '',
+  };
+}
+
 /** One `set` of the whole agent entry, from what the editor shows. Empty optional fields are left out. */
 export function saveChanges(form: AgentForm): ConfigChange[] {
   const value: Record<string, unknown> = { harness: form.harness.trim() };

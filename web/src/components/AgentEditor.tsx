@@ -2,66 +2,11 @@
 // entry in one config change and stays open with the server's reason when the save is refused.
 import { useState, type FormEvent } from 'react';
 import { useConfig, useSaveConfigDocument } from '../queries';
-import { classifySaveFailure } from './config/saveFailure';
-import { formFromAgent, saveChanges, type AgentForm } from '../lib/agentChanges';
-import type { AgentView, ConfigProblem } from '../types';
+import { blankForm, formFromAgent, saveChanges, type AgentForm } from '../lib/agentChanges';
+import type { AgentView } from '../types';
 import { Button } from './Button';
-import { Callout } from './Callout';
-import { ErrorLine } from './ErrorLine';
+import { AgentSaveFailure } from './AgentSaveFailure';
 import { Field } from './Field';
-
-/** An empty form for a new agent. */
-export function blankForm(): AgentForm {
-  return {
-    name: '',
-    description: '',
-    harness: '',
-    model: '',
-    args: [],
-    promptMode: 'text',
-    promptRef: '',
-    promptText: '',
-  };
-}
-
-/**
- * Shows why a save or removal was refused: the problems the server listed, the conflict or
- * reload notice, or the plain error. Nothing is shown for no error.
- */
-export function SaveFailure({ error }: { error: unknown }) {
-  if (!error) return null;
-  const failure = classifySaveFailure(error);
-  switch (failure.kind) {
-    case 'conflict':
-      return (
-        <Callout tone="danger" title="Not saved">
-          The file changed on disk since this page loaded. The page has reloaded it; try again.
-        </Callout>
-      );
-    case 'problems':
-      if (failure.problems.length === 0) return <ErrorLine error={error} />;
-      return (
-        <Callout tone="danger" title="Not saved">
-          <ul className="config-problems">
-            {failure.problems.map((problem: ConfigProblem, index) => (
-              <li key={index}>
-                <span className="mono">{problem.path || 'file'}</span>: {problem.message}
-              </li>
-            ))}
-          </ul>
-        </Callout>
-      );
-    case 'written-not-reloaded':
-      return (
-        <Callout tone="danger" title="Saved, not reloaded">
-          Saved to the file, but onlet could not reload it: {failure.message}. Fix the problem and
-          reload the page.
-        </Callout>
-      );
-    case 'error':
-      return <ErrorLine error={failure.error} />;
-  }
-}
 
 /**
  * The editor. `mode` "new" asks for a name (refusing one already in use) and offers to start
@@ -74,6 +19,7 @@ export function AgentEditor({
   version,
   onDone,
   onCancel,
+  onSaveError,
 }: {
   mode: 'new' | 'edit';
   /** The starting values. For "new" these are blank, or a copy of the agent chosen to start from. */
@@ -84,6 +30,8 @@ export function AgentEditor({
   version: string;
   onDone: () => void;
   onCancel: () => void;
+  /** Called when a save is refused, so the owner of `version` can reload the document. */
+  onSaveError: () => void;
 }) {
   const config = useConfig();
   const save = useSaveConfigDocument();
@@ -101,9 +49,8 @@ export function AgentEditor({
   const chooseStart = (name: string) => {
     setStartFrom(name);
     const source = existing.find((a) => a.name === name);
-    if (!source) return;
-    // Keep the name the owner typed; everything else comes from the chosen agent.
-    setForm({ ...formFromAgent(source), name: form.name });
+    // Keep the name the owner typed; everything else comes from the chosen agent, or is blank.
+    setForm({ ...(source ? formFromAgent(source) : blankForm()), name: form.name });
   };
 
   const submit = (event: FormEvent) => {
@@ -120,7 +67,10 @@ export function AgentEditor({
       { version, changes: saveChanges({ ...form, name, args }) },
       {
         onSuccess: onDone,
-        onError: setFailure,
+        onError: (err) => {
+          setFailure(err);
+          onSaveError();
+        },
       },
     );
   };
@@ -203,7 +153,7 @@ export function AgentEditor({
         </Field>
       )}
 
-      <SaveFailure error={failure} />
+      <AgentSaveFailure error={failure} />
       <div className="row-actions">
         <Button type="submit" variant="primary" disabled={save.isPending}>
           {mode === 'new' ? 'Create agent' : 'Save agent'}

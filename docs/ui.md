@@ -300,10 +300,11 @@ the customised one (stacked on a phone). Enabled agents come first; removed ones
 "New agent", which opens a sheet with name (refused when taken), description, harness (the
 configured harnesses), model, args (one per line), and the prompt, either a reference such as
 `builtin:triager` or a path, or text written here. "Start from" copies another agent's settings
-into the sheet. Each card then has "Edit"; "Remove" (a built-in or edited agent is switched off, a
-custom one is deleted); "Reset to built-in" (an edited one); and "Restore" on a removed card. Remove,
-delete and reset ask for a second click ("Confirm?"). A refused change, such as removing an agent a
-route still uses, shows the server's reason on the page and changes nothing.
+into the sheet, or starts blank. An enabled card has "Edit"; "Remove" (a built-in or edited agent is
+switched off, a custom one is deleted); and "Reset to built-in" (an edited one). Remove and reset ask
+for a second click ("Confirm?"). A removed card shows "Restore" only, with no Edit: restore it first,
+then edit it. A refused change, such as removing an agent a route still uses, shows the server's
+reason on the page and changes nothing.
 
 **Config** (`/config`) — everyone sees the file path and the redacted config as syntax-highlighted
 JSON (keys `--info`, strings `--ok`, numbers `--warn`), with the note "Only an owner can change

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentView } from '../types';
 import {
+  blankForm,
   formFromAgent,
   removeChanges,
   resetChanges,
@@ -41,6 +42,21 @@ function form(overrides: Partial<AgentForm>): AgentForm {
     ...overrides,
   };
 }
+
+describe('blankForm', () => {
+  it('starts every field empty, in text mode, with no args', () => {
+    expect(blankForm()).toEqual({
+      name: '',
+      description: '',
+      harness: '',
+      model: '',
+      args: [],
+      promptMode: 'text',
+      promptRef: '',
+      promptText: '',
+    });
+  });
+});
 
 describe('removeChanges', () => {
   it('deletes a custom agent, since nothing would bring it back', () => {

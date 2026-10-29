@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { useCan } from '../auth';
 import { AgentCard, type AgentControls } from '../components/AgentCard';
-import { AgentEditor, SaveFailure, blankForm } from '../components/AgentEditor';
+import { AgentEditor } from '../components/AgentEditor';
+import { AgentSaveFailure } from '../components/AgentSaveFailure';
 import { Button } from '../components/Button';
 import { Empty } from '../components/Empty';
 import { ErrorLine } from '../components/ErrorLine';
 import { PageHeader } from '../components/PageHeader';
-import { formFromAgent, removeChanges, resetChanges, restoreChanges, type AgentEntry } from '../lib/agentChanges';
+import { blankForm, formFromAgent, removeChanges, resetChanges, restoreChanges, type AgentEntry } from '../lib/agentChanges';
 import { useAgents, useConfigDocument, useSaveConfigDocument } from '../queries';
 import type { AgentView, ConfigChange } from '../types';
 
@@ -84,9 +85,10 @@ export function Agents() {
           version={doc.version}
           onDone={() => setEditing(null)}
           onCancel={() => setEditing(null)}
+          onSaveError={() => void configDoc.refetch()}
         />
       ) : null}
-      <SaveFailure error={failure} />
+      <AgentSaveFailure error={failure} />
 
       {agents.isSuccess && all.length === 0 ? (
         <Empty>No agents are configured. Roles are set under agents in onlet.yaml.</Empty>
