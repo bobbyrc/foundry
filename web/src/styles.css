@@ -288,11 +288,11 @@ pre,
   color: var(--board-text);
 }
 
-.wordmark-square {
-  width: 12px;
-  height: 12px;
-  background: var(--lamp-call);
-  display: inline-block;
+/* Sized in em so the mark follows the wordmark from the rail (24px) to the top bar (22px). */
+.brand-mark {
+  width: 0.75em;
+  height: 0.75em;
+  flex: none;
 }
 
 .sidebar nav {

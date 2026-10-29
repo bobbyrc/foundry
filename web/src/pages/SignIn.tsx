@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError } from '../api';
 import { setUp, signIn } from '../auth';
+import { BrandMark } from '../components/BrandMark';
 import { Button } from '../components/Button';
 import { Field } from '../components/Field';
 import { errorMessage } from '../lib/format';
@@ -57,7 +58,7 @@ export function SignIn({ setup, expired }: { setup: boolean; expired: boolean })
     <div className="connect">
       <form className="card connect-card auth-card" onSubmit={(event) => void submit(event)}>
         <span className="auth-wordmark">
-          <span className="wordmark-square" aria-hidden="true" />
+          <BrandMark />
           onlet
         </span>
         <h1>{creating ? 'Create the owner account' : 'Sign in'}</h1>
