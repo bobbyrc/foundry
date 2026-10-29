@@ -71,3 +71,24 @@ func TestApplyChangesKeepsSingleLineStringsPlain(t *testing.T) {
 	assert.NotContains(t, text, "|")
 	assert.NotContains(t, text, `"`)
 }
+
+func TestApplyChangesKeepsCommentWhenOpeningFlowMapping(t *testing.T) {
+	out, err := ApplyChanges([]byte("# top\nagents: {} # empty agents\nserver:\n  addr: x # listen\n"), []Change{{
+		Op:    "set",
+		Path:  []string{"agents", "docs", "harness"},
+		Value: "claude",
+	}})
+	require.NoError(t, err)
+	var agentsLine, serverLine string
+	for _, line := range strings.Split(string(out), "\n") {
+		switch {
+		case strings.HasPrefix(line, "agents:"):
+			agentsLine = line
+		case strings.HasPrefix(line, "server:"):
+			serverLine = line
+		}
+	}
+	assert.Contains(t, agentsLine, "# empty agents", "output:\n%s", out)
+	assert.NotContains(t, serverLine, "# empty agents", "output:\n%s", out)
+	assert.Contains(t, string(out), "addr: x # listen")
+}
