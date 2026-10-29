@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useCan } from '../auth';
 import { AgentCard, type AgentControls } from '../components/AgentCard';
 import { AgentEditor } from '../components/AgentEditor';
-import { AgentSaveFailure } from '../components/AgentSaveFailure';
 import { Button } from '../components/Button';
 import { Empty } from '../components/Empty';
 import { ErrorLine } from '../components/ErrorLine';
@@ -22,22 +21,20 @@ export function Agents() {
   const configDoc = useConfigDocument(owner);
   const save = useSaveConfigDocument();
   const [editing, setEditing] = useState<Editing | null>(null);
-  // The reason the last remove, reset or restore was refused. The editor shows its own.
-  const [failure, setFailure] = useState<unknown>(null);
+  // The last remove, reset or restore that was refused, and the agent it was for. The card shows
+  // it under its own buttons; the editor shows its own failures.
+  const [failure, setFailure] = useState<{ name: string; error: unknown } | null>(null);
 
   const doc = owner ? configDoc.data : undefined;
-  const fileAgents = (doc?.document as { agents?: Record<string, AgentEntry> } | undefined)?.agents ?? {};
-  const entryFor = (name: string): AgentEntry | undefined =>
-    Object.prototype.hasOwnProperty.call(fileAgents, name) ? fileAgents[name] : undefined;
-
-  const apply = (changes: ConfigChange[]) => {
+  const fileAgents: Record<string, AgentEntry> = (doc?.document as { agents?: Record<string, AgentEntry> } | undefined)?.agents ?? {};
+  const apply = (name: string, changes: ConfigChange[]) => {
     if (!doc) return;
     setFailure(null);
     save.mutate(
       { version: doc.version, changes },
       {
         onError: (err) => {
-          setFailure(err);
+          setFailure({ name, error: err });
           // The file may have changed under us (a conflict), so take the current one again.
           void configDoc.refetch();
         },
@@ -45,14 +42,18 @@ export function Agents() {
     );
   };
 
+  /** The failure to show under this card: only the card whose action was refused. */
+  const failureFor = (agent: AgentView): unknown =>
+    failure !== null && failure.name === agent.name ? failure.error : null;
+
   const controlsFor = (agent: AgentView): AgentControls | undefined => {
     if (!owner) return undefined;
     return {
       busy: !doc || save.isPending,
       onEdit: () => setEditing({ mode: 'edit', agent }),
-      onRemove: () => apply(removeChanges(agent, entryFor(agent.name))),
-      onReset: () => apply(resetChanges(agent.name)),
-      onRestore: () => apply(restoreChanges(agent.name, entryFor(agent.name))),
+      onRemove: () => apply(agent.name, removeChanges(agent, fileAgents)),
+      onReset: () => apply(agent.name, resetChanges(agent.name, fileAgents)),
+      onRestore: () => apply(agent.name, restoreChanges(agent.name, fileAgents)),
     };
   };
 
@@ -88,14 +89,13 @@ export function Agents() {
           onSaveError={() => void configDoc.refetch()}
         />
       ) : null}
-      <AgentSaveFailure error={failure} />
 
       {agents.isSuccess && all.length === 0 ? (
         <Empty>No agents are configured. Roles are set under agents in onlet.yaml.</Empty>
       ) : null}
       <div className="card-grid">
         {enabled.map((agent) => (
-          <AgentCard key={agent.name} agent={agent} controls={controlsFor(agent)} />
+          <AgentCard key={agent.name} agent={agent} controls={controlsFor(agent)} failure={failureFor(agent)} />
         ))}
       </div>
       {removed.length > 0 ? (
@@ -103,7 +103,7 @@ export function Agents() {
           <h2 className="agents-heading">Removed</h2>
           <div className="card-grid">
             {removed.map((agent) => (
-              <AgentCard key={agent.name} agent={agent} controls={controlsFor(agent)} />
+              <AgentCard key={agent.name} agent={agent} controls={controlsFor(agent)} failure={failureFor(agent)} />
             ))}
           </div>
         </>

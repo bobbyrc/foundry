@@ -1,6 +1,6 @@
 // The agent editor sheet: a new agent, or the settings of an existing one. It saves the whole
 // entry in one config change and stays open with the server's reason when the save is refused.
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useConfig, useSaveConfigDocument } from '../queries';
 import { blankForm, formFromAgent, saveChanges, type AgentForm } from '../lib/agentChanges';
 import type { AgentView } from '../types';
@@ -39,6 +39,16 @@ export function AgentEditor({
   const [startFrom, setStartFrom] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Opening the sheet brings it into view with the first field focused, so a click on a card
+  // far down the page still leaves the owner at the form.
+  useEffect(() => {
+    const sheet = formRef.current;
+    if (!sheet) return;
+    sheet.scrollIntoView({ block: 'start' });
+    sheet.querySelector<HTMLElement>('input, select, textarea')?.focus();
+  }, []);
 
   const harnessNames = Object.keys(config.data?.harnesses ?? {});
   // An agent may name a harness that is not in the list (a file edited by hand): keep it selectable.
@@ -76,7 +86,7 @@ export function AgentEditor({
   };
 
   return (
-    <form className="card agent-editor" onSubmit={submit} aria-label={mode === 'new' ? 'New agent' : `Edit ${form.name}`}>
+    <form ref={formRef} className="card agent-editor" onSubmit={submit} aria-label={mode === 'new' ? 'New agent' : `Edit ${form.name}`}>
       <h2 className="agent-editor-title">{mode === 'new' ? 'New agent' : <>Edit <span className="mono">{form.name}</span></>}</h2>
 
       {mode === 'new' ? (

@@ -61,14 +61,30 @@ export function saveChanges(form: AgentForm): ConfigChange[] {
   return [{ op: 'set', path: ['agents', form.name], value }];
 }
 
+/** Whether the file names `name` under `agents`. */
+function hasEntry(fileAgents: Record<string, AgentEntry>, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(fileAgents, name);
+}
+
+/**
+ * Deletes the file entry for `name`. When it is the only entry under `agents`, the whole `agents`
+ * mapping goes, so the file never keeps an empty `agents: {}`.
+ */
+function deleteEntry(name: string, fileAgents: Record<string, AgentEntry>): ConfigChange {
+  const onlyEntry = Object.keys(fileAgents).length === 1 && hasEntry(fileAgents, name);
+  return onlyEntry ? { op: 'delete', path: ['agents'] } : { op: 'delete', path: ['agents', name] };
+}
+
 /**
  * Takes an agent out of use. A custom agent is deleted, since nothing would bring it back. A
  * built-in with no file entry gets an entry that only disables it; an edited one keeps its
  * entry and gets `disabled` set, so its changes survive a restore.
  */
-export function removeChanges(a: AgentView, entry: AgentEntry | undefined): ConfigChange[] {
-  if (a.origin === 'custom') return [{ op: 'delete', path: ['agents', a.name] }];
-  if (entry === undefined) return [{ op: 'set', path: ['agents', a.name], value: { disabled: true } }];
+export function removeChanges(a: AgentView, fileAgents: Record<string, AgentEntry>): ConfigChange[] {
+  if (a.origin === 'custom') return [deleteEntry(a.name, fileAgents)];
+  if (!hasEntry(fileAgents, a.name)) {
+    return [{ op: 'set', path: ['agents', a.name], value: { disabled: true } }];
+  }
   return [{ op: 'set', path: ['agents', a.name, 'disabled'], value: true }];
 }
 
@@ -76,14 +92,14 @@ export function removeChanges(a: AgentView, entry: AgentEntry | undefined): Conf
  * Puts a removed agent back. An entry that only disabled a built-in is deleted, so the built-in
  * returns as it was; any other entry keeps its settings and loses only the `disabled` flag.
  */
-export function restoreChanges(name: string, entry: AgentEntry | undefined): ConfigChange[] {
-  if (entry === undefined) return [];
-  const otherKeys = Object.keys(entry).filter((key) => key !== 'disabled');
-  if (otherKeys.length === 0) return [{ op: 'delete', path: ['agents', name] }];
+export function restoreChanges(name: string, fileAgents: Record<string, AgentEntry>): ConfigChange[] {
+  if (!hasEntry(fileAgents, name)) return [];
+  const otherKeys = Object.keys(fileAgents[name]).filter((key) => key !== 'disabled');
+  if (otherKeys.length === 0) return [deleteEntry(name, fileAgents)];
   return [{ op: 'delete', path: ['agents', name, 'disabled'] }];
 }
 
 /** Drops the file entry for a built-in, so it returns to the built-in definition. */
-export function resetChanges(name: string): ConfigChange[] {
-  return [{ op: 'delete', path: ['agents', name] }];
+export function resetChanges(name: string, fileAgents: Record<string, AgentEntry>): ConfigChange[] {
+  return [deleteEntry(name, fileAgents)];
 }

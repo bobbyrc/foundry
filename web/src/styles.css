@@ -1720,6 +1720,11 @@ a.board-window:hover .board-name {
   margin-top: 12px;
 }
 
+/* A card showing its full prompt or the compare view takes the whole grid row. */
+.agent-card--wide {
+  grid-column: 1 / -1;
+}
+
 .agents-heading {
   font-size: 15px;
   color: var(--muted);
@@ -1749,7 +1754,7 @@ a.board-window:hover .board-name {
   flex: 1 1 200px;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .agent-compare {
     grid-template-columns: minmax(0, 1fr);
   }

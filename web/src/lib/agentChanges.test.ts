@@ -60,44 +60,68 @@ describe('blankForm', () => {
 
 describe('removeChanges', () => {
   it('deletes a custom agent, since nothing would bring it back', () => {
-    expect(removeChanges(view({ name: 'docs', origin: 'custom' }), { harness: 'claude' })).toEqual([
+    const files = { docs: { harness: 'claude' }, other: { harness: 'claude' } };
+    expect(removeChanges(view({ name: 'docs', origin: 'custom' }), files)).toEqual([
       { op: 'delete', path: ['agents', 'docs'] },
     ]);
   });
 
-  it('disables a built-in agent that has no file entry', () => {
-    expect(removeChanges(view({ name: 'improver', origin: 'builtin', prompt: 'builtin:improver' }), undefined)).toEqual([
-      { op: 'set', path: ['agents', 'improver'], value: { disabled: true } },
+  it('deletes the whole agents mapping when a custom agent is the only entry', () => {
+    expect(removeChanges(view({ name: 'docs', origin: 'custom' }), { docs: { harness: 'claude' } })).toEqual([
+      { op: 'delete', path: ['agents'] },
     ]);
+  });
+
+  it('disables a built-in agent that has no file entry', () => {
+    expect(
+      removeChanges(view({ name: 'improver', origin: 'builtin', prompt: 'builtin:improver' }), {
+        docs: { harness: 'claude' },
+      }),
+    ).toEqual([{ op: 'set', path: ['agents', 'improver'], value: { disabled: true } }]);
   });
 
   it('sets disabled on an edited agent whose entry is present', () => {
     expect(
       removeChanges(view({ name: 'reviewer', origin: 'edited', prompt: 'builtin:reviewer' }), {
-        harness: 'claude',
-        prompt: 'builtin:reviewer',
+        reviewer: { harness: 'claude', prompt: 'builtin:reviewer' },
       }),
     ).toEqual([{ op: 'set', path: ['agents', 'reviewer', 'disabled'], value: true }]);
   });
 });
 
 describe('restoreChanges', () => {
-  it('deletes the whole entry when it only disables a built-in', () => {
-    expect(restoreChanges('improver', { disabled: true })).toEqual([
+  it('deletes the whole entry when it only disables a built-in and other entries remain', () => {
+    expect(restoreChanges('improver', { improver: { disabled: true }, docs: { harness: 'claude' } })).toEqual([
       { op: 'delete', path: ['agents', 'improver'] },
     ]);
   });
 
+  it('deletes the whole agents mapping when a disabled-only entry is the only one', () => {
+    expect(restoreChanges('improver', { improver: { disabled: true } })).toEqual([
+      { op: 'delete', path: ['agents'] },
+    ]);
+  });
+
   it('removes only the disabled flag when the entry sets other fields', () => {
-    expect(restoreChanges('reviewer', { harness: 'claude', disabled: true })).toEqual([
+    expect(restoreChanges('reviewer', { reviewer: { harness: 'claude', disabled: true } })).toEqual([
       { op: 'delete', path: ['agents', 'reviewer', 'disabled'] },
     ]);
+  });
+
+  it('changes nothing when the file has no entry for the agent', () => {
+    expect(restoreChanges('improver', { docs: { harness: 'claude' } })).toEqual([]);
   });
 });
 
 describe('resetChanges', () => {
-  it('deletes the entry so the built-in comes back', () => {
-    expect(resetChanges('reviewer')).toEqual([{ op: 'delete', path: ['agents', 'reviewer'] }]);
+  it('deletes the entry so the built-in comes back, keeping other entries', () => {
+    expect(resetChanges('reviewer', { reviewer: { harness: 'claude' }, docs: { harness: 'claude' } })).toEqual([
+      { op: 'delete', path: ['agents', 'reviewer'] },
+    ]);
+  });
+
+  it('deletes the whole agents mapping when the entry is the only one', () => {
+    expect(resetChanges('reviewer', { reviewer: { harness: 'claude' } })).toEqual([{ op: 'delete', path: ['agents'] }]);
   });
 });
 

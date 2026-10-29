@@ -2,10 +2,14 @@
 // the controls that change it. The page does the saving; the card only asks for an action.
 import { useState } from 'react';
 import type { AgentView } from '../types';
+import { AgentSaveFailure } from './AgentSaveFailure';
 import { Button } from './Button';
 
 /** The first lines of a prompt shown before "Show full prompt". */
 const PREVIEW_LINES = 8;
+
+/** The server always refuses to disable the orchestrator (chat needs it), so it has no Remove. */
+const ORCHESTRATOR = 'orchestrator';
 
 export interface AgentControls {
   /** True while a save is in flight: every control is disabled. */
@@ -19,10 +23,23 @@ export interface AgentControls {
 
 /** The badge text: a removed agent says so whatever its origin. */
 export function agentBadge(a: AgentView): string {
-  return a.disabled ? 'removed' : a.origin;
+  if (a.disabled) return 'removed';
+  return a.origin === 'builtin' ? 'built-in' : a.origin;
 }
 
-export function AgentCard({ agent, controls }: { agent: AgentView; controls?: AgentControls }) {
+/**
+ * `failure` is the reason the last action on this card was refused, or null. It is shown under
+ * the card's own buttons, so the owner sees it next to the click that caused it.
+ */
+export function AgentCard({
+  agent,
+  controls,
+  failure = null,
+}: {
+  agent: AgentView;
+  controls?: AgentControls;
+  failure?: unknown;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [comparing, setComparing] = useState(false);
 
@@ -32,9 +49,11 @@ export function AgentCard({ agent, controls }: { agent: AgentView; controls?: Ag
   const customized = agent.origin === 'edited' && !agent.prompt_updates;
   const canCompare = customized && agent.builtin_prompt_text !== undefined;
   const busy = controls?.busy ?? false;
+  // A full prompt or a side-by-side compare needs the room of the whole grid row.
+  const wide = expanded || (canCompare && comparing);
 
   return (
-    <article className="card agent-card">
+    <article className={wide ? 'card agent-card agent-card--wide' : 'card agent-card'}>
       <div className="card-head">
         <h3 className="mono">{agent.name}</h3>
         <span className="tag">{agentBadge(agent)}</span>
@@ -116,15 +135,11 @@ export function AgentCard({ agent, controls }: { agent: AgentView; controls?: Ag
               <Button disabled={busy} onClick={controls.onEdit}>
                 Edit
               </Button>
-              {agent.origin === 'custom' ? (
+              {agent.origin === 'custom' || agent.name !== ORCHESTRATOR ? (
                 <Button variant="danger" confirm disabled={busy} onClick={controls.onRemove}>
-                  Delete
+                  {agent.origin === 'custom' ? 'Delete' : 'Remove'}
                 </Button>
-              ) : (
-                <Button variant="danger" confirm disabled={busy} onClick={controls.onRemove}>
-                  Remove
-                </Button>
-              )}
+              ) : null}
               {agent.origin === 'edited' ? (
                 <Button variant="danger" confirm disabled={busy} onClick={controls.onReset}>
                   Reset to built-in
@@ -134,6 +149,7 @@ export function AgentCard({ agent, controls }: { agent: AgentView; controls?: Ag
           )}
         </div>
       ) : null}
+      <AgentSaveFailure error={failure} />
     </article>
   );
 }
