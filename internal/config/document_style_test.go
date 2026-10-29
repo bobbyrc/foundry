@@ -92,3 +92,19 @@ func TestApplyChangesKeepsCommentWhenOpeningFlowMapping(t *testing.T) {
 	assert.NotContains(t, serverLine, "# empty agents", "output:\n%s", out)
 	assert.Contains(t, string(out), "addr: x # listen")
 }
+
+func TestApplyChangesNestedFlowStaysValid(t *testing.T) {
+	out, err := ApplyChanges([]byte("x: {a: {b: 1} # inner\n, c: 2}\n"), []Change{{
+		Op:    "set",
+		Path:  []string{"x", "a", "d"},
+		Value: "claude",
+	}})
+	require.NoError(t, err)
+
+	var back map[string]any
+	require.NoError(t, yaml.Unmarshal(out, &back), "output must re-parse:\n%s", out)
+	x := back["x"].(map[string]any)
+	assert.Equal(t, "claude", x["a"].(map[string]any)["d"])
+	assert.Equal(t, 1, x["a"].(map[string]any)["b"])
+	assert.Equal(t, 2, x["c"])
+}
