@@ -1,8 +1,5 @@
 # onett
 
-> Renamed from **onlet** on 2026-10-29, and from **foundry** before that. Upgrading an existing
-> install: see [docs/renamed-from-onlet.md](docs/renamed-from-onlet.md).
-
 Onett is a personal software factory. It is a local daemon (a background program that keeps
 running) that hands work to coding agents: Claude Code and Codex today, and any other agent CLI
 through a plugin. For each piece of work it runs the agent in its own git checkout, opens a pull
