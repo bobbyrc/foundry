@@ -1,5 +1,5 @@
 // The single event stream. One EventSource to /api/v1/events feeds every subscriber, reconnects
-// with backoff (1s doubling to 30s) and resumes from the last stored event ID.
+// with backoff (1s doubling to 5s) and resumes from the last stored event ID.
 import { useSyncExternalStore } from 'react';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { ApiError, getStats } from './api';
@@ -35,7 +35,9 @@ export type LiveStatus = 'live' | 'reconnecting';
 type Listener = (ev: OnletEvent) => void;
 
 const MIN_BACKOFF_MS = 1_000;
-const MAX_BACKOFF_MS = 30_000;
+// A retry is one small request to a self-hosted daemon, so the cap stays low: a longer one only
+// leaves the UI disconnected for that long after the daemon comes back.
+const MAX_BACKOFF_MS = 5_000;
 
 export class EventStream {
   private source: EventSource | null = null;
@@ -55,11 +57,15 @@ export class EventStream {
     if (this.running) return;
     this.queryClient = queryClient;
     this.running = true;
+    window.addEventListener('online', this.retryNow);
+    document.addEventListener('visibilitychange', this.retryNow);
     this.connect();
   }
 
   stop(): void {
     this.running = false;
+    window.removeEventListener('online', this.retryNow);
+    document.removeEventListener('visibilitychange', this.retryNow);
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -93,6 +99,16 @@ export class EventStream {
     this.status = next;
     for (const listener of this.statusListeners) listener();
   }
+
+  // Skips the rest of a backoff wait when the network returns or the tab is shown again. Browsers
+  // throttle timers in background tabs, so a wait that started there can run far past its delay.
+  private readonly retryNow = (): void => {
+    if (this.timer === null || document.visibilityState !== 'visible') return;
+    clearTimeout(this.timer);
+    this.timer = null;
+    this.attempt = 0;
+    this.connect();
+  };
 
   private connect(): void {
     if (!this.running) return;
