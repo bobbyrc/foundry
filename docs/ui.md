@@ -140,7 +140,7 @@ that needs remote access, such as Tailscale, and the name you use must be in
 ## Live data
 
 One `EventSource` to `/api/v1/events?after=<last id>`, which the browser sends with the session
-cookie. It starts only once someone is signed in. It reconnects with backoff (1s → 30s). Events invalidate react-query keys: `task.*` → tasks, task detail, stats;
+cookie. It starts only once someone is signed in. It reconnects with backoff (1s → 5s), and at once when the tab is shown again or the network returns. Events invalidate react-query keys: `task.*` → tasks, task detail, stats;
 `run.updated` → runs, run detail; `approval.*` → approvals, stats; `deploy.updated` →
 deployments; `signal.new` → signals; `friction.reported`/`issue.filed` → friction;
 `chat.message` → that conversation. `run.log` and `chat.delta` are delivered to subscribers
