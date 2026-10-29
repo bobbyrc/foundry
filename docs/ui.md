@@ -30,7 +30,7 @@ is drawn with 1px rules and square corners; content has no shadows.
 | `--text` / `--muted` | `#18201c` / `#4b5751` | `#e4ebe6` / `#a1aea7` | body / secondary text |
 | `--board` | `#1f2422` | `#0a0d0c` | nav rail, phone top bar, lamp board |
 | `--lamp-run` | `#2fa35a` | same | running, in review, merged, deploying |
-| `--lamp-call` | `#f2c230` | same | waits on you: approvals; medium risk; brand square |
+| `--lamp-call` | `#f2c230` | same | waits on you: approvals; medium risk; the lit segment of the brand mark |
 | `--lamp-stop` | `#d7342a` | same | stopped: blocked, failed, denied; high risk |
 | `--lamp-done` | `#7f9d8c` | `#6f8e7d` | done, healthy |
 | `--lamp-off` | `#3a423e` | `#2c3430` | idle, queued, cancelled, paused |
@@ -75,8 +75,8 @@ blinks on and off rather than pulsing; both stop under `prefers-reduced-motion`.
 
 ## Shell
 
-- Left rail 216px in `--board`: wordmark "onlet" in Barlow Condensed with a 12px call-yellow
-  square before it; nav items: Overview, Projects, Chat, Tasks, Approvals, Runs, Deploys,
+- Left rail 216px in `--board`: wordmark "onlet" in Barlow Condensed after the brand mark, a
+  loop in the text colour with one call-yellow lit segment (work going round the line); nav items: Overview, Projects, Chat, Tasks, Approvals, Runs, Deploys,
   Signals, Friction, Loops, Agents, Config, and Users (owners only). Approvals carries a
   yellow count badge when approvals wait; Tasks a red one when tasks are blocked (each count
   has screen-reader text). The active item is lit (`--board-2` background, white text).
@@ -129,7 +129,7 @@ A control a role may not use is left out, not shown greyed out.
 ## Install on a phone
 
 The UI is an installable web app (it has a web app manifest, `/manifest.webmanifest`, and an
-icon of a yellow lamp square on charcoal, `/icon.svg`), so it can sit on a phone home screen
+icon of the brand mark on charcoal, `/icon.svg`), so it can sit on a phone home screen
 and open without browser chrome. Open onlet's URL on the phone first. From another network
 that needs remote access, such as Tailscale, and the name you use must be in
 `server.allowed_hosts`, or the server answers 421. Then:

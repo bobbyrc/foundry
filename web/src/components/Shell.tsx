@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useCan } from '../auth';
 import { useStats } from '../queries';
 import { AccountPanel } from './AccountPanel';
+import { BrandMark } from './BrandMark';
 import { LiveIndicator } from './LiveIndicator';
 import { PauseSwitch } from './PauseSwitch';
 import { RailLamps } from './RailLamps';
@@ -26,7 +27,7 @@ const NAV: { to: string; label: string; end?: boolean; approvals?: boolean; bloc
 function Wordmark() {
   return (
     <span className="wordmark">
-      <span className="wordmark-square" aria-hidden="true" />
+      <BrandMark />
       onlet
     </span>
   );
