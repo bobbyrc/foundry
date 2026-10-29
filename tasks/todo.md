@@ -246,6 +246,7 @@ Design: `docs/proposals/customizable-agents.md`. Phase 1 plan (checkboxes live t
 
 ## Rename to onett — 2026-10-29
 
-- [x] Rename onlet -> onett everywhere (clean break; upgrade note docs/renamed-from-onlet.md)
-- [ ] Rename the GitHub repo to bobbyrc/onett and update local remotes
-- [ ] Migrate the dogfood instance to ~/.local/share/onett-dogfood and io.onett.serve
+- [x] Rename onlet -> onett everywhere (PR #66, clean break; upgrade note docs/renamed-from-onlet.md)
+- [x] Rename the GitHub repo to bobbyrc/onett and the intake label to `onett`; local remotes updated
+- [x] Migrate the dogfood instance to ~/.local/share/onett-dogfood and io.onett.serve;
+      history's project key rewritten to onett; backup in ~/.local/share/onlet-dogfood-backup-2026-10-29
