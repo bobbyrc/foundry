@@ -59,14 +59,14 @@ agents:
     harness: claude                    # default: claude, model opus
     model: opus
     prompt: builtin:orchestrator       # "builtin:<name>" or a Markdown file path
-    description: The agent you chat with. Plans work and delegates it to other roles.
+    description: The agent you chat with. Turns what you ask for into tasks for the other agents.
 
   # Override the implementer to run on Claude instead of Codex.
   implementer:
     harness: claude                    # default: codex
     model: sonnet                      # the model name the harness understands; empty = harness default
     prompt: builtin:implementer
-    description: Writes code for features, bug fixes, issues and chores, with tests.
+    description: Writes and tests the code change for a feature, bug fix, issue or chore.
 
   # A custom role. Its prompt is a Markdown file; a relative path is relative to this file.
   security:

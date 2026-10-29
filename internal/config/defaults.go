@@ -185,35 +185,35 @@ func BuiltinAgents() map[string]Agent {
 			Harness:     "claude",
 			Model:       "opus",
 			Prompt:      "builtin:orchestrator",
-			Description: "The agent you chat with. Plans work and delegates it to other roles; never edits code itself.",
+			Description: "The agent you chat with. Turns what you ask for into tasks for the other agents and reports back; never edits code.",
 		},
 		"implementer": {
 			Harness:     "codex",
 			Prompt:      "builtin:implementer",
-			Description: "Writes code for features, bug fixes, issues and chores, with tests, and commits it on the task branch.",
+			Description: "Writes and tests the code change for a feature, bug fix, issue or chore; on a re-run, fixes the CI failure or review findings first.",
 		},
 		"reviewer": {
 			Harness:     "claude",
 			Model:       "sonnet",
 			Prompt:      "builtin:reviewer",
-			Description: "Reviews a pull request's diff for defects and risk; approves or requests changes.",
+			Description: "Reviews each pull request's diff for defects and risk before merge, without the author's reasoning; approves or requests changes.",
 		},
 		"triager": {
 			Harness:     "claude",
 			Model:       "sonnet",
 			Prompt:      "builtin:triager",
-			Description: "Answers questions and triages issues: reproduces, scopes, and splits them into tasks.",
+			Description: "Answers questions about the code, and triages bug reports: reproduces them and splits them into well-scoped follow-up tasks.",
 		},
 		"sre": {
 			Harness:     "claude",
 			Model:       "sonnet",
 			Prompt:      "builtin:sre",
-			Description: "Investigates production incidents from observability data and ships the smallest safe fix.",
+			Description: "Investigates a failed deploy or production error from its evidence, finds the root cause and ships the smallest safe fix.",
 		},
 		"improver": {
 			Harness:     "codex",
 			Prompt:      "builtin:improver",
-			Description: "Fixes friction in the factory and the codebase: tooling, docs, flaky tests, agent instructions.",
+			Description: "Fixes the cause of friction agents report and of problems retrospectives find: tooling, docs, flaky tests, agent instructions.",
 		},
 	}
 }
