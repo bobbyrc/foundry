@@ -27,3 +27,7 @@
   on a spare port takes minutes, and it found the stranded-branch bug (a retry after a failed PR
   open marked the task done) that every unit test passed. Live drills (kill staging during
   verification, inject a log error) found more than the reviews did for the deploy path.
+- Check browser-facing behaviour in the owner's browser (Firefox here), not only in Chromium.
+  Browsers differ in what they wait for: Firefox fires EventSource "open" only once body bytes
+  arrive, Chrome on the headers. (2026-10-28: a reconnect fix measured fast in Chromium, and
+  the owner still waited 15s for "live", one full ping interval, in Firefox.)

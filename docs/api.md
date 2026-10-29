@@ -175,6 +175,6 @@ data: {"id":1234,"time":"…","type":"task.updated","task_id":"…","message":"�
 
 Live-only events (`run.log`, `chat.delta`) carry no `id:` line, since they are not stored. Their
 JSON data has `"id":0`, so clients must not use it as a resume cursor.
-The server sends `: ping` every 15s. Clients must ignore event types they do not know and
-reconnect with the last `id` they saw. Event types are the `Ev*` constants in
-`internal/domain/domain.go`.
+The server sends `: connected` as soon as a stream opens and `: ping` every 15s. Clients must
+ignore event types they do not know and reconnect with the last `id` they saw. Event types are
+the `Ev*` constants in `internal/domain/domain.go`.
