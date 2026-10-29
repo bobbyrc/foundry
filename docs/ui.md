@@ -289,8 +289,21 @@ asks for confirmation. "Add user" opens a sheet above the table with username, p
 role (default operator) and "Create user" or "Cancel". The server's message is shown under the
 table when it refuses a change, such as demoting or removing the last owner.
 
-**Agents** (`/agents`) — card grid: name, description, harness and its type, model,
-prompt, and the task kinds routed to it.
+**Agents** (`/agents`) — card grid of the configured roles. Each card shows the name, a badge
+(`built-in`, `edited`, `custom` or `removed`: where its settings come from, or that it is switched
+off), the description, the harness and its type, the model (or "harness default"), and **Used for**:
+one line per task kind or route that uses the agent, with the project when one is named. The prompt
+shows its first 8 lines with "Show full prompt" to expand it. An edited built-in that no longer
+receives onlet's prompt updates says so, and "Compare with built-in" puts the built-in text beside
+the customised one (stacked on a phone). Enabled agents come first; removed ones sit under a
+"Removed" heading. Anyone can read the page. An owner also sees:
+"New agent", which opens a sheet with name (refused when taken), description, harness (the
+configured harnesses), model, args (one per line), and the prompt, either a reference such as
+`builtin:triager` or a path, or text written here. "Start from" copies another agent's settings
+into the sheet. Each card then has "Edit"; "Remove" (a built-in or edited agent is switched off, a
+custom one is deleted); "Reset to built-in" (an edited one); and "Restore" on a removed card. Remove,
+delete and reset ask for a second click ("Confirm?"). A refused change, such as removing an agent a
+route still uses, shows the server's reason on the page and changes nothing.
 
 **Config** (`/config`) — everyone sees the file path and the redacted config as syntax-highlighted
 JSON (keys `--info`, strings `--ok`, numbers `--warn`), with the note "Only an owner can change

@@ -1666,6 +1666,95 @@ a.board-window:hover .board-name {
   font-size: 17px;
 }
 
+.agent-card .agent-uses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-card .agent-uses li {
+  margin: 0 0 4px;
+}
+
+/* The prompt: monospace in a panel, wrapping long lines so nothing scrolls the page sideways. */
+.agent-prompt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin-top: 12px;
+}
+
+.agent-prompt {
+  margin: 6px 0;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-prompt-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+/* Built-in beside the customised prompt; stacked on a phone. */
+.agent-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.agent-compare > div {
+  min-width: 0;
+}
+
+.agent-compare .agent-prompt {
+  margin-bottom: 0;
+}
+
+.agent-actions {
+  margin-top: 12px;
+}
+
+.agents-heading {
+  font-size: 15px;
+  color: var(--muted);
+  margin: 24px 0 10px;
+}
+
+/* The agent editor sheet: its fields sit in rows that wrap on a phone, like the add-user sheet. */
+.agent-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-editor-title {
+  font-size: 17px;
+  margin: 0;
+}
+
+.agent-editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.agent-editor-row .field {
+  flex: 1 1 200px;
+}
+
+@media (max-width: 760px) {
+  .agent-compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .connect {
   min-height: 100vh;
   display: grid;

@@ -213,9 +213,12 @@ export interface LoopView {
   last_error?: string;
 }
 
+/** Where an agent's settings come from: the built-in definition, a built-in with changes, or a custom agent. */
+export type AgentOrigin = 'builtin' | 'edited' | 'custom';
+
 export interface AgentView {
   name: string;
-  origin: 'builtin' | 'edited' | 'custom';
+  origin: AgentOrigin;
   disabled: boolean;
   harness: string;
   harness_type: string;
@@ -330,8 +333,10 @@ export interface Agent {
   harness: string;
   model?: string;
   prompt: string;
+  prompt_text?: string;
   args?: string[];
   description?: string;
+  disabled?: boolean;
 }
 
 export interface Rule {
