@@ -48,6 +48,9 @@ func (e *Engine) harnessFor(project, agentName string) (harness.Harness, config.
 	if !ok {
 		return nil, a, fmt.Errorf("agent %q: unknown harness %q", agentName, a.Harness)
 	}
+	if a.Disabled {
+		return nil, config.Agent{}, fmt.Errorf("agent %q is disabled", agentName)
+	}
 	hn, err := e.d.HarnessFor(a.Harness, h)
 	return hn, a, err
 }

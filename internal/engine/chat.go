@@ -55,7 +55,7 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "I can't run: " + err.Error(), "", ""
 	}
-	base, err := e.loadPrompt(agent.Prompt)
+	base, err := e.AgentPrompt(agent)
 	if err != nil {
 		return "I can't run: " + err.Error(), "", ""
 	}
