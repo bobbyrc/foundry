@@ -197,6 +197,7 @@ func setAt(root *yaml.Node, path []string, value any) error {
 	if err := val.Encode(normalizeNumbers(value)); err != nil {
 		return fmt.Errorf("%s: encode value: %w", dotted(path), err)
 	}
+	blockStyle(&val)
 	last := path[len(path)-1]
 	at := dotted(path)
 	switch parent.Kind {
@@ -207,6 +208,7 @@ func setAt(root *yaml.Node, path []string, value any) error {
 			return nil
 		}
 		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: last}
+		openBlock(parent)
 		parent.Content = append(parent.Content, key, &val)
 		return nil
 	case yaml.SequenceNode:
@@ -215,6 +217,7 @@ func setAt(root *yaml.Node, path []string, value any) error {
 		case !ok:
 			return fmt.Errorf("%s: %q is not a list index", at, last)
 		case i == len(parent.Content):
+			openBlock(parent)
 			parent.Content = append(parent.Content, &val)
 			return nil
 		case i < len(parent.Content):
@@ -275,6 +278,7 @@ func step(parent *yaml.Node, seg, at string, create bool) (*yaml.Node, error) {
 		}
 		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: seg}
 		v := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		openBlock(parent)
 		parent.Content = append(parent.Content, key, v)
 		return v, nil
 	case yaml.SequenceNode:
@@ -309,6 +313,30 @@ func listIndex(seg string) (int, bool) {
 
 func isNull(n *yaml.Node) bool {
 	return n.Kind == yaml.ScalarNode && n.ShortTag() == "!!null"
+}
+
+// blockStyle makes a value that onlet writes read as block YAML, the form people edit by hand:
+// mappings and lists are block style, and a multi-line string is a literal block, one text line
+// per file line. yaml.v3 writes a multi-line string as a quoted line with \n escapes when it sits
+// inside a flow mapping, so keeping the value out of flow style matters.
+func blockStyle(n *yaml.Node) {
+	switch n.Kind {
+	case yaml.MappingNode, yaml.SequenceNode:
+		n.Style = 0
+	case yaml.ScalarNode:
+		if n.ShortTag() == "!!str" && strings.Contains(n.Value, "\n") {
+			n.Style = yaml.LiteralStyle
+		}
+	}
+	for _, c := range n.Content {
+		blockStyle(c)
+	}
+}
+
+// openBlock turns a flow mapping or list (such as "agents: {}") into block style. Call it only on
+// a node the change is adding an entry to, so that untouched flow nodes keep their style.
+func openBlock(n *yaml.Node) {
+	n.Style &^= yaml.FlowStyle
 }
 
 // copyComments keeps the comments of the value being replaced, so a comment beside a setting
