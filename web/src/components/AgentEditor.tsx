@@ -2,7 +2,7 @@
 // entry in one config change and stays open with the server's reason when the save is refused.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useConfig, useSaveConfigDocument } from '../queries';
-import { blankForm, formFromAgent, saveChanges, type AgentForm } from '../lib/agentChanges';
+import { blankForm, formFromAgent, formFromEntry, hasEntry, saveChanges, type AgentEntry, type AgentForm } from '../lib/agentChanges';
 import type { AgentView } from '../types';
 import { Button } from './Button';
 import { AgentSaveFailure } from './AgentSaveFailure';
@@ -16,6 +16,7 @@ export function AgentEditor({
   mode,
   initial,
   existing,
+  fileAgents,
   version,
   onDone,
   onCancel,
@@ -26,6 +27,8 @@ export function AgentEditor({
   initial: AgentForm;
   /** Names of every agent already configured, used to refuse a duplicate name. */
   existing: AgentView[];
+  /** The agent entries the config file holds, keyed by name; "Start from" copies from these first. */
+  fileAgents: Record<string, AgentEntry>;
   /** The config document version the save is based on. */
   version: string;
   onDone: () => void;
@@ -59,8 +62,13 @@ export function AgentEditor({
   const chooseStart = (name: string) => {
     setStartFrom(name);
     const source = existing.find((a) => a.name === name);
+    const start = hasEntry(fileAgents, name)
+      ? formFromEntry(name, fileAgents[name], source)
+      : source
+        ? formFromAgent(source)
+        : blankForm();
     // Keep the name the owner typed; everything else comes from the chosen agent, or is blank.
-    setForm({ ...(source ? formFromAgent(source) : blankForm()), name: form.name });
+    setForm({ ...start, name: form.name });
   };
 
   const submit = (event: FormEvent) => {

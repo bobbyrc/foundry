@@ -33,6 +33,26 @@ export function formFromAgent(a: AgentView): AgentForm {
   };
 }
 
+/**
+ * The editor's starting values from the file's own entry for `name`. The entry holds the settings
+ * as written: a relative prompt path, and no masks. `view` only supplies the current text, which
+ * "Write the prompt here" starts from when the entry names a file.
+ */
+export function formFromEntry(name: string, entry: AgentEntry, view: AgentView | undefined): AgentForm {
+  const text = (key: string): string => (typeof entry[key] === 'string' ? (entry[key] as string) : '');
+  const inline = typeof entry.prompt_text === 'string';
+  return {
+    name,
+    description: text('description'),
+    harness: text('harness'),
+    model: text('model'),
+    args: Array.isArray(entry.args) ? entry.args.map(String) : [],
+    promptMode: inline ? 'text' : 'ref',
+    promptRef: text('prompt'),
+    promptText: inline ? text('prompt_text') : (view?.prompt_text ?? ''),
+  };
+}
+
 /** An empty form for a new agent. */
 export function blankForm(): AgentForm {
   return {
@@ -62,7 +82,7 @@ export function saveChanges(form: AgentForm): ConfigChange[] {
 }
 
 /** Whether the file names `name` under `agents`. */
-function hasEntry(fileAgents: Record<string, AgentEntry>, name: string): boolean {
+export function hasEntry(fileAgents: Record<string, AgentEntry>, name: string): boolean {
   return Object.prototype.hasOwnProperty.call(fileAgents, name);
 }
 

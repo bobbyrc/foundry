@@ -3,6 +3,7 @@ import type { AgentView } from '../types';
 import {
   blankForm,
   formFromAgent,
+  formFromEntry,
   removeChanges,
   resetChanges,
   restoreChanges,
@@ -169,5 +170,40 @@ describe('formFromAgent', () => {
     expect(f.promptMode).toBe('ref');
     expect(f.promptRef).toBe('builtin:improver');
     expect(f.promptText).toBe('Improve things.');
+  });
+});
+
+describe('formFromEntry', () => {
+  it('starts from the file entry, so a relative prompt path is kept as written', () => {
+    const v = view({ name: 'security', prompt: '/repo/prompts/security.md', prompt_text: 'Audit.' });
+    const f = formFromEntry('security', { harness: 'claude', prompt: 'prompts/security.md' }, v);
+    expect(f.promptMode).toBe('ref');
+    expect(f.promptRef).toBe('prompts/security.md');
+  });
+
+  it('uses the entry prompt_text exactly, even when the view holds a mask', () => {
+    const v = view({ name: 'docs', prompt_text: '***' });
+    const f = formFromEntry('docs', { harness: 'claude', prompt_text: 'Mine.' }, v);
+    expect(f.promptMode).toBe('text');
+    expect(f.promptText).toBe('Mine.');
+  });
+
+  it('starts "Write the prompt here" from the current text when the entry names a file', () => {
+    const v = view({ name: 'security', prompt: 'prompts/security.md', prompt_text: 'Audit.' });
+    const f = formFromEntry('security', { prompt: 'prompts/security.md' }, v);
+    expect(f.promptText).toBe('Audit.');
+  });
+
+  it('defaults missing fields to empty strings and no args', () => {
+    expect(formFromEntry('x', {}, undefined)).toEqual({
+      name: 'x',
+      description: '',
+      harness: '',
+      model: '',
+      args: [],
+      promptMode: 'ref',
+      promptRef: '',
+      promptText: '',
+    });
   });
 });

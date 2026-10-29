@@ -8,7 +8,16 @@ import { Button } from '../components/Button';
 import { Empty } from '../components/Empty';
 import { ErrorLine } from '../components/ErrorLine';
 import { PageHeader } from '../components/PageHeader';
-import { blankForm, formFromAgent, removeChanges, resetChanges, restoreChanges, type AgentEntry } from '../lib/agentChanges';
+import {
+  blankForm,
+  formFromAgent,
+  formFromEntry,
+  hasEntry,
+  removeChanges,
+  resetChanges,
+  restoreChanges,
+  type AgentEntry,
+} from '../lib/agentChanges';
 import { useAgents, useConfigDocument, useSaveConfigDocument } from '../queries';
 import type { AgentView, ConfigChange } from '../types';
 
@@ -41,6 +50,10 @@ export function Agents() {
       },
     );
   };
+
+  /** The editor's starting values: the file's entry when it has one, else the computed view. */
+  const editForm = (agent: AgentView) =>
+    hasEntry(fileAgents, agent.name) ? formFromEntry(agent.name, fileAgents[agent.name], agent) : formFromAgent(agent);
 
   /** The failure to show under this card: only the card whose action was refused. */
   const failureFor = (agent: AgentView): unknown =>
@@ -81,8 +94,9 @@ export function Agents() {
         <AgentEditor
           key={editing.mode === 'edit' ? editing.agent.name : 'new'}
           mode={editing.mode}
-          initial={editing.mode === 'edit' ? formFromAgent(editing.agent) : blankForm()}
+          initial={editing.mode === 'edit' ? editForm(editing.agent) : blankForm()}
           existing={all}
+          fileAgents={fileAgents}
           version={doc.version}
           onDone={() => setEditing(null)}
           onCancel={() => setEditing(null)}
