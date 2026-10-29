@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stand-in for the codex CLI in unit tests. $1 is the fixture to replay; the remaining
-# arguments are the CLI arguments onlet built, which are reported on stderr with the stdin.
+# arguments are the CLI arguments onett built, which are reported on stderr with the stdin.
 fixture=$1
 shift
 input=$(cat)

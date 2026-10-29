@@ -19,11 +19,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/events"
-	"github.com/bobbyrc/onlet/internal/store"
-	"github.com/bobbyrc/onlet/internal/store/sqlite"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/events"
+	"github.com/bobbyrc/onett/internal/store"
+	"github.com/bobbyrc/onett/internal/store/sqlite"
 )
 
 const testToken = "test-token-value"
@@ -210,7 +210,7 @@ func (f *fakeCtl) AgentPrompt(a config.Agent) (string, error) {
 func testConfig() *config.Config {
 	return &config.Config{
 		Projects: map[string]*config.Project{
-			"onlet": {Repo: "bobbyrc/onlet", Env: map[string]string{"API_SECRET": "hunter2"}},
+			"onett": {Repo: "bobbyrc/onett", Env: map[string]string{"API_SECRET": "hunter2"}},
 		},
 		Harness: map[string]config.Harness{
 			"codex":  {Type: "codex"},
@@ -338,7 +338,7 @@ func TestUnknownAPIPathIsJSON404(t *testing.T) {
 
 func TestCreateTask(t *testing.T) {
 	x := newHarness(t)
-	body := `{"project":"onlet","kind":"feature","title":"Add x","body":"do it","role":"implementer",
+	body := `{"project":"onett","kind":"feature","title":"Add x","body":"do it","role":"implementer",
 		"priority":5,"parent_id":"parent-1"}`
 	rec := x.call(t, http.MethodPost, "/api/v1/tasks", body)
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
@@ -348,7 +348,7 @@ func TestCreateTask(t *testing.T) {
 	assert.Equal(t, "task-new", got.ID)
 
 	c := x.ctl.created
-	assert.Equal(t, "onlet", c.Project)
+	assert.Equal(t, "onett", c.Project)
 	assert.Equal(t, domain.KindFeature, c.Kind)
 	assert.Equal(t, "Add x", c.Title)
 	assert.Equal(t, "do it", c.Body)
@@ -360,16 +360,16 @@ func TestCreateTask(t *testing.T) {
 
 func TestCreateTaskRejectsUnknownField(t *testing.T) {
 	x := newHarness(t)
-	rec := x.call(t, http.MethodPost, "/api/v1/tasks", `{"project":"onlet","bogus":1}`)
+	rec := x.call(t, http.MethodPost, "/api/v1/tasks", `{"project":"onett","bogus":1}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Empty(t, x.ctl.calls, "controller must not run on a bad body")
 }
 
 func TestListTasksStatusFilter(t *testing.T) {
 	x := newHarness(t)
-	x.makeTask(t, "onlet", domain.TaskQueued, "")
-	x.makeTask(t, "onlet", domain.TaskRunning, "")
-	x.makeTask(t, "onlet", domain.TaskDone, "")
+	x.makeTask(t, "onett", domain.TaskQueued, "")
+	x.makeTask(t, "onett", domain.TaskRunning, "")
+	x.makeTask(t, "onett", domain.TaskDone, "")
 
 	rec := x.call(t, http.MethodGet, "/api/v1/tasks?status=queued,running", "")
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -387,15 +387,15 @@ func TestListTasksStatusFilter(t *testing.T) {
 
 func TestTaskDetail(t *testing.T) {
 	x := newHarness(t)
-	parent := x.makeTask(t, "onlet", domain.TaskRunning, "")
-	child := x.makeTask(t, "onlet", domain.TaskQueued, parent.ID)
-	other := x.makeTask(t, "onlet", domain.TaskQueued, "")
+	parent := x.makeTask(t, "onett", domain.TaskRunning, "")
+	child := x.makeTask(t, "onett", domain.TaskQueued, parent.ID)
+	other := x.makeTask(t, "onett", domain.TaskQueued, "")
 	ctx := context.Background()
-	_, err := x.st.CreateRun(ctx, domain.Run{TaskID: parent.ID, Project: "onlet", Status: domain.RunRunning, StartedAt: time.Now()})
+	_, err := x.st.CreateRun(ctx, domain.Run{TaskID: parent.ID, Project: "onett", Status: domain.RunRunning, StartedAt: time.Now()})
 	require.NoError(t, err)
-	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: parent.ID, Project: "onlet", Kind: "merge", Status: domain.ApprovalPending})
+	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: parent.ID, Project: "onett", Kind: "merge", Status: domain.ApprovalPending})
 	require.NoError(t, err)
-	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: other.ID, Project: "onlet", Kind: "merge", Status: domain.ApprovalPending})
+	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: other.ID, Project: "onett", Kind: "merge", Status: domain.ApprovalPending})
 	require.NoError(t, err)
 
 	rec := x.call(t, http.MethodGet, "/api/v1/tasks/"+parent.ID, "")
@@ -474,9 +474,9 @@ func TestCancelAndRetry(t *testing.T) {
 func TestApprovals(t *testing.T) {
 	x := newHarness(t)
 	ctx := context.Background()
-	_, err := x.st.CreateApproval(ctx, domain.Approval{TaskID: "t1", Project: "onlet", Kind: "merge", Status: domain.ApprovalPending})
+	_, err := x.st.CreateApproval(ctx, domain.Approval{TaskID: "t1", Project: "onett", Kind: "merge", Status: domain.ApprovalPending})
 	require.NoError(t, err)
-	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: "t2", Project: "onlet", Kind: "merge", Status: domain.ApprovalApproved})
+	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: "t2", Project: "onett", Kind: "merge", Status: domain.ApprovalApproved})
 	require.NoError(t, err)
 
 	var pending []domain.Approval
@@ -519,7 +519,7 @@ func TestDecideApprovalRequiresApprove(t *testing.T) {
 func TestProjectPauseAndResume(t *testing.T) {
 	x := newHarness(t)
 
-	rec := x.call(t, http.MethodPost, "/api/v1/projects/onlet/pause", "")
+	rec := x.call(t, http.MethodPost, "/api/v1/projects/onett/pause", "")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.JSONEq(t, `{"paused":true,"paused_by":"owner"}`, rec.Body.String())
 
@@ -535,7 +535,7 @@ func TestProjectPauseAndResume(t *testing.T) {
 	assert.True(t, projects[0].Paused)
 	assert.Equal(t, "owner", projects[0].PausedBy)
 
-	rec = x.call(t, http.MethodPost, "/api/v1/projects/onlet/resume", "")
+	rec = x.call(t, http.MethodPost, "/api/v1/projects/onett/resume", "")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.JSONEq(t, `{"paused":false,"paused_by":""}`, rec.Body.String())
 	rec = x.call(t, http.MethodGet, "/api/v1/projects", "")
@@ -544,7 +544,7 @@ func TestProjectPauseAndResume(t *testing.T) {
 	assert.Empty(t, projects[0].PausedBy)
 
 	assert.Equal(t, []string{
-		"SetProjectPaused:onlet:true", "SetProjectPaused:onlet:false",
+		"SetProjectPaused:onett:true", "SetProjectPaused:onett:false",
 	}, x.ctl.calls)
 
 	rec = x.call(t, http.MethodPost, "/api/v1/projects/nope/pause", "")
@@ -553,7 +553,7 @@ func TestProjectPauseAndResume(t *testing.T) {
 
 func TestProjectResumeConfigPausedConflicts(t *testing.T) {
 	x := newHarness(t)
-	x.ctl.cfg.Projects["onlet"].Paused = true
+	x.ctl.cfg.Projects["onett"].Paused = true
 
 	var projects []struct {
 		Paused   bool   `json:"paused"`
@@ -565,17 +565,17 @@ func TestProjectResumeConfigPausedConflicts(t *testing.T) {
 	assert.True(t, projects[0].Paused, "a project paused in config is paused")
 	assert.Equal(t, "config", projects[0].PausedBy)
 
-	rec = x.call(t, http.MethodPost, "/api/v1/projects/onlet/resume", "")
+	rec = x.call(t, http.MethodPost, "/api/v1/projects/onett/resume", "")
 	assert.Equal(t, http.StatusConflict, rec.Code)
-	assert.JSONEq(t, `{"error":"conflict: project \"onlet\" is paused in config"}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":"conflict: project \"onett\" is paused in config"}`, rec.Body.String())
 }
 
 func TestProjectsCountsAndRedaction(t *testing.T) {
 	x := newHarness(t)
-	x.makeTask(t, "onlet", domain.TaskQueued, "")
-	x.makeTask(t, "onlet", domain.TaskQueued, "")
-	x.makeTask(t, "onlet", domain.TaskRunning, "")
-	x.makeTask(t, "onlet", domain.TaskDone, "") // not counted
+	x.makeTask(t, "onett", domain.TaskQueued, "")
+	x.makeTask(t, "onett", domain.TaskQueued, "")
+	x.makeTask(t, "onett", domain.TaskRunning, "")
+	x.makeTask(t, "onett", domain.TaskDone, "") // not counted
 	x.makeTask(t, "other", domain.TaskBlocked, "")
 
 	rec := x.call(t, http.MethodGet, "/api/v1/projects", "")
@@ -590,8 +590,8 @@ func TestProjectsCountsAndRedaction(t *testing.T) {
 	}
 	decode(t, rec, &projects)
 	require.Len(t, projects, 1)
-	assert.Equal(t, "onlet", projects[0].Name)
-	assert.Equal(t, "bobbyrc/onlet", projects[0].Repo)
+	assert.Equal(t, "onett", projects[0].Name)
+	assert.Equal(t, "bobbyrc/onett", projects[0].Repo)
 	assert.Equal(t, "***", projects[0].Env["API_SECRET"])
 	assert.Equal(t, 2, projects[0].Counts["queued"])
 	assert.Equal(t, 1, projects[0].Counts["running"])
@@ -603,15 +603,15 @@ func TestProjectsCountsAndRedaction(t *testing.T) {
 func TestStats(t *testing.T) {
 	x := newHarness(t)
 	ctx := context.Background()
-	x.makeTask(t, "onlet", domain.TaskQueued, "")
-	x.makeTask(t, "onlet", domain.TaskDone, "")
-	_, err := x.st.CreateRun(ctx, domain.Run{TaskID: "t", Project: "onlet", Status: domain.RunRunning,
+	x.makeTask(t, "onett", domain.TaskQueued, "")
+	x.makeTask(t, "onett", domain.TaskDone, "")
+	_, err := x.st.CreateRun(ctx, domain.Run{TaskID: "t", Project: "onett", Status: domain.RunRunning,
 		StartedAt: time.Now(), CostUSD: 1.5})
 	require.NoError(t, err)
-	_, err = x.st.CreateRun(ctx, domain.Run{TaskID: "t", Project: "onlet", Status: domain.RunSucceeded,
+	_, err = x.st.CreateRun(ctx, domain.Run{TaskID: "t", Project: "onett", Status: domain.RunSucceeded,
 		StartedAt: time.Now().Add(-48 * time.Hour), CostUSD: 10})
 	require.NoError(t, err)
-	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: "t", Project: "onlet", Kind: "merge", Status: domain.ApprovalPending})
+	_, err = x.st.CreateApproval(ctx, domain.Approval{TaskID: "t", Project: "onett", Kind: "merge", Status: domain.ApprovalPending})
 	require.NoError(t, err)
 	x.ctl.paused = true
 	x.ctl.cfg.Limits.DailyBudgetUSD = 25
@@ -652,7 +652,7 @@ func TestConfigRedacted(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "hunter2")
 	assert.Contains(t, rec.Body.String(), `"API_SECRET":"***"`)
-	assert.Equal(t, "hunter2", x.ctl.cfg.Projects["onlet"].Env["API_SECRET"], "the live config is not modified")
+	assert.Equal(t, "hunter2", x.ctl.cfg.Projects["onett"].Env["API_SECRET"], "the live config is not modified")
 
 	rec = x.call(t, http.MethodPost, "/api/v1/config/reload", "")
 	assert.Equal(t, http.StatusNoContent, rec.Code)
@@ -674,7 +674,7 @@ func TestControl(t *testing.T) {
 
 func TestLoops(t *testing.T) {
 	x := newHarness(t)
-	x.ctl.loops = []LoopView{{Name: "pr_shepherd", Project: "onlet", Enabled: true, Every: "1m"}}
+	x.ctl.loops = []LoopView{{Name: "pr_shepherd", Project: "onett", Enabled: true, Every: "1m"}}
 	rec := x.call(t, http.MethodGet, "/api/v1/loops", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	var loops []LoopView
@@ -682,15 +682,15 @@ func TestLoops(t *testing.T) {
 	require.Len(t, loops, 1)
 	assert.Equal(t, "pr_shepherd", loops[0].Name)
 
-	rec = x.call(t, http.MethodPost, "/api/v1/loops/pr_shepherd/run?project=onlet", "")
+	rec = x.call(t, http.MethodPost, "/api/v1/loops/pr_shepherd/run?project=onett", "")
 	assert.Equal(t, http.StatusAccepted, rec.Code)
-	assert.Equal(t, "pr_shepherd?project=onlet", x.ctl.loopRun)
+	assert.Equal(t, "pr_shepherd?project=onett", x.ctl.loopRun)
 }
 
 func TestRunsAndLogs(t *testing.T) {
 	x := newHarness(t)
 	ctx := context.Background()
-	run, err := x.st.CreateRun(ctx, domain.Run{TaskID: "t1", Project: "onlet", Status: domain.RunRunning, StartedAt: time.Now()})
+	run, err := x.st.CreateRun(ctx, domain.Run{TaskID: "t1", Project: "onett", Status: domain.RunRunning, StartedAt: time.Now()})
 	require.NoError(t, err)
 	_, err = x.st.AppendRunLogs(ctx, run.ID, []domain.LogLine{
 		{Kind: domain.LogText, Text: "one"}, {Kind: domain.LogText, Text: "two"}, {Kind: domain.LogText, Text: "three"},
@@ -718,7 +718,7 @@ func TestRunsAndLogs(t *testing.T) {
 func TestDeploymentsSignalsFriction(t *testing.T) {
 	x := newHarness(t)
 	for _, p := range []string{"/api/v1/deployments", "/api/v1/signals", "/api/v1/friction"} {
-		rec := x.call(t, http.MethodGet, p+"?project=onlet&limit=5", "")
+		rec := x.call(t, http.MethodGet, p+"?project=onett&limit=5", "")
 		assert.Equal(t, http.StatusOK, rec.Code, p)
 		assert.JSONEq(t, `[]`, rec.Body.String(), p)
 	}
@@ -728,10 +728,10 @@ func TestEventsHistory(t *testing.T) {
 	x := newHarness(t)
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
-		_, err := x.bus.Publish(ctx, domain.Event{Type: domain.EvTaskCreated, Project: "onlet", Message: "m"})
+		_, err := x.bus.Publish(ctx, domain.Event{Type: domain.EvTaskCreated, Project: "onett", Message: "m"})
 		require.NoError(t, err)
 	}
-	rec := x.call(t, http.MethodGet, "/api/v1/events/history?after=1&project=onlet", "")
+	rec := x.call(t, http.MethodGet, "/api/v1/events/history?after=1&project=onett", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	var evs []domain.Event
 	decode(t, rec, &evs)
@@ -761,7 +761,7 @@ func TestConversations(t *testing.T) {
 	rec := x.call(t, http.MethodPost, "/api/v1/conversations", `{"title":"Plan","project":"nope"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "unknown project is invalid")
 
-	rec = x.call(t, http.MethodPost, "/api/v1/conversations", `{"title":"Plan","project":"onlet"}`)
+	rec = x.call(t, http.MethodPost, "/api/v1/conversations", `{"title":"Plan","project":"onett"}`)
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 	var conv domain.Conversation
 	decode(t, rec, &conv)

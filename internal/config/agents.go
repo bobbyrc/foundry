@@ -3,7 +3,7 @@ package config
 import (
 	"sort"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // AgentOrigin says where an agent's settings come from. The UI shows it so an owner can tell a

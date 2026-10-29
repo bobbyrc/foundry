@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/api"
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/api"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // Loop names. They are the names used in config, the API and LoopState.

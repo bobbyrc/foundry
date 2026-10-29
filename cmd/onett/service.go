@@ -15,14 +15,14 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onett/internal/config"
 )
 
 // serviceLabel is the launchd label of the daemon. The plist file is named after it.
-const serviceLabel = "io.onlet.serve"
+const serviceLabel = "io.onett.serve"
 
 // logFileName is the daemon's log, written under the config's data directory.
-const logFileName = "onlet.log"
+const logFileName = "onett.log"
 
 // externalTimeout bounds each command the service and doctor commands run.
 const externalTimeout = 10 * time.Second
@@ -57,22 +57,22 @@ func runExternal(name string, args ...string) (string, error) {
 	return commandRunner(ctx, name, args...)
 }
 
-// cmdService installs, removes or reports the launchd agent that keeps `onlet serve` running.
+// cmdService installs, removes or reports the launchd agent that keeps `onett serve` running.
 func cmdService(e *env, args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: onlet service install|uninstall|status [--config P]")
+		return usagef("usage: onett service install|uninstall|status [--config P]")
 	}
 	action := args[0]
 	switch action {
 	case "-h", "-help", "--help", "help":
-		fmt.Fprintln(e.out, "usage: onlet service install|uninstall|status [--config P]")
+		fmt.Fprintln(e.out, "usage: onett service install|uninstall|status [--config P]")
 		return nil
 	case "install", "uninstall", "status":
 	default:
 		return usagef("unknown service action %q: want install, uninstall or status", action)
 	}
 	fs := newFlagSet("service "+action, e)
-	cfgFlag := fs.String("config", "", "config file (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
+	cfgFlag := fs.String("config", "", "config file (default $ONETT_CONFIG or ~/.config/onett/onett.yaml)")
 	positional, err := parseArgs(fs, args[1:])
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func cmdService(e *env, args []string) error {
 		return err
 	}
 	if hostOS != "darwin" {
-		return fmt.Errorf("onlet service uses launchd, which only runs on macOS (this is %s)", hostOS)
+		return fmt.Errorf("onett service uses launchd, which only runs on macOS (this is %s)", hostOS)
 	}
 	switch action {
 	case "install":
@@ -124,7 +124,7 @@ func serviceInstall(e *env, cfgFlag string) error {
 	if err != nil {
 		return fmt.Errorf("resolve config path: %w", err)
 	}
-	exe, err := onletExecutable()
+	exe, err := onettExecutable()
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func xmlEscape(s string) string {
 	return b.String()
 }
 
-// plistPath is where the plist lives: ~/Library/LaunchAgents/io.onlet.serve.plist.
+// plistPath is where the plist lives: ~/Library/LaunchAgents/io.onett.serve.plist.
 func plistPath() (string, error) {
 	if launchAgentsDir == "" {
 		return "", errors.New("find home directory for ~/Library/LaunchAgents")
@@ -323,25 +323,25 @@ func launchdDomain() string {
 	return fmt.Sprintf("gui/%d", currentUID())
 }
 
-// serviceTarget is the service's full launchd name, gui/<uid>/io.onlet.serve.
+// serviceTarget is the service's full launchd name, gui/<uid>/io.onett.serve.
 func serviceTarget() string {
 	return launchdDomain() + "/" + serviceLabel
 }
 
-// onletExecutable is the running binary's absolute path with symlinks resolved, so the plist
+// onettExecutable is the running binary's absolute path with symlinks resolved, so the plist
 // keeps working after the symlink (for example a Homebrew link) is re-pointed.
-func onletExecutable() (string, error) {
+func onettExecutable() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("find onlet binary: %w", err)
+		return "", fmt.Errorf("find onett binary: %w", err)
 	}
 	resolved, err := filepath.EvalSymlinks(exe)
 	if err != nil {
-		return "", fmt.Errorf("resolve onlet binary: %w", err)
+		return "", fmt.Errorf("resolve onett binary: %w", err)
 	}
 	abs, err := filepath.Abs(resolved)
 	if err != nil {
-		return "", fmt.Errorf("resolve onlet binary: %w", err)
+		return "", fmt.Errorf("resolve onett binary: %w", err)
 	}
 	return abs, nil
 }

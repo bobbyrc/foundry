@@ -143,7 +143,7 @@ export function singularize(key: string): string {
   return key.replace(/s$/, '');
 }
 
-/** True for a value written as ${NAME}, which onlet replaces with an environment variable. */
+/** True for a value written as ${NAME}, which onett replaces with an environment variable. */
 export function isEnvRef(value: unknown): boolean {
   return typeof value === 'string' && ENV_REF.test(value);
 }

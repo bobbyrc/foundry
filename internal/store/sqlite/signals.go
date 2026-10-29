@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 var signals = entity[domain.Signal]{

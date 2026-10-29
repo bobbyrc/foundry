@@ -1,4 +1,4 @@
-// Package client is the typed Go client for onlet's HTTP API (docs/api.md). The onlet CLI
+// Package client is the typed Go client for onett's HTTP API (docs/api.md). The onett CLI
 // is its main user; every route in the API has one method here.
 package client
 
@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // apiPrefix is the base path of every route. The health check is under it too.
 const apiPrefix = "/api/v1"
 
-// Client talks to one onlet server. BaseURL is the scheme, host and port, for example
+// Client talks to one onett server. BaseURL is the scheme, host and port, for example
 // http://127.0.0.1:7777. Token is the bearer token from <data_dir>/token.
 type Client struct {
 	BaseURL string
@@ -81,7 +81,7 @@ type ProjectView struct {
 	DefaultBranch string `json:"default_branch"`
 	Policy        string `json:"policy"`
 	Paused        bool   `json:"paused"`
-	// PausedBy says who paused the project: "config" (paused: true in onlet.yaml) or "owner"
+	// PausedBy says who paused the project: "config" (paused: true in onett.yaml) or "owner"
 	// (POST /projects/{name}/pause). Empty when it is not paused.
 	PausedBy string         `json:"paused_by"`
 	Counts   map[string]int `json:"counts"`

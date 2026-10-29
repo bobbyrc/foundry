@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // subscriberBuffer is how many events a subscriber may fall behind before it is dropped.

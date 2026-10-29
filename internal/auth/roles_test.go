@@ -3,7 +3,7 @@ package auth
 import (
 	"testing"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 func TestAllowsTable(t *testing.T) {

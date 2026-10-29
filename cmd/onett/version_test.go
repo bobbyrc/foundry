@@ -43,7 +43,7 @@ func TestVersionCommandShowsToolchain(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	want := fmt.Sprintf("onlet %s (%s %s/%s)\n", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	want := fmt.Sprintf("onett %s (%s %s/%s)\n", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	if out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/deploy"
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/deploy"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // TestLoopDeployHealthyReleaseKeepsRevertedShippedTaskBlocked checks that a healthy release does

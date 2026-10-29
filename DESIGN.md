@@ -1,5 +1,5 @@
 ---
-name: Onlet
+name: Onett
 description: The factory's andon board: a charcoal board lights what needs you over a machine-green enamel ground.
 colors:
   bg: "#e3eae4"
@@ -138,13 +138,13 @@ components:
     padding: "16px 18px"
 ---
 
-# Design System: Onlet
+# Design System: Onett
 
 ## Overview
 
 **Creative North Star: "The Andon Board"**
 
-Onlet's interface is a factory's andon board: the lamp board on a production line that shows,
+Onett's interface is a factory's andon board: the lamp board on a production line that shows,
 at a glance, whether the line runs. A healthy line is quiet green. A project that needs its owner
 lights yellow. A line that stopped itself lights red. The whole system exists to make that
 readable in one look, on a phone or a second monitor.
@@ -447,7 +447,7 @@ Each component is a square or a 2px-cornered control, with a word that carries i
 - **Head:** the project name in Board Name caps, the repo as a muted link beneath it, and the
   lamp's words in 14px semi-bold, in the status ink for their state (run, warn, danger, or muted
   for off). The pause control sits at the right: outlined "Pause", stop-red-filled
-  "Paused — Resume", or a muted "Paused in onlet.yaml" when the file owns the state.
+  "Paused — Resume", or a muted "Paused in onett.yaml" when the file owns the state.
 - **Counts:** five cells in a row between two inner rules, divided by 1px rules: queued, running,
   review, needs you and blocked. Each cell is the stat numeral over a small label. A non-zero cell
   links to the tasks filtered to that project and status; a zero cell is muted and is not a link.
@@ -557,7 +557,7 @@ Each component is a square or a 2px-cornered control, with a word that carries i
 ### Account, sign-in and users
 - **Sign-in sheet:** the connect screen is the charcoal board filling the viewport. The sheet is a
   Sheet Mist card, 380px wide, 24px padding, at the centre. It carries the wordmark (a 12px Call
-  Yellow square and "onlet" in condensed 24px), the title ("Sign in" or "Create the owner account"),
+  Yellow square and "onett" in condensed 24px), the title ("Sign in" or "Create the owner account"),
   a muted lead line when there is one, labelled fields with hints, an error line in Stop Red text,
   and a full-width primary button. While the sign-in state loads, a Board Muted line stands in.
 - **Users table:** owners only. A page header with the primary "Add user". Adding opens a sheet
@@ -576,7 +576,7 @@ Each component is a square or a 2px-cornered control, with a word that carries i
   the first). Help text is 13.5px muted, 72ch at most. Each setting is a block with a 12px
   padding and a 1px Inner Rule beneath; its label is 14px semi-bold, its dotted path 12px mono
   muted beside it. A number, text or duration setting is an input at most 420px wide; a checkbox is
-  "On". A `${NAME}` value shows as text with a note that onlet reads that environment variable.
+  "On". A `${NAME}` value shows as text with a note that onett reads that environment variable.
 - **Nested:** a section inside a section, or a map or list entry, is indented 16px with a 1px Inner
   Rule down its left edge (12px under 760px). A map is one sheet per entry, with its name in 16px
   semi-bold and "Rename" and "Remove" link-buttons; Remove asks inline ("Remove name? Yes No"). A

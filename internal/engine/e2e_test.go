@@ -16,21 +16,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/deploy"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/events"
-	"github.com/bobbyrc/onlet/internal/harness"
-	_ "github.com/bobbyrc/onlet/internal/harness/fake" // registers the "fake" harness type
-	"github.com/bobbyrc/onlet/internal/observe"
-	"github.com/bobbyrc/onlet/internal/scm"
-	scmfake "github.com/bobbyrc/onlet/internal/scm/fake"
-	"github.com/bobbyrc/onlet/internal/store"
-	"github.com/bobbyrc/onlet/internal/store/sqlite"
-	"github.com/bobbyrc/onlet/internal/workspace"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/deploy"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/events"
+	"github.com/bobbyrc/onett/internal/harness"
+	_ "github.com/bobbyrc/onett/internal/harness/fake" // registers the "fake" harness type
+	"github.com/bobbyrc/onett/internal/observe"
+	"github.com/bobbyrc/onett/internal/scm"
+	scmfake "github.com/bobbyrc/onett/internal/scm/fake"
+	"github.com/bobbyrc/onett/internal/store"
+	"github.com/bobbyrc/onett/internal/store/sqlite"
+	"github.com/bobbyrc/onett/internal/workspace"
 )
 
-// e2eConfigYAML is the onlet.yaml every end-to-end test starts from. Arguments: data dir,
+// e2eConfigYAML is the onett.yaml every end-to-end test starts from. Arguments: data dir,
 // bare repo path, clone path, and extra top-level YAML (column zero, may be empty).
 const e2eConfigYAML = `server:
   data_dir: %s

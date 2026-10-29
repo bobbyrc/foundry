@@ -1,4 +1,4 @@
-// Package sysproc holds the process-level rules every child process in onlet shares: run each
+// Package sysproc holds the process-level rules every child process in onett shares: run each
 // command in its own process group so one kill reaches its whole tree, and build the environment
 // an agent process may see.
 package sysproc
@@ -85,8 +85,8 @@ func WaitKeepOnSuccess(cmd *exec.Cmd) error {
 	return err
 }
 
-// baseEnv is the allowlist of onlet's environment that agent processes receive. Everything
-// else is withheld, so credentials onlet holds for itself (GH_TOKEN, GITHUB_TOKEN,
+// baseEnv is the allowlist of onett's environment that agent processes receive. Everything
+// else is withheld, so credentials onett holds for itself (GH_TOKEN, GITHUB_TOKEN,
 // SENTRY_AUTH_TOKEN, ...) never reach an agent that runs arbitrary commands.
 var baseEnv = map[string]bool{
 	// Locating binaries, user identity and locale.
@@ -107,12 +107,12 @@ var baseEnv = map[string]bool{
 var basePrefixes = []string{"CLAUDE_CODE_", "MISE_"}
 
 // AgentEnv returns the environment for an agent process as KEY=value pairs, sorted by key. It
-// starts from an allowlist of onlet's own environment (see baseEnv), adds each name in inherit
-// when onlet has it set, then applies extra, which wins on conflicts.
+// starts from an allowlist of onett's own environment (see baseEnv), adds each name in inherit
+// when onett has it set, then applies extra, which wins on conflicts.
 //
 // Why an allowlist and not a copy of os.Environ: an agent runs commands and reads files on the
-// operator's machine, so anything in onlet's environment is in reach of the agent. Forwarding
-// everything would hand it every token onlet holds. The inherit list lets a config opt a
+// operator's machine, so anything in onett's environment is in reach of the agent. Forwarding
+// everything would hand it every token onett holds. The inherit list lets a config opt a
 // specific variable back in.
 func AgentEnv(inherit []string, extra map[string]string) []string {
 	want := make(map[string]string)

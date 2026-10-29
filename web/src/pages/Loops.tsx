@@ -79,7 +79,7 @@ export function Loops() {
         </p>
       ) : null}
       {loops.isSuccess && list.length === 0 ? (
-        <Empty>No loops are configured. Loops are set under loops in onlet.yaml.</Empty>
+        <Empty>No loops are configured. Loops are set under loops in onett.yaml.</Empty>
       ) : null}
       {loops.isSuccess && list.length > 0 ? (
         <>

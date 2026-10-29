@@ -1,7 +1,7 @@
 # Plugins
 
-Onlet has four kinds of plugin. Each kind is a Go interface with built-in implementations, and
-you pick one per harness, project or notifier by its `type` in `onlet.yaml`:
+Onett has four kinds of plugin. Each kind is a Go interface with built-in implementations, and
+you pick one per harness, project or notifier by its `type` in `onett.yaml`:
 
 - **Harnesses** run an agent CLI. Built in: `claude-code`, `codex`. Any other program: the `exec`
   type.
@@ -13,20 +13,20 @@ you pick one per harness, project or notifier by its `type` in `onlet.yaml`:
 - **Intake sources** turn an external queue of work into tasks. There are no built-in types: any
   program that prints JSON lines can be one. See [Intake sources](#intake-sources).
 
-The `exec` types let you add a plugin in any language, without recompiling onlet. The source
+The `exec` types let you add a plugin in any language, without recompiling onett. The source
 interfaces are in `internal/harness`, `internal/deploy`, `internal/observe` and `internal/notify`.
 The only source control implementation is GitHub (`internal/scm/github`), so there is no SCM plugin.
 
-Every plugin is configured in `onlet.yaml`. The examples below are fragments of that file.
+Every plugin is configured in `onett.yaml`. The examples below are fragments of that file.
 
 ## Harness plugins (exec)
 
 A harness runs one coding-agent CLI non-interactively and turns its output into a stream of events.
-The `exec` harness runs any program as that CLI. Use it for an agent onlet does not ship with.
+The `exec` harness runs any program as that CLI. Use it for an agent onett does not ship with.
 
 ### Registering a plugin
 
-Add a harness block to `onlet.yaml`. `command` is the program and its fixed leading arguments.
+Add a harness block to `onett.yaml`. `command` is the program and its fixed leading arguments.
 `args` and `env` are added to every session of that harness.
 
 ```yaml
@@ -45,30 +45,30 @@ A role that names `mytool` as its harness runs through this plugin:
 agents:
   implementer:
     harness: mytool
-    model: fast-model        # passed to the plugin as ONLET_MODEL
+    model: fast-model        # passed to the plugin as ONETT_MODEL
     prompt: builtin:implementer
 ```
 
-### What onlet gives the plugin
+### What onett gives the plugin
 
-For each session onlet starts the command with:
+For each session onett starts the command with:
 
 | Source                       | What                                                                                     |
 |------------------------------|------------------------------------------------------------------------------------------|
 | argv                         | `command`, then the harness `args`, then the role's `args`                               |
 | working directory            | the run's git worktree                                                                   |
-| stdin                        | the prompt (the same text as in `ONLET_PROMPT_FILE`)                                   |
-| `ONLET_PROMPT_FILE`        | path to a file holding the task prompt                                                   |
-| `ONLET_INSTRUCTIONS_FILE`  | path to a file holding the system instructions (role, rules, outbox contract); empty if none |
-| `ONLET_MODEL`              | the model name from the role; empty if none                                              |
-| `ONLET_RESUME_SESSION`     | a session ID to continue; empty for a new session                                        |
+| stdin                        | the prompt (the same text as in `ONETT_PROMPT_FILE`)                                   |
+| `ONETT_PROMPT_FILE`        | path to a file holding the task prompt                                                   |
+| `ONETT_INSTRUCTIONS_FILE`  | path to a file holding the system instructions (role, rules, outbox contract); empty if none |
+| `ONETT_MODEL`              | the model name from the role; empty if none                                              |
+| `ONETT_RESUME_SESSION`     | a session ID to continue; empty for a new session                                        |
 | `env`                        | the harness `env`, then the role `env`, added to the inherited environment               |
 
-The two prompt files are temporary. Onlet deletes them once the process has exited and its
+The two prompt files are temporary. Onett deletes them once the process has exited and its
 result has been collected. The plugin must not expect them to exist after it exits.
 
 Everything the agent does must happen inside the working directory. The agent reports back to
-onlet through `.onlet-run/result.json` in the worktree (the outbox, described in
+onett through `.onett-run/result.json` in the worktree (the outbox, described in
 [design.md](design.md)). The protocol below is only for the live stream.
 
 ### Output protocol
@@ -85,7 +85,7 @@ The plugin writes to stdout, one JSON object per line. Each object has a `type`:
 | `error`       | something failed                         | `text`                            |
 | `result`      | the final line; see below                | the fields below                  |
 
-Any object may also carry `session_id`. Onlet remembers the latest one and returns it in the
+Any object may also carry `session_id`. Onett remembers the latest one and returns it in the
 result, so a later run can resume the session.
 
 Lines that are not JSON are shown as `text`. Lines with an unknown `type` are shown as `system`.
@@ -105,7 +105,7 @@ The final line is `type: "result"`:
 | `is_error`      | true if the run failed                                               |
 | `denials`       | descriptions of refused tool calls; a denial stops the run's task    |
 
-If the plugin exits without a result line, onlet uses the last `text` line as the final message.
+If the plugin exits without a result line, onett uses the last `text` line as the final message.
 The run is an error if the exit code is non-zero. The exit code is always recorded.
 
 ### Minimal example
@@ -116,10 +116,10 @@ the prompt on stdin. It needs `jq` to quote the progress lines:
 ```sh
 #!/bin/sh
 # /path/to/plugin: run mytool on the prompt and report in the exec protocol.
-prompt=$(cat)   # the prompt arrives on stdin; it is also in $ONLET_PROMPT_FILE
+prompt=$(cat)   # the prompt arrives on stdin; it is also in $ONETT_PROMPT_FILE
 out=$(mktemp)
 printf '{"type":"system","text":"mytool starting"}\n'
-if mytool --model "${ONLET_MODEL:-default}" "$prompt" >"$out" 2>&1; then
+if mytool --model "${ONETT_MODEL:-default}" "$prompt" >"$out" 2>&1; then
 	failed=false
 else
 	failed=true
@@ -135,7 +135,7 @@ diagnostics to stderr. Stderr is shown in the run log as `stderr` lines.
 ## Deployers
 
 A deployer releases a project after its PR merges. It is chosen per project by `deploy.type`. A
-project without a `deploy` block has no deployer. Merged work is then not released, and onlet only
+project without a `deploy` block has no deployer. Merged work is then not released, and onett only
 records the merge.
 
 The deploy watch runs these steps for each merged change:
@@ -149,7 +149,7 @@ The deploy watch runs these steps for each merged change:
    Three failed health checks in a row, or a new production problem during the window, fail the
    release. A clean window marks it healthy.
 4. A release that fails during the window is rolled back to the previous healthy release when
-   `auto_rollback` is on (the default). Onlet then records the rollback, opens an `incident` task
+   `auto_rollback` is on (the default). Onett then records the rollback, opens an `incident` task
    and notifies you.
 
 These keys belong to the project's `deploy` block, not to the deployer's `options`:
@@ -166,7 +166,7 @@ deploy:
 
 Evidence for incidents. A release keeps the tail of its deploy command's output (the `command` type
 keeps the last 4 KB of stdout and stderr). When a release fails, or a production problem opens an
-incident, onlet also runs the project's `deploy.logs` command (`sh -c`, in the project's clone, 30
+incident, onett also runs the project's `deploy.logs` command (`sh -c`, in the project's clone, 30
 second limit) and keeps its last 8 KB, or the reason it failed. Both go into the incident's
 `## Evidence` section. A failing logs command is reported there and does not stop the release from
 being handled.
@@ -178,22 +178,22 @@ API you can call from a script.
 
 A `deploy` or `rollback` command may start long-running processes, such as a service in the
 background. They keep running after the command succeeds. If the command fails or hits its
-`timeout`, onlet kills them. The command's stdout and stderr go to temporary files, not pipes, so a
+`timeout`, onett kills them. The command's stdout and stderr go to temporary files, not pipes, so a
 background process keeps its output working after the command exits: it is not cut off by a closed
-pipe and does not hold onlet waiting. Redirecting its output (`> app.log 2>&1 &`) is still a good
+pipe and does not hold onett waiting. Redirecting its output (`> app.log 2>&1 &`) is still a good
 idea: without it, whatever the service prints after the command exits goes to a deleted temporary
 file that keeps growing until the service stops. The `deploy` result is read from the last non-empty line of stdout, and the incident
 evidence is the last 4 KB of stdout followed by stderr. Before evidence (deploy output, `logs` output,
-failure notes) is stored or handed to an agent, onlet replaces secret values with `***`: the value
-of every environment variable (onlet's own and the project's `env`) whose name has a segment such
+failure notes) is stored or handed to an agent, onett replaces secret values with `***`: the value
+of every environment variable (onett's own and the project's `env`) whose name has a segment such
 as `TOKEN`, `SECRET`, `PASSWORD`, `PASS`, `PASSWD`, `KEY`, `AUTH`, `APIKEY`, `CREDENTIAL`, `DSN`,
 `COOKIE` or `PAT` (plural forms count too, such as `TOKENS` or `KEYS`), and any URL with credentials
 in it. Values shorter than 8 characters are left alone.
 
 | Option     | Required | Default | Meaning                                                              |
 |------------|----------|---------|----------------------------------------------------------------------|
-| `deploy`   | yes      |         | Creates a release of the ref in `ONLET_REF`.                      |
-| `status`   | no       |         | Reports the state of a release identified by `ONLET_DEPLOY_ID`.   |
+| `deploy`   | yes      |         | Creates a release of the ref in `ONETT_REF`.                      |
+| `status`   | no       |         | Reports the state of a release identified by `ONETT_DEPLOY_ID`.   |
 | `rollback` | no       |         | Restores a previous release. Without it, rollback is an error.      |
 | `timeout`  | no       | `30m`   | Kills each command after this long. Go duration syntax, e.g. `10m`. |
 
@@ -201,21 +201,21 @@ Do not confuse the option `timeout` with the deploy-level `timeout` above. The o
 command that runs too long. The deploy-level setting fails a release that is still building after
 that long.
 
-Environment: each command inherits onlet's environment, then the project's `env` map, then:
+Environment: each command inherits onett's environment, then the project's `env` map, then:
 
-- `deploy`: `ONLET_REF` (the commit SHA to release).
-- `status`: `ONLET_DEPLOY_ID` (the ID that `deploy` returned).
-- `rollback`: `ONLET_ROLLBACK_ID` (the previous healthy release to restore) and
-  `ONLET_ROLLBACK_REF` (its commit SHA).
+- `deploy`: `ONETT_REF` (the commit SHA to release).
+- `status`: `ONETT_DEPLOY_ID` (the ID that `deploy` returned).
+- `rollback`: `ONETT_ROLLBACK_ID` (the previous healthy release to restore) and
+  `ONETT_ROLLBACK_REF` (its commit SHA).
 
-The `status` command gets only `ONLET_DEPLOY_ID`. It does not get `ONLET_REF`, so it cannot look
+The `status` command gets only `ONETT_DEPLOY_ID`. It does not get `ONETT_REF`, so it cannot look
 up a deployment by commit. A command that needs the commit must do that work in `deploy`.
 
-Output conventions. Onlet reads only the **last non-empty stdout line**. Earlier lines are
+Output conventions. Onett reads only the **last non-empty stdout line**. Earlier lines are
 ignored, so print progress freely. On failure the error includes the tail of the output.
 
 - `deploy` may end with a JSON object `{"id": "...", "url": "...", "state": "..."}`, or with a bare
-  `https://` URL. Without an `id`, onlet generates one. Without a `status` command, the deploy is
+  `https://` URL. Without an `id`, onett generates one. Without a `status` command, the deploy is
   treated as finished and recorded as `ready` with its URL.
 - `status` must end with a JSON object `{"state": "...", "url": "...", "message": "..."}`, or a bare
   state word. The states are `pending`, `building`, `ready`, `error` and `canceled`. Anything else is
@@ -230,18 +230,18 @@ deploy:
   type: command
   options:
     deploy: vercel deploy --prod --yes
-    rollback: vercel rollback $ONLET_ROLLBACK_ID --yes
+    rollback: vercel rollback $ONETT_ROLLBACK_ID --yes
     timeout: 20m
 ```
 
 **Platforms that deploy on push** (for example, a Vercel project connected to GitHub) release the
 merge themselves. For these, `deploy` must not create a second release. Use one of two patterns:
 
-- `type: noop`. Onlet records nothing and still runs the health window and the observers after the
+- `type: noop`. Onett records nothing and still runs the health window and the observers after the
   merge. This is the simple choice.
-- A `command` deployer whose `deploy` command finds the platform's deployment for `ONLET_REF` and
+- A `command` deployer whose `deploy` command finds the platform's deployment for `ONETT_REF` and
   prints its `{"id": ...}`, and whose `status` command reports that deployment's state from
-  `ONLET_DEPLOY_ID`. The `deploy` command is required and runs on every release, so it must be
+  `ONETT_DEPLOY_ID`. The `deploy` command is required and runs on every release, so it must be
   the lookup, not a create.
 
 ### `noop`
@@ -273,8 +273,8 @@ firing after its fix merged reopens.
 
 ### `exec`
 
-Runs a shell command that prints the production problems it sees. Onlet passes the time of the
-last poll in `ONLET_SINCE` (RFC 3339, UTC).
+Runs a shell command that prints the production problems it sees. Onett passes the time of the
+last poll in `ONETT_SINCE` (RFC 3339, UTC).
 
 | Option    | Required | Default | Meaning                                        |
 |-----------|----------|---------|------------------------------------------------|
@@ -298,9 +298,9 @@ Example script that prints the errors written to a log file since the last poll,
 
 ```sh
 #!/bin/sh
-# Print one observation per error line written since ONLET_SINCE.
+# Print one observation per error line written since ONETT_SINCE.
 # Assumes lines look like: 2026-01-02T12:00:00Z ERROR <fingerprint> <message>
-since="$ONLET_SINCE"
+since="$ONETT_SINCE"
 awk -v since="$since" '$2 == "ERROR" && $1 >= since {
   printf "{\"fingerprint\":\"%s\",\"title\":\"%s\",\"level\":\"error\",\"count\":1,\"last_seen\":\"%s\"}\n", $3, $4, $1
 }' /var/log/myapp/app.log
@@ -322,10 +322,10 @@ previous poll. It reads the issue list only; it never resolves or changes issues
 | `token_env` | no       | `SENTRY_AUTH_TOKEN`   | Name of the variable that holds the auth token (see below).             |
 | `query`     | no       | `is:unresolved`       | Sentry issue search query.                                              |
 
-The token is read from the project's `env` map under the name in `token_env`, then from onlet's
-process environment. Onlet's process environment includes `~/.config/onlet/secrets.env`, so put
-the token there. If neither has it, onlet refuses to start the observer and names the variable.
-The token needs `project:read` on the project. Never put the token itself in `onlet.yaml`.
+The token is read from the project's `env` map under the name in `token_env`, then from onett's
+process environment. Onett's process environment includes `~/.config/onett/secrets.env`, so put
+the token there. If neither has it, onett refuses to start the observer and names the variable.
+The token needs `project:read` on the project. Never put the token itself in `onett.yaml`.
 
 ```yaml
 observe:
@@ -344,26 +344,26 @@ skipped.
 ## Notifiers
 
 A notifier sends a message when something needs your attention: a blocked task, a rollback, an
-approval. The `notify` list in `onlet.yaml` can hold several notifiers. Each one receives the
+approval. The `notify` list in `onett.yaml` can hold several notifiers. Each one receives the
 messages at or above its own `min_priority`.
 
 ```yaml
 notify:
   - type: ntfy
     options:
-      topic: onlet-example-7f3a
+      topic: onett-example-7f3a
     min_priority: normal
   - type: log
 ```
 
 `min_priority` is `low`, `normal` or `high`. Empty means `normal`. Blocked work, rollbacks and
-approvals are `high`. If a notifier fails, onlet logs a warning and carries on. Notifications are
+approvals are `high`. If a notifier fails, onett logs a warning and carries on. Notifications are
 also recorded as events, so they show in the web UI's Activity feed.
 
 ### `log`
 
 Writes each notification to the daemon's log, as an info-level `notification` line. It has no
-options. `onlet init` adds it by default, so the notifications are visible even with no other
+options. `onett init` adds it by default, so the notifications are visible even with no other
 channel.
 
 ### `ntfy`
@@ -382,14 +382,14 @@ and click URL (a link into the web UI) travel as headers.
 ### `exec`
 
 Runs a shell command (`sh -c`) for each notification, so you can send to any channel with a script or
-CLI. Onlet passes the message in environment variables:
+CLI. Onett passes the message in environment variables:
 
 | Variable                  | Value                                                  |
 |---------------------------|--------------------------------------------------------|
-| `ONLET_NOTIFY_TITLE`    | the notification title                                 |
-| `ONLET_NOTIFY_BODY`     | the body text                                          |
-| `ONLET_NOTIFY_PRIORITY` | `low`, `normal` or `high`                              |
-| `ONLET_NOTIFY_URL`      | a link into the web UI, possibly empty                 |
+| `ONETT_NOTIFY_TITLE`    | the notification title                                 |
+| `ONETT_NOTIFY_BODY`     | the body text                                          |
+| `ONETT_NOTIFY_PRIORITY` | `low`, `normal` or `high`                              |
+| `ONETT_NOTIFY_URL`      | a link into the web UI, possibly empty                 |
 
 | Option    | Required | Default | Meaning                                                       |
 |-----------|----------|---------|---------------------------------------------------------------|
@@ -401,24 +401,24 @@ The command has 30 seconds. A non-zero exit is an error, and it includes the com
 notify:
   - type: exec
     options:
-      command: 'my-notify-script --title "$ONLET_NOTIFY_TITLE" --url "$ONLET_NOTIFY_URL"'
+      command: 'my-notify-script --title "$ONETT_NOTIFY_TITLE" --url "$ONETT_NOTIFY_URL"'
     min_priority: high
 ```
 
 ## Intake sources
 
-An intake source turns any external queue of work into onlet tasks: a phone app's inbox, a ticket
-system, a chat bot, or a plain file. Onlet runs each source's command for every project on the
+An intake source turns any external queue of work into onett tasks: a phone app's inbox, a ticket
+system, a chat bot, or a plain file. Onett runs each source's command for every project on the
 `exec_intake` loop (every 1m by default) and creates one task per new item the command prints.
 
-Sources are listed under a project in `onlet.yaml`:
+Sources are listed under a project in `onett.yaml`:
 
 ```yaml
 projects:
   myapp:
     intake:
       - name: inbox                    # lowercase letters, digits, - and _; unique per project
-        command: cat ~/onlet-inbox.jsonl
+        command: cat ~/onett-inbox.jsonl
         kind: feature                  # default kind for items that name none (default feature)
         timeout: 60s                   # for one run of the command (default 60s)
 ```
@@ -426,7 +426,7 @@ projects:
 ### The protocol
 
 - The command runs with `sh -c` in the project's clone, or in the data directory if the clone does
-  not exist yet. It gets onlet's environment, the project's `env`, and `ONLET_PROJECT` set to
+  not exist yet. It gets onett's environment, the project's `env`, and `ONETT_PROJECT` set to
   the project name.
 - It prints zero or more items on stdout, one JSON object per line. Blank lines are ignored.
 
@@ -434,7 +434,7 @@ projects:
 |------------|----------|----------------------------------------------------------------------------------|
 | `id`       | yes      | Your identifier for the item. Items are deduplicated by it (see below).          |
 | `title`    | yes      | The task title.                                                                  |
-| `body`     | no       | The task body. Onlet adds a footer naming the source and the id.               |
+| `body`     | no       | The task body. Onett adds a footer naming the source and the id.               |
 | `kind`     | no       | `feature`, `bugfix`, `chore`, `improve` or `question`. Anything else, or none, uses the source's `kind`. A line can never create a `review` or an `incident`. |
 | `priority` | no       | Integer. Higher runs first.                                                      |
 | `role`     | no       | An agent role name, as in `routing`. Empty uses the kind's routing.             |
@@ -459,13 +459,13 @@ create tasks. To queue the same work again, give it a new id.
 
 ### Example: a file queue
 
-Append one JSON object per line to `~/onlet-inbox.jsonl`. Each line becomes a task within a
+Append one JSON object per line to `~/onett-inbox.jsonl`. Each line becomes a task within a
 minute. Lines already in the file are not queued again, so keep the file append-only.
 
 ```yaml
 intake:
   - name: inbox
-    command: cat ~/onlet-inbox.jsonl
+    command: cat ~/onett-inbox.jsonl
 ```
 
 ### Example: the Herdr phone app (sketch)
@@ -481,10 +481,10 @@ item. A message that fails to claim is left in the queue and not printed.
 queue=$(herdr gram list --queue) || exit 1
 echo "$queue" | jq -c '.result.messages[]' | while read -r msg; do
   id=$(echo "$msg" | jq -r '.id')
-  herdr gram grab "$id" --as onlet >/dev/null 2>&1 || continue
+  herdr gram grab "$id" --as onett >/dev/null 2>&1 || continue
   echo "$msg" | jq -c '{id: .id, title: (.text | split("\n")[0]), body: .text}'
 done
 ```
 
-Claiming a message before onlet creates its task means a crash in between loses the message. If
+Claiming a message before onett creates its task means a crash in between loses the message. If
 that matters, print the items first and claim them after a successful run.

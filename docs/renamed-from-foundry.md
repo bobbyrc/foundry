@@ -1,5 +1,8 @@
 # Renamed from foundry
 
+> onlet has since been renamed to onett; see [renamed-from-onlet.md](renamed-from-onlet.md).
+> Moving an install from foundry, follow this page, then that one.
+
 On 2026-10-28 the project was renamed from **foundry** to **onlet**. The rename is a clean break:
 onlet reads only the new names, so an existing install must be moved over once, by hand, while
 the daemon is stopped.

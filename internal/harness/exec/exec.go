@@ -1,4 +1,4 @@
-// Package exec runs any external program as an onlet harness of type "exec". The program
+// Package exec runs any external program as an onett harness of type "exec". The program
 // receives the task through files and environment variables and reports through JSON lines on
 // stdout; see docs/plugins.md for the protocol.
 package exec
@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onett/internal/harness"
 )
 
 const harnessType = "exec"
@@ -28,14 +28,14 @@ type runner struct {
 }
 
 // Start runs the plugin. The prompt and instructions are written to temporary files whose paths
-// are passed in ONLET_PROMPT_FILE and ONLET_INSTRUCTIONS_FILE; the prompt is also written to
+// are passed in ONETT_PROMPT_FILE and ONETT_INSTRUCTIONS_FILE; the prompt is also written to
 // stdin. The files are removed when the process has exited and Wait has been called.
 func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session, error) {
-	promptPath, err := writeTemp("onlet-prompt-*.txt", spec.Prompt)
+	promptPath, err := writeTemp("onett-prompt-*.txt", spec.Prompt)
 	if err != nil {
 		return nil, err
 	}
-	instructionsPath, err := writeTemp("onlet-instructions-*.md", spec.Instructions)
+	instructionsPath, err := writeTemp("onett-instructions-*.md", spec.Instructions)
 	if err != nil {
 		_ = os.Remove(promptPath)
 		return nil, err
@@ -51,10 +51,10 @@ func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session,
 	command = append(command, spec.Args...)
 
 	env := mergeEnv(map[string]string{
-		"ONLET_PROMPT_FILE":       promptPath,
-		"ONLET_INSTRUCTIONS_FILE": instructionsPath,
-		"ONLET_MODEL":             spec.Model,
-		"ONLET_RESUME_SESSION":    spec.ResumeSessionID,
+		"ONETT_PROMPT_FILE":       promptPath,
+		"ONETT_INSTRUCTIONS_FILE": instructionsPath,
+		"ONETT_MODEL":             spec.Model,
+		"ONETT_RESUME_SESSION":    spec.ResumeSessionID,
 	}, r.cfg.Env, spec.Env)
 
 	ps := newParser()

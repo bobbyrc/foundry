@@ -20,7 +20,7 @@ func TestVerbCommandsPrintUsageForHelp(t *testing.T) {
 			t.Run(cmd+" "+flag, func(t *testing.T) {
 				code, out, errOut := runCLI(cmd, flag)
 				require.Equal(t, 0, code, errOut)
-				assert.Contains(t, out, "usage: onlet "+cmd)
+				assert.Contains(t, out, "usage: onett "+cmd)
 				for _, v := range names {
 					assert.Contains(t, out, v)
 				}
@@ -37,13 +37,13 @@ func TestProjectPauseHelpDoesNotCallAPI(t *testing.T) {
 	})
 	fakeAPI(t, mux)
 	// No token: if the command reached apiClient it would fail with "no token".
-	t.Setenv("ONLET_TOKEN", "")
-	t.Setenv("ONLET_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
+	t.Setenv("ONETT_TOKEN", "")
+	t.Setenv("ONETT_CONFIG", filepath.Join(t.TempDir(), "absent.yaml"))
 
 	for _, flag := range []string{"-h", "--help"} {
 		code, out, errOut := runCLI("project", "pause", flag)
 		assert.Equal(t, 0, code, errOut)
-		assert.Contains(t, out, "usage: onlet project")
+		assert.Contains(t, out, "usage: onett project")
 		assert.NotContains(t, errOut, "no token")
 	}
 }
@@ -59,7 +59,7 @@ func TestProjectVerbRejectsDashName(t *testing.T) {
 		code, out, errOut := runCLI("project", verb, "-x")
 		assert.Equal(t, 2, code)
 		assert.Empty(t, out)
-		assert.Contains(t, errOut, "usage: onlet project "+verb+" NAME")
+		assert.Contains(t, errOut, "usage: onett project "+verb+" NAME")
 	}
 }
 
@@ -72,5 +72,5 @@ func TestLoopRunRejectsDashName(t *testing.T) {
 
 	code, _, errOut := runCLI("loop", "run", "--", "-x")
 	assert.Equal(t, 2, code)
-	assert.Contains(t, errOut, "usage: onlet loop run NAME")
+	assert.Contains(t, errOut, "usage: onett loop run NAME")
 }

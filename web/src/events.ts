@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { ApiError, getStats } from './api';
 import { keys } from './keys';
-import type { OnletEvent } from './types';
+import type { OnettEvent } from './types';
 
 // Mirrors the Ev* constants in internal/domain/domain.go. Browsers only deliver named SSE events
 // to listeners registered by name, so each known type is registered below; onmessage covers
@@ -32,7 +32,7 @@ export const EVENT_TYPES = [
 
 export type LiveStatus = 'live' | 'reconnecting';
 
-type Listener = (ev: OnletEvent) => void;
+type Listener = (ev: OnettEvent) => void;
 
 const MIN_BACKOFF_MS = 1_000;
 // A retry is one small request to a self-hosted daemon, so the cap stays low: a longer one only
@@ -160,9 +160,9 @@ export class EventStream {
   }
 
   private handle(message: MessageEvent<string>): void {
-    let ev: OnletEvent;
+    let ev: OnettEvent;
     try {
-      ev = JSON.parse(message.data) as OnletEvent;
+      ev = JSON.parse(message.data) as OnettEvent;
     } catch {
       return;
     }
@@ -171,7 +171,7 @@ export class EventStream {
       try {
         listener(ev);
       } catch (err) {
-        console.error('onlet event listener failed', err);
+        console.error('onett event listener failed', err);
       }
     }
   }
@@ -192,7 +192,7 @@ export function useLiveStatus(): LiveStatus {
 }
 
 /** The query keys an event makes stale. Live-only events (run.log, chat.delta) refetch nothing. */
-export function keysFor(ev: OnletEvent): QueryKey[] {
+export function keysFor(ev: OnettEvent): QueryKey[] {
   const out: QueryKey[] = [];
   const add = (...queryKeys: QueryKey[]) => out.push(...queryKeys);
   const taskId = ev.task_id || undefined;
@@ -229,7 +229,7 @@ export function keysFor(ev: OnletEvent): QueryKey[] {
   return out;
 }
 
-export function invalidateFor(ev: OnletEvent, queryClient: QueryClient): void {
+export function invalidateFor(ev: OnettEvent, queryClient: QueryClient): void {
   for (const queryKey of keysFor(ev)) {
     void queryClient.invalidateQueries({ queryKey });
   }

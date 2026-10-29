@@ -1,89 +1,89 @@
 # Getting started
 
-This walks you from a fresh checkout of onlet to a first merged pull request on a throwaway
-repository. Do it on a test repository first. Onlet opens PRs, merges them and, if you configure
+This walks you from a fresh checkout of onett to a first merged pull request on a throwaway
+repository. Do it on a test repository first. Onett opens PRs, merges them and, if you configure
 it, deploys, so the first run should touch nothing you care about.
 
 Terms used here are defined in the [README](../README.md#terms-used-below). In short: a **task**
 is a unit of work, a **run** is one agent attempt at it, a **role** picks the agent and its
-instructions, and an **approval** is a decision onlet is waiting on from you.
+instructions, and an **approval** is a decision onett is waiting on from you.
 
 ## 1. Check the prerequisites
 
-- `git`, and `gh` logged in to GitHub (`gh auth status`). Onlet uses `gh` to open and merge PRs.
+- `git`, and `gh` logged in to GitHub (`gh auth status`). Onett uses `gh` to open and merge PRs.
 - `mise`. The repository's `mise.toml` pins the Go version, and `mise exec --` runs commands with it.
 - Node.js and npm. They are needed only to build the web UI.
 - The agent CLIs you plan to use. The default `implementer` role runs on Codex, and the
   `orchestrator` and `reviewer` roles run on Claude Code. Install and log in to both (`codex` and
   `claude`), or change the roles to use only one.
 
-## 2. Build onlet
+## 2. Build onett
 
 From the repository root:
 
 ```sh
 (cd web && npm install && npm run build)           # writes the UI into internal/api/webdist
-mise exec -- go build -o onlet ./cmd/onlet     # embeds the UI into the binary
+mise exec -- go build -o onett ./cmd/onett     # embeds the UI into the binary
 ```
 
 Build the UI first. The Go build embeds whatever is in `internal/api/webdist` at build time, and that
 directory is empty in git. Without the UI build, the daemon runs but serves no web page. Move the
-binary somewhere on your PATH, or keep using `./onlet`.
+binary somewhere on your PATH, or keep using `./onett`.
 
 Check it:
 
 ```sh
-./onlet version
-./onlet help
+./onett version
+./onett help
 ```
 
 ## 3. Create a throwaway repository
 
 ```sh
-gh repo create onlet-trial --private --add-readme --clone
-cd onlet-trial
+gh repo create onett-trial --private --add-readme --clone
+cd onett-trial
 pwd    # note this path; you will need it in step 4
 ```
 
-`--add-readme` gives the repository a `main` branch, which onlet expects by default.
+`--add-readme` gives the repository a `main` branch, which onett expects by default.
 
 ## 4. Write the config
 
 ```sh
-./onlet init --project trial --repo YOUR_GITHUB_USER/onlet-trial --path /absolute/path/to/onlet-trial
+./onett init --project trial --repo YOUR_GITHUB_USER/onett-trial --path /absolute/path/to/onett-trial
 ```
 
-This writes `~/.config/onlet/onlet.yaml`. It refuses to overwrite an existing file. The starter
+This writes `~/.config/onett/onett.yaml`. It refuses to overwrite an existing file. The starter
 file has a `log` notifier and one project. Open it in your editor and add `paused: true` to the
 `trial` project, so the factory starts nothing until you are ready:
 
 ```yaml
 projects:
   trial:
-    repo: "YOUR_GITHUB_USER/onlet-trial"
-    path: "/absolute/path/to/onlet-trial"
+    repo: "YOUR_GITHUB_USER/onett-trial"
+    path: "/absolute/path/to/onett-trial"
     paused: true        # nothing starts for this project until you set this to false
 ```
 
 `paused` is a key of the project, next to `repo` and `path`. The `--path` you pass must point at the
-clone from step 3. Onlet runs agents there, so it must be a real git checkout.
+clone from step 3. Onett runs agents there, so it must be a real git checkout.
 
-Every other key is optional and has a default. `onlet.example.yaml` in the repository lists every
+Every other key is optional and has a default. `onett.example.yaml` in the repository lists every
 option with its default.
 
 **Adding another project.** You do not need to edit the file by hand for a second repository. Run
-`./onlet project add NAME --repo OWNER/NAME`, with `--path` and `--branch` optional, and it adds
+`./onett project add NAME --repo OWNER/NAME`, with `--path` and `--branch` optional, and it adds
 the project under `projects:` and keeps the file's comments. It refuses a name that already exists.
-Then run `./onlet config --reload` (or restart `onlet serve`) so the daemon starts using it.
+Then run `./onett config --reload` (or restart `onett serve`) so the daemon starts using it.
 
 **Per-project agents.** A project can change the agent roles for itself. Under `agents:`, give a
 role name the fields to change (`harness`, `model`, `prompt`, `args`, `description`); the fields you
 leave out keep the global role's values, and a name the global config does not define adds a role
 that only this project has. Under `routing:`, send a task kind to a role for this project only, and
-kinds you leave out keep the global routing. `onlet.example.yaml` shows `myapp` running its
+kinds you leave out keep the global routing. `onett.example.yaml` shows `myapp` running its
 implementer on Claude Code with a different model.
 
-**Per-project checks.** `checks` lists commands onlet runs in the worktree after the agent
+**Per-project checks.** `checks` lists commands onett runs in the worktree after the agent
 finishes and before it commits and pushes. A failure re-queues the task with the output instead of
 opening a PR that CI would reject:
 
@@ -94,7 +94,7 @@ opening a PR that CI would reject:
         timeout: 10m        # default 10m
 ```
 
-**Setup.** `setup` lists commands onlet runs in each fresh worktree before the agent starts, for
+**Setup.** `setup` lists commands onett runs in each fresh worktree before the agent starts, for
 example to install dependencies the agent needs to build and test. It runs on every attempt, so
 make the commands idempotent (`npm ci` rather than a one-off install). A failing setup command
 fails the attempt and re-queues the task with the command's output; the agent never runs:
@@ -106,11 +106,11 @@ fails the attempt and re-queues the task with the command's output; the agent ne
         timeout: 5m         # default 10m
 ```
 
-**Environment.** Agents get a small allowlisted environment, not onlet's own, so `GH_TOKEN` and
+**Environment.** Agents get a small allowlisted environment, not onett's own, so `GH_TOKEN` and
 similar secrets are not passed on. A harness can name extra variables to pass through with
-`inherit_env: [NAME, ...]`. Worker agents are never given the onlet API token. Setup and checks
+`inherit_env: [NAME, ...]`. Worker agents are never given the onett API token. Setup and checks
 run with that same environment (the allowlist, the harness's `inherit_env` and the project's `env`),
-not onlet's, because they execute code the agent may have written.
+not onett's, because they execute code the agent may have written.
 
 **Budget.** `limits.daily_budget_usd` stops new task runs once the day's reported cost reaches it.
 A run's cost is recorded when it ends, so runs in flight count only after they finish. Codex
@@ -119,7 +119,7 @@ reports no cost, so give its harness a `price` to count an estimate (shown as `~
 Check the setup before you start the daemon:
 
 ```sh
-./onlet doctor
+./onett doctor
 ```
 
 It prints one `ok`, `warn` or `FAIL` line per check (config, git, `gh` login, the harness CLIs,
@@ -131,7 +131,7 @@ each project's clone and pause state, and the daemon). A `FAIL` line says how to
 In its own terminal:
 
 ```sh
-./onlet serve
+./onett serve
 ```
 
 It keeps running and prints the address it listens on (`127.0.0.1:7777` by default). Leave it
@@ -140,34 +140,34 @@ running. Stop it with Ctrl-C.
 In a second terminal:
 
 ```sh
-./onlet status       # factory state, pending approvals, blocked tasks and running runs
-./onlet open         # open the web UI; on first run you create the owner account there
+./onett status       # factory state, pending approvals, blocked tasks and running runs
+./onett open         # open the web UI; on first run you create the owner account there
 ```
 
-`onlet status` reads "Factory: running" because the factory is not paused. The project is paused
+`onett status` reads "Factory: running" because the factory is not paused. The project is paused
 separately, so no run for `trial` will start yet.
 
 The web UI asks for a username and password; the first run creates the owner account. The CLI does
 not use a password. It finds the daemon through the config file's `server` address and reads the API
-token from the daemon's data directory (`~/.local/share/onlet/token` by default). On another
-machine, set `ONLET_API` and `ONLET_TOKEN` instead.
+token from the daemon's data directory (`~/.local/share/onett/token` by default). On another
+machine, set `ONETT_API` and `ONETT_TOKEN` instead.
 
 To keep the daemon running without a terminal on macOS, install it as a launchd service (launchd is
 the macOS service manager). It starts at login and restarts the daemon if it crashes:
 
 ```sh
-./onlet service install     # write the plist and start the daemon
-./onlet service status      # running (with pid) or not, and where the log is
-./onlet service uninstall   # stop it and remove the plist
+./onett service install     # write the plist and start the daemon
+./onett service status      # running (with pid) or not, and where the log is
+./onett service uninstall   # stop it and remove the plist
 ```
 
-The log is `onlet.log` in the data directory (`server.data_dir`). Use either `serve` in a terminal
+The log is `onett.log` in the data directory (`server.data_dir`). Use either `serve` in a terminal
 or the service, not both: the second one cannot listen on the same address.
 
 ## 6. Create a small task while the project is paused
 
 ```sh
-./onlet task create --project trial --kind chore \
+./onett task create --project trial --kind chore \
   --title "Add a usage section to the README" \
   --body "Add a short section to README.md that says how to run the tests. Keep it to five lines."
 ```
@@ -176,24 +176,24 @@ The task is created and stays `queued`. A paused project is skipped when work is
 runs yet. Check the task:
 
 ```sh
-./onlet task list --project trial
+./onett task list --project trial
 ```
 
 ## 7. Unpause the project and watch the run
 
-Set `paused: false` for `trial` in `~/.config/onlet/onlet.yaml`, then reload the config:
+Set `paused: false` for `trial` in `~/.config/onett/onett.yaml`, then reload the config:
 
 ```sh
-./onlet config --reload
+./onett config --reload
 ```
 
-Onlet re-reads the file without a restart. From here the work runs on its own. Watch it:
+Onett re-reads the file without a restart. From here the work runs on its own. Watch it:
 
 ```sh
-./onlet status                      # "Running" lists the active run and its ID
-./onlet run list --project trial    # every run, with status
-./onlet run logs RUN_ID --follow    # stream the agent's output; Ctrl-C stops following
-./onlet events --follow             # the live event stream, all projects
+./onett status                      # "Running" lists the active run and its ID
+./onett run list --project trial    # every run, with status
+./onett run logs RUN_ID --follow    # stream the agent's output; Ctrl-C stops following
+./onett events --follow             # the live event stream, all projects
 ```
 
 In the web UI, the Overview page shows active runs and the **Needs you** list. Tasks shows every
@@ -201,22 +201,22 @@ task and its status. Runs opens a run's full log.
 
 A run ends with one of these outcomes:
 
-- **Changes made**: onlet commits them, pushes a `onlet/...` branch, opens a PR and moves the
+- **Changes made**: onett commits them, pushes a `onett/...` branch, opens a PR and moves the
   task to `review`.
 - **No changes needed**: the task is done, and the summary explains why.
-- **Failed, or the agent reports `failed`**: onlet queues the task again for another attempt,
+- **Failed, or the agent reports `failed`**: onett queues the task again for another attempt,
   until `max_attempts` is used up. Then the task is blocked. The same happens when CI fails or the
   reviewer asks for changes.
 - **Denied or stalled**: the task is blocked at once, with the reason, and you are notified.
 
 Once the PR exists, the PR shepherd waits for CI and runs a reviewer agent. Your trial repository
-needs no CI. Onlet treats "no checks" as passing, so the reviewer is the only gate. A small docs
+needs no CI. Onett treats "no checks" as passing, so the reviewer is the only gate. A small docs
 change is usually rated `low` risk. If the agent and the policy both agree, the PR merges on its
 own after the reviewer approves. Otherwise it waits for you, as in step 8.
 
 To add your own risk rules to a policy, use `extra_rules`. Setting `rules` instead **replaces** the
-built-in protections (migrations, CI, auth, dependency manifests, onlet's own gates and agent
-instructions) and you must then copy them back in. Built-in rules also rate work onlet assigned
+built-in protections (migrations, CI, auth, dependency manifests, onett's own gates and agent
+instructions) and you must then copy them back in. Built-in rules also rate work onett assigned
 itself (task sources `followup` and `retro`) `medium`, so it waits for your approval. For a
 repository that always runs CI, set the policy's `require_checks: true`: a PR with no checks then
 waits instead of being treated as "no CI".
@@ -231,30 +231,30 @@ A `medium` or `high` risk change does not merge on its own. The task moves to `a
 and the request appears in the web UI's **Needs you** list and in:
 
 ```sh
-./onlet approvals                                   # pending approvals
-./onlet approve APPROVAL_ID                         # approve: the PR merges
-./onlet approve APPROVAL_ID --reject --note "Split this into two PRs"
+./onett approvals                                   # pending approvals
+./onett approve APPROVAL_ID                         # approve: the PR merges
+./onett approve APPROVAL_ID --reject --note "Split this into two PRs"
 ```
 
 An approval covers one commit on the PR. If the PR changes after you were asked, the approval is
-withdrawn and onlet checks the PR again.
+withdrawn and onett checks the PR again.
 
 ## 9. Retry or cancel a blocked task
 
 A blocked task has stopped and will not start again on its own. Look at the reason first:
 
 ```sh
-./onlet task show TASK_ID           # shows the blocked reason and the run history
+./onett task show TASK_ID           # shows the blocked reason and the run history
 ```
 
 Then either give the agent guidance and retry, or cancel:
 
 ```sh
-./onlet task retry TASK_ID --note "The README is at the repo root, not in docs/."
-./onlet task cancel TASK_ID
+./onett task retry TASK_ID --note "The README is at the repo root, not in docs/."
+./onett task cancel TASK_ID
 ```
 
-The `--note` is added to the task body for the next attempt. Onlet also marks a task blocked after
+The `--note` is added to the task body for the next attempt. Onett also marks a task blocked after
 `limits.max_attempts` (default 3) failed attempts.
 
 ## 10. Add a deployer (optional)
@@ -262,7 +262,7 @@ The `--note` is added to the task body for the next attempt. Onlet also marks a 
 A deployer releases a project after its PR merges. Without one, a merge is the end of the task. Two
 options:
 
-**Nothing is released by onlet** (for example, the platform deploys on push). Use `noop`. Onlet
+**Nothing is released by onett** (for example, the platform deploys on push). Use `noop`. Onett
 still runs the health window and the observers after each merge.
 
 ```yaml
@@ -273,9 +273,9 @@ projects:
       type: noop
 ```
 
-**A shell command releases it.** Onlet runs the `deploy` command in the project's clone, with the
-commit to release in `ONLET_REF`. A failed health window runs `rollback` with the previous healthy
-release in `ONLET_ROLLBACK_ID`:
+**A shell command releases it.** Onett runs the `deploy` command in the project's clone, with the
+commit to release in `ONETT_REF`. A failed health window runs `rollback` with the previous healthy
+release in `ONETT_ROLLBACK_ID`:
 
 ```yaml
 projects:
@@ -285,7 +285,7 @@ projects:
       type: command
       options:
         deploy: "vercel deploy --prod --yes"
-        rollback: "vercel rollback $ONLET_ROLLBACK_ID --yes"
+        rollback: "vercel rollback $ONETT_ROLLBACK_ID --yes"
       health_url: https://myapp.example.com/healthz   # must answer 2xx during verify_for
       verify_for: 10m          # watch a release this long before calling it healthy
       timeout: 30m             # fail a release still building after this long
@@ -294,7 +294,7 @@ projects:
 
 Every option, and how deployers read command output, is in [plugins.md](plugins.md#deployers).
 
-To see releases from a terminal, run `./onlet deploys`, and `./onlet deploys show ID` for one release's fields and evidence log (why it failed).
+To see releases from a terminal, run `./onett deploys`, and `./onett deploys show ID` for one release's fields and evidence log (why it failed).
 
 ## 11. Add a Sentry observer (optional)
 
@@ -320,36 +320,36 @@ and the query option, are in [plugins.md](plugins.md#sentry).
 
 ## 12. Keep secrets out of the config
 
-Onlet reads `~/.config/onlet/secrets.env` when `onlet serve` starts, before it reads the
+Onett reads `~/.config/onett/secrets.env` when `onett serve` starts, before it reads the
 config. Each line is `KEY=value`. Blank lines and lines starting with `#` are skipped, and one pair of
 matching quotes around a value is removed.
 
 ```sh
-mkdir -p ~/.config/onlet
-touch ~/.config/onlet/secrets.env
-chmod 600 ~/.config/onlet/secrets.env
-code ~/.config/onlet/secrets.env    # add lines like SENTRY_AUTH_TOKEN=...
+mkdir -p ~/.config/onett
+touch ~/.config/onett/secrets.env
+chmod 600 ~/.config/onett/secrets.env
+code ~/.config/onett/secrets.env    # add lines like SENTRY_AUTH_TOKEN=...
 ```
 
 - A variable already set in the environment wins over the file.
-- In the config, `${NAME}` is replaced with the value of `NAME`. If `NAME` is not set, `onlet serve`
+- In the config, `${NAME}` is replaced with the value of `NAME`. If `NAME` is not set, `onett serve`
   refuses to start and names the variable. A bare `$NAME` is left alone, so it can be used in shell
   commands such as the rollback above.
-- Restart `onlet serve` after you change `secrets.env`. It is read only at startup.
+- Restart `onett serve` after you change `secrets.env`. It is read only at startup.
 
 ## 13. Pause and resume
 
 There are two switches:
 
 ```sh
-./onlet pause      # the whole factory: nothing new starts, and loops stop acting
-./onlet resume
+./onett pause      # the whole factory: nothing new starts, and loops stop acting
+./onett resume
 ```
 
-For one project, run `./onlet project pause NAME` (and `./onlet project resume NAME`), or use
+For one project, run `./onett project pause NAME` (and `./onett project resume NAME`), or use
 the Projects page in the web UI. That takes effect at once and survives restarts. A project with
 `paused: true` in the config can only be resumed by editing the file and running
-`./onlet config --reload`. Pausing does not stop agents that are already running. They finish, and
+`./onett config --reload`. Pausing does not stop agents that are already running. They finish, and
 nothing new starts. The `deploy_watch` and `prod_watch` loops keep running while paused, so a release
 in flight is still checked and rolled back.
 
@@ -363,9 +363,9 @@ write caches under `$HOME` or download dependencies fail inside it, usually with
 cache and temp directory) at `/tmp`:
 
 ```sh
-export GOCACHE=/tmp/onlet-go/gocache
-export GOMODCACHE=/tmp/onlet-go/mod     # only if the default module cache is not writable
-export GOTMPDIR=/tmp/onlet-go/tmp       # only if Go cannot create temp files
+export GOCACHE=/tmp/onett-go/gocache
+export GOMODCACHE=/tmp/onett-go/mod     # only if the default module cache is not writable
+export GOTMPDIR=/tmp/onett-go/tmp       # only if Go cannot create temp files
 mkdir -p "$GOCACHE" "$GOMODCACHE" "$GOTMPDIR"
 ```
 
@@ -405,17 +405,17 @@ never enable it themselves; if a task cannot be verified without it, report it a
 
 ## Troubleshooting
 
-- **``no config at <path>: run `onlet init` to create one``**: the CLI cannot find the config file.
-  Run `onlet init`, or pass `--config` / set `ONLET_CONFIG`.
-- **`no token: set ONLET_TOKEN or run on the machine running onlet serve`**: the CLI cannot read
-  the token. Run the command on the machine that runs the daemon, or set `ONLET_API` and
-  `ONLET_TOKEN`.
+- **``no config at <path>: run `onett init` to create one``**: the CLI cannot find the config file.
+  Run `onett init`, or pass `--config` / set `ONETT_CONFIG`.
+- **`no token: set ONETT_TOKEN or run on the machine running onett serve`**: the CLI cannot read
+  the token. Run the command on the machine that runs the daemon, or set `ONETT_API` and
+  `ONETT_TOKEN`.
 - **`undefined environment variable ${NAME}`**: the config refers to a variable that is not set.
-  Add it to `secrets.env` and restart `onlet serve`.
-- **A task is `blocked` with a denial**: read the run log with `./onlet run logs RUN_ID`. The agent's
+  Add it to `secrets.env` and restart `onett serve`.
+- **A task is `blocked` with a denial**: read the run log with `./onett run logs RUN_ID`. The agent's
   tool call was refused. Fix the cause (for example, a missing permission or a path outside the
   checkout) and retry with a note.
 
-## Next: run onlet on itself
+## Next: run onett on itself
 
-`examples/dogfood/` shows a full loop: issues labelled `onlet` become tasks, agents open PRs against a `dogfood` branch, and low-risk PRs merge on their own. Each merge is released to a staging copy on port 7798 and verified, and a failed release rolls back and opens an incident. See [`examples/dogfood/README.md`](../examples/dogfood/README.md) for the steps.
+`examples/dogfood/` shows a full loop: issues labelled `onett` become tasks, agents open PRs against a `dogfood` branch, and low-risk PRs merge on their own. Each merge is released to a staging copy on port 7798 and verified, and a failed release rolls back and opens an incident. See [`examples/dogfood/README.md`](../examples/dogfood/README.md) for the steps.

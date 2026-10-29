@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func TestDefaultsOnEmptyConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "127.0.0.1:7777", cfg.Server.Addr)
-	assert.Equal(t, filepath.Join(home, ".local", "share", "onlet"), cfg.Server.DataDir)
+	assert.Equal(t, filepath.Join(home, ".local", "share", "onett"), cfg.Server.DataDir)
 	assert.Equal(t, "http://127.0.0.1:7777", cfg.Server.PublicURL)
 
 	assert.Equal(t, 3, cfg.Limits.MaxConcurrentRuns)
@@ -54,7 +54,7 @@ func TestDefaultsOnEmptyConfig(t *testing.T) {
 	assert.Nil(t, pol.ExtraRules, "extra rules default to none")
 	assert.Equal(t, DefaultGates(), pol.Gates)
 
-	assert.Equal(t, "onlet", cfg.Loops.IssueIntake.Label)
+	assert.Equal(t, "onett", cfg.Loops.IssueIntake.Label)
 	assert.Equal(t, 5*time.Minute, cfg.Loops.IssueIntake.Every.Duration)
 	assert.Equal(t, time.Minute, cfg.Loops.PRShepherd.Every.Duration)
 	assert.Equal(t, 30*time.Second, cfg.Loops.DeployWatch.Every.Duration)
@@ -72,7 +72,7 @@ func TestUserValuesAreNotOverwritten(t *testing.T) {
 	cfg, err := Parse([]byte(`
 server:
   addr: 0.0.0.0:9000
-  data_dir: /var/lib/onlet
+  data_dir: /var/lib/onett
 limits:
   max_attempts: 5
 harnesses:
@@ -99,7 +99,7 @@ loops:
 	require.NoError(t, err)
 
 	assert.Equal(t, "0.0.0.0:9000", cfg.Server.Addr)
-	assert.Equal(t, "/var/lib/onlet", cfg.Server.DataDir)
+	assert.Equal(t, "/var/lib/onett", cfg.Server.DataDir)
 	assert.Equal(t, "http://127.0.0.1:9000", cfg.Server.PublicURL)
 	assert.Equal(t, 5, cfg.Limits.MaxAttempts)
 	assert.Equal(t, 3, cfg.Limits.MaxConcurrentRuns)
@@ -123,21 +123,21 @@ func TestUnknownKeyIsAnError(t *testing.T) {
 }
 
 func TestEnvExpansionOnlyTouchesBracedNames(t *testing.T) {
-	t.Setenv("ONLET_TEST_HOST", "example.test")
+	t.Setenv("ONETT_TEST_HOST", "example.test")
 	cfg, err := Parse([]byte(`
 server:
-  public_url: "https://${ONLET_TEST_HOST}/onlet"
+  public_url: "https://${ONETT_TEST_HOST}/onett"
 projects:
   app:
     repo: bob/app
     deploy:
       type: command
       options:
-        rollback: "vercel rollback $ONLET_TEST_HOST --yes"
+        rollback: "vercel rollback $ONETT_TEST_HOST --yes"
 `), "")
 	require.NoError(t, err)
-	assert.Equal(t, "https://example.test/onlet", cfg.Server.PublicURL)
-	assert.Equal(t, "vercel rollback $ONLET_TEST_HOST --yes", cfg.Projects["app"].Deploy.Options["rollback"])
+	assert.Equal(t, "https://example.test/onett", cfg.Server.PublicURL)
+	assert.Equal(t, "vercel rollback $ONETT_TEST_HOST --yes", cfg.Projects["app"].Deploy.Options["rollback"])
 }
 
 func TestRulesNilVersusEmpty(t *testing.T) {
@@ -155,12 +155,12 @@ policies:
 }
 
 func TestPromptPathsResolveAgainstConfigDir(t *testing.T) {
-	cfg, err := Load(filepath.Join("testdata", "onlet.yaml"))
+	cfg, err := Load(filepath.Join("testdata", "onett.yaml"))
 	require.NoError(t, err)
 
 	dir, err := filepath.Abs("testdata")
 	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(dir, "onlet.yaml"), cfg.Path)
+	assert.Equal(t, filepath.Join(dir, "onett.yaml"), cfg.Path)
 	assert.Equal(t, filepath.Join(dir, "prompts", "reviewer.md"), cfg.Agents["reviewer"].Prompt)
 	assert.Equal(t, "/abs/triager.md", cfg.Agents["triager"].Prompt, "absolute paths are left alone")
 	assert.Equal(t, "builtin:sre", cfg.Agents["sre"].Prompt, "builtin prompts are left alone")
@@ -224,7 +224,7 @@ func TestDefaultPolicyReturnsFreshValues(t *testing.T) {
 
 func TestProjectAgentPromptPathsResolveAgainstConfigDir(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "onlet.yaml")
+	path := filepath.Join(dir, "onett.yaml")
 	cfg, err := Parse([]byte(`
 projects:
   app:
@@ -277,7 +277,7 @@ func TestDefaultRulesRateSelfAssignedWorkMedium(t *testing.T) {
 	rules := DefaultRules()
 	last := rules[len(rules)-1]
 	assert.Equal(t, domain.RiskMedium, last.Risk)
-	assert.Equal(t, "work onlet assigned itself (follow-up or retrospective)", last.Reason)
+	assert.Equal(t, "work onett assigned itself (follow-up or retrospective)", last.Reason)
 	assert.Equal(t, []string{"followup", "retro"}, last.Sources)
 	assert.Empty(t, last.Paths)
 }
@@ -306,7 +306,7 @@ func TestLocalURL(t *testing.T) {
 		":7777":          "http://127.0.0.1:7777",
 		"[::]:7777":      "http://[::1]:7777",
 		"localhost:7777": "http://localhost:7777",
-		"onlet.lan:80":   "http://onlet.lan:80",
+		"onett.lan:80":   "http://onett.lan:80",
 		"[::1]:7777":     "http://[::1]:7777",
 		"garbage":        "http://garbage",
 	}

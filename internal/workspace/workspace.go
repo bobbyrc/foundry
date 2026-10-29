@@ -1,5 +1,5 @@
 // Package workspace gives each agent run its own git worktree on a repository's local clone, and
-// does the git work around it: commit, push, diff stats and cleanup. Onlet pushes; agents
+// does the git work around it: commit, push, diff stats and cleanup. Onett pushes; agents
 // never get push credentials.
 package workspace
 
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bobbyrc/onlet/internal/policy"
+	"github.com/bobbyrc/onett/internal/policy"
 )
 
 // Repo is a project's repository and its local clone.
@@ -46,9 +46,9 @@ type Manager struct {
 	locks map[string]*sync.Mutex // one per clone path, created on first use
 }
 
-// outboxExclude is the info/exclude pattern that keeps an agent's .onlet-run/ outbox out of
+// outboxExclude is the info/exclude pattern that keeps an agent's .onett-run/ outbox out of
 // commits. It is anchored to the worktree root.
-const outboxExclude = "/.onlet-run/"
+const outboxExclude = "/.onett-run/"
 
 // New returns a Manager whose worktrees live under root.
 func New(root string) *Manager {
@@ -168,7 +168,7 @@ func (m *Manager) Prepare(ctx context.Context, r Repo, branch, runID string) (Wo
 	if err := excludeOutbox(ctx, r.Path); err != nil {
 		return Workspace{}, err
 	}
-	if err := os.MkdirAll(filepath.Join(dir, ".onlet-run"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".onett-run"), 0o755); err != nil {
 		return Workspace{}, fmt.Errorf("create outbox in %s: %w", dir, err)
 	}
 
@@ -287,7 +287,7 @@ var ErrUnresolvedConflicts = errors.New("unresolved merge conflicts")
 // Commit stages everything in the worktree and commits it. It returns false, with no commit,
 // when nothing changed. A merge in progress is always concluded by the commit, even when the
 // result matches HEAD. Files that still contain conflict markers block the commit with
-// ErrUnresolvedConflicts. The commit uses Onlet's identity only when git has no user.email
+// ErrUnresolvedConflicts. The commit uses Onett's identity only when git has no user.email
 // configured.
 func (m *Manager) Commit(ctx context.Context, ws Workspace, message string) (bool, error) {
 	if _, err := git(ctx, ws.Dir, "add", "-A"); err != nil {
@@ -324,7 +324,7 @@ func (m *Manager) Commit(ctx context.Context, ws Workspace, message string) (boo
 
 	var args []string
 	if email, err := git(ctx, ws.Dir, "config", "user.email"); err != nil || email == "" {
-		args = append(args, "-c", "user.name=Onlet", "-c", "user.email=onlet@localhost")
+		args = append(args, "-c", "user.name=Onett", "-c", "user.email=onett@localhost")
 	}
 	args = append(args, "commit", "-m", message)
 	if _, err := git(ctx, ws.Dir, args...); err != nil {
@@ -343,7 +343,7 @@ func (m *Manager) MergeBase(ctx context.Context, r Repo, ws Workspace) ([]string
 	if _, err := git(ctx, r.Path, "fetch", "origin", "--prune"); err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", r.Name, err)
 	}
-	_, mergeErr := git(ctx, ws.Dir, "-c", "user.name=Onlet", "-c", "user.email=onlet@localhost",
+	_, mergeErr := git(ctx, ws.Dir, "-c", "user.name=Onett", "-c", "user.email=onett@localhost",
 		"merge", "--no-edit", ws.BaseRef)
 	if mergeErr == nil {
 		return nil, nil

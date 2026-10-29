@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 var _ store.Store = (*Store)(nil)

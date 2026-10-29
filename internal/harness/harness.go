@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // Spec is everything needed to start one agent session.
@@ -72,15 +72,15 @@ type Harness interface {
 // Factory builds a harness from its config block.
 type Factory func(cfg Config) (Harness, error)
 
-// Config is the harness block from onlet.yaml.
+// Config is the harness block from onett.yaml.
 type Config struct {
 	Name    string
 	Type    string            // registered factory name
 	Command []string          // binary and fixed leading args; adapters have a default
 	Env     map[string]string // added to every session
 	Args    []string          // added to every session, before Spec.Args
-	// InheritEnv names variables passed through from onlet's environment on top of the
-	// base allowlist (see proc.go). Everything else in onlet's environment is withheld.
+	// InheritEnv names variables passed through from onett's environment on top of the
+	// base allowlist (see proc.go). Everything else in onett's environment is withheld.
 	InheritEnv []string
 }
 

@@ -72,7 +72,7 @@ export function TaskDetail() {
                 </>
               ) : null}
               {queuedInPausedProject ? (
-                <Callout tone="muted">This project is paused in onlet.yaml, so queued work will not start.</Callout>
+                <Callout tone="muted">This project is paused in onett.yaml, so queued work will not start.</Callout>
               ) : null}
               {pendingApprovals.map((approval) => (
                 <ApprovalCard key={approval.id} approval={approval} showTask={false} />

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onett/internal/config"
 )
 
 // withConfig parses a config document (defaults applied, as the daemon does) and serves it.

@@ -1,5 +1,5 @@
-// Package domain holds the types shared by every onlet package. It has no dependencies on
-// other onlet packages, and its JSON tags are the wire format of the HTTP API.
+// Package domain holds the types shared by every onett package. It has no dependencies on
+// other onett packages, and its JSON tags are the wire format of the HTTP API.
 package domain
 
 import (
@@ -96,10 +96,10 @@ type Task struct {
 	MergeSHA  string `json:"merge_sha,omitempty"`
 	// ApprovedSHA is the PR head commit a reviewer run approved; a new push invalidates it.
 	ApprovedSHA string `json:"approved_sha,omitempty"`
-	// PushedAt is when onlet last pushed the task branch (CI may not have registered yet).
+	// PushedAt is when onett last pushed the task branch (CI may not have registered yet).
 	PushedAt *time.Time `json:"pushed_at,omitempty"`
 	// CIHeadSHA is the PR head the shepherd last saw, and CIHeadSeenAt when it first saw it;
-	// the CI grace period runs from there, so any push (onlet's or a human's) gets one.
+	// the CI grace period runs from there, so any push (onett's or a human's) gets one.
 	CIHeadSHA     string     `json:"ci_head_sha,omitempty"`
 	CIHeadSeenAt  *time.Time `json:"ci_head_seen_at,omitempty"`
 	Summary       string     `json:"summary,omitempty"` // latest agent summary
@@ -156,7 +156,7 @@ const (
 	LogToolUse    LogKind = "tool_use"    // the agent called a tool
 	LogToolResult LogKind = "tool_result" // a tool returned
 	LogDenial     LogKind = "denial"      // a tool call was refused
-	LogSystem     LogKind = "system"      // onlet or harness bookkeeping
+	LogSystem     LogKind = "system"      // onett or harness bookkeeping
 	LogStderr     LogKind = "stderr"
 	LogError      LogKind = "error"
 )
@@ -214,7 +214,7 @@ const (
 	ApprovalRejected ApprovalStatus = "rejected"
 )
 
-// Approval is a decision onlet is waiting for you to make.
+// Approval is a decision onett is waiting for you to make.
 type Approval struct {
 	ID      string `json:"id"`
 	TaskID  string `json:"task_id"`
@@ -241,7 +241,7 @@ const (
 	DeployRolledBack DeployState = "rolled_back"
 )
 
-// Deployment is onlet's record of one release of a project.
+// Deployment is onett's record of one release of a project.
 type Deployment struct {
 	ID         string      `json:"id"`
 	Project    string      `json:"project"`

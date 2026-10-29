@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/harness"
 )
 
 // rtNoChangesScript is a harness run that changes nothing and reports no_changes, the way an
@@ -37,7 +37,7 @@ func rtNoChangesScript(ctx context.Context, spec harness.Spec, emit func(harness
 func TestRunnerNoChangesOnBranchAheadOfBaseOpensPR(t *testing.T) {
 	env := rtNewEngine(t, rtOpts{script: rtNoChangesScript})
 
-	const branch = "onlet/stranded-greeting"
+	const branch = "onett/stranded-greeting"
 	clone := t.TempDir()
 	rtGit(t, "", "clone", env.bare["demo"], clone)
 	rtGit(t, clone, "checkout", "-b", branch)

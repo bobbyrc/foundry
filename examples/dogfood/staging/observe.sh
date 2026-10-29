@@ -1,6 +1,6 @@
 #!/bin/bash
 # Exec observer for the staging instance: prints error and panic lines from the staging log as
-# JSON Lines (one per distinct message). ONLET_SINCE filters by the line's "time" when parseable.
+# JSON Lines (one per distinct message). ONETT_SINCE filters by the line's "time" when parseable.
 # STAGING_OBSERVE_LOG overrides the log path (used for testing only).
 set -euo pipefail
 
@@ -18,7 +18,7 @@ import re
 import sys
 
 LOG = os.environ["OBS_LOG"]
-SINCE_RAW = os.environ.get("ONLET_SINCE", "")
+SINCE_RAW = os.environ.get("ONETT_SINCE", "")
 NOW = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
 
 

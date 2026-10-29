@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/scm"
 )
 
 // lpStagingShepherdEnv is lpShepherdEnv for a project whose default branch is staging, so a

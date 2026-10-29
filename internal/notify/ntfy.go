@@ -107,7 +107,7 @@ func (t *ntfy) Notify(ctx context.Context, n Notification) error {
 	return nil
 }
 
-// ntfyPriority maps an onlet priority to ntfy's 1 (min) to 5 (max) scale.
+// ntfyPriority maps an onett priority to ntfy's 1 (min) to 5 (max) scale.
 func ntfyPriority(p Priority) string {
 	switch effectivePriority(p) {
 	case PriorityLow:

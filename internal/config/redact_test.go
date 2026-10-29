@@ -38,12 +38,12 @@ notify:
     options:
       topic: public-topic
       api_key: key-1
-`), "/conf/onlet.yaml")
+`), "/conf/onett.yaml")
 	require.NoError(t, err)
 
 	red := cfg.Redacted()
 
-	assert.Equal(t, "/conf/onlet.yaml", red.Path)
+	assert.Equal(t, "/conf/onett.yaml", red.Path)
 	assert.Equal(t, "app", red.Projects["app"].Name)
 	assert.Equal(t, "***", red.Harness["exec"].Env["API_TOKEN"])
 	assert.Equal(t, "***", red.Projects["app"].Env["SECRET_PATH"])
@@ -69,38 +69,38 @@ notify:
 }
 
 func TestRedactedMasksExpandedValuesEverywhere(t *testing.T) {
-	t.Setenv("ONLET_TEST_VERCEL_TOKEN", "vcp_live_secret_1")
-	t.Setenv("ONLET_TEST_CLI_KEY", "harness-key-value")
-	t.Setenv("ONLET_TEST_NTFY_PATH", "abc123-topic-path")
-	t.Setenv("ONLET_TEST_INSTR_SECRET", "sk-instruction-secret")
-	t.Setenv("ONLET_TEST_SHORT", "tiny")
-	t.Setenv("ONLET_TEST_EMPTY", "")
+	t.Setenv("ONETT_TEST_VERCEL_TOKEN", "vcp_live_secret_1")
+	t.Setenv("ONETT_TEST_CLI_KEY", "harness-key-value")
+	t.Setenv("ONETT_TEST_NTFY_PATH", "abc123-topic-path")
+	t.Setenv("ONETT_TEST_INSTR_SECRET", "sk-instruction-secret")
+	t.Setenv("ONETT_TEST_SHORT", "tiny")
+	t.Setenv("ONETT_TEST_EMPTY", "")
 	cfg, err := Parse([]byte(`
 harnesses:
   exec:
     type: exec
     command: ["agent"]
-    args: ["--api-key=${ONLET_TEST_CLI_KEY}"]
+    args: ["--api-key=${ONETT_TEST_CLI_KEY}"]
 projects:
   app:
     repo: bob/app
-    instructions: "Use the key ${ONLET_TEST_INSTR_SECRET} for the API."
+    instructions: "Use the key ${ONETT_TEST_INSTR_SECRET} for the API."
     deploy:
       type: command
       options:
-        deploy: "vercel --token ${ONLET_TEST_VERCEL_TOKEN}"
-        label: "${ONLET_TEST_SHORT}-deploy${ONLET_TEST_EMPTY}"
+        deploy: "vercel --token ${ONETT_TEST_VERCEL_TOKEN}"
+        label: "${ONETT_TEST_SHORT}-deploy${ONETT_TEST_EMPTY}"
 notify:
   - type: ntfy
     options:
-      url: "https://ntfy.example/${ONLET_TEST_NTFY_PATH}"
-      label: "${ONLET_TEST_SHORT}"
-`), "/conf/onlet.yaml")
+      url: "https://ntfy.example/${ONETT_TEST_NTFY_PATH}"
+      label: "${ONETT_TEST_SHORT}"
+`), "/conf/onett.yaml")
 	require.NoError(t, err)
 
 	red := cfg.Redacted()
 
-	assert.Equal(t, "/conf/onlet.yaml", red.Path)
+	assert.Equal(t, "/conf/onett.yaml", red.Path)
 	assert.Equal(t, "app", red.Projects["app"].Name)
 	assert.Equal(t, "--api-key=***", red.Harness["exec"].Args[0])
 	assert.Equal(t, "Use the key *** for the API.", red.Projects["app"].Instructions)

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 func lpObservation(level string, count int64, lastSeen time.Time) domain.SignalObservation {

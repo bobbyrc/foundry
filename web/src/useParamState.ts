@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-/** A filter kept in the URL (?project=onlet) so filtered views can be linked and reloaded. */
+/** A filter kept in the URL (?project=onett) so filtered views can be linked and reloaded. */
 export function useParamState(key: string): [string, (value: string) => void] {
   const [params, setParams] = useSearchParams();
   const value = params.get(key) ?? '';

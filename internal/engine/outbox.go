@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
-// readResult parses the agent's report from <dir>/.onlet-run/result.json. A missing or
+// readResult parses the agent's report from <dir>/.onett-run/result.json. A missing or
 // unparsable report is a failed run; finalText (the agent's last message) is kept as context.
 func readResult(dir string, finalText string) domain.RunResult {
 	failed := func() domain.RunResult {

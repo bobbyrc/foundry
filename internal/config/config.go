@@ -1,4 +1,4 @@
-// Package config defines onlet.yaml. load.go reads, defaults and validates it.
+// Package config defines onett.yaml. load.go reads, defaults and validates it.
 //
 // The struct tags are the file format; the JSON tags are how GET /api/v1/config shows it.
 package config
@@ -6,7 +6,7 @@ package config
 import (
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // Duration is a time.Duration written as "15m" in YAML and JSON.
@@ -22,7 +22,7 @@ type Config struct {
 	Projects map[string]*Project `yaml:"projects" json:"projects"`
 	Loops    Loops               `yaml:"loops" json:"loops"`
 	Notify   []Notifier          `yaml:"notify" json:"notify"`
-	// SelfProject names the project that is onlet itself; factory friction is filed there.
+	// SelfProject names the project that is onett itself; factory friction is filed there.
 	SelfProject string `yaml:"self_project" json:"self_project"`
 
 	// Path is the file this config was loaded from (not part of the file).
@@ -35,11 +35,11 @@ type Config struct {
 
 type Server struct {
 	Addr      string `yaml:"addr" json:"addr"`             // default 127.0.0.1:7777
-	DataDir   string `yaml:"data_dir" json:"data_dir"`     // default ~/.local/share/onlet
+	DataDir   string `yaml:"data_dir" json:"data_dir"`     // default ~/.local/share/onett
 	PublicURL string `yaml:"public_url" json:"public_url"` // for links in notifications; default http://<addr>
 	// AllowedHosts are extra Host header values the server accepts (DNS-rebinding guard).
 	// localhost, 127.0.0.1, ::1 and the host parts of addr and public_url are always allowed.
-	// A wildcard bind (0.0.0.0, ::) adds no name: to reach onlet remotely (e.g. over
+	// A wildcard bind (0.0.0.0, ::) adds no name: to reach onett remotely (e.g. over
 	// Tailscale), list the name you use here, or requests get 421 Misdirected Request.
 	AllowedHosts []string `yaml:"allowed_hosts" json:"allowed_hosts,omitempty"`
 	// RetainEvents and RetainRunLogs bound how long the event history and agent run logs are
@@ -69,11 +69,11 @@ type Harness struct {
 	Command []string          `yaml:"command" json:"command,omitempty"`
 	Args    []string          `yaml:"args" json:"args,omitempty"`
 	Env     map[string]string `yaml:"env" json:"env,omitempty"`
-	// InheritEnv names extra variables passed through from onlet's own environment. Agents
+	// InheritEnv names extra variables passed through from onett's own environment. Agents
 	// otherwise get only a small allowlist (PATH, HOME, USER, LANG, TERM, TMPDIR, ...), so
-	// secrets loaded into onlet (GH_TOKEN, provider tokens) do not reach them.
+	// secrets loaded into onett (GH_TOKEN, provider tokens) do not reach them.
 	InheritEnv []string `yaml:"inherit_env" json:"inherit_env,omitempty"`
-	// Price lets onlet estimate the cost of runs whose harness reports tokens but no dollar
+	// Price lets onett estimate the cost of runs whose harness reports tokens but no dollar
 	// cost (codex), so limits.daily_budget_usd counts them.
 	Price *Price `yaml:"price" json:"price,omitempty"`
 }
@@ -143,9 +143,9 @@ type Policy struct {
 	// Rules replaces the built-in default rules when set (an explicit empty list means none).
 	Rules []Rule `yaml:"rules" json:"rules"`
 	// ExtraRules are added to Rules (or to the defaults when Rules is unset). Prefer this:
-	// it keeps the built-in protections for migrations, CI, auth and onlet's own gates.
+	// it keeps the built-in protections for migrations, CI, auth and onett's own gates.
 	ExtraRules []Rule `yaml:"extra_rules" json:"extra_rules,omitempty"`
-	// CIGrace: after onlet pushes, a PR with no checks yet counts as CI pending (not "no CI")
+	// CIGrace: after onett pushes, a PR with no checks yet counts as CI pending (not "no CI")
 	// for this long, so a fast review cannot merge before CI registers. Default 3m.
 	CIGrace Duration `yaml:"ci_grace" json:"ci_grace"`
 	// RequireChecks: for repositories that always run CI, a PR with no checks never passes the
@@ -170,14 +170,14 @@ type Project struct {
 	Agents map[string]Agent `yaml:"agents" json:"agents,omitempty"`
 	// Routing overrides the global task kind → agent routing for this project.
 	Routing map[string]string `yaml:"routing" json:"routing,omitempty"`
-	// Checks run in the worktree after the agent finishes and before onlet commits and
+	// Checks run in the worktree after the agent finishes and before onett commits and
 	// pushes (formatters, linters, fast tests). A failing check fails the attempt: the task is
 	// re-queued with the check's output, like a CI failure, without spending a CI run.
 	Checks []Check `yaml:"checks" json:"checks,omitempty"`
 	// Setup runs in a fresh worktree before the agent starts (install dependencies, generate
 	// code), so the agent can build and test. A failing setup command fails the attempt before
 	// the agent runs: the task is re-queued with the command's output. Setup and checks run
-	// with the agent's environment, not onlet's, because they execute code the agent may
+	// with the agent's environment, not onett's, because they execute code the agent may
 	// have written.
 	Setup []Check `yaml:"setup" json:"setup,omitempty"`
 	// Intake sources turn external work queues into tasks: each command prints tasks as JSON
@@ -231,7 +231,7 @@ type Loops struct {
 	// IssueIntake turns open issues carrying Label into tasks.
 	IssueIntake struct {
 		Loop  `yaml:",inline"`
-		Label string `yaml:"label" json:"label"` // default "onlet"
+		Label string `yaml:"label" json:"label"` // default "onett"
 	} `yaml:"issue_intake" json:"issue_intake"`
 	// PRShepherd moves tasks in review through CI, review, policy and merge.
 	PRShepherd Loop `yaml:"pr_shepherd" json:"pr_shepherd"`
@@ -263,7 +263,7 @@ type Loops struct {
 	} `yaml:"friction" json:"friction"`
 }
 
-// Check is one command onlet runs in an agent's worktree: a check before pushing its work, or a
+// Check is one command onett runs in an agent's worktree: a check before pushing its work, or a
 // setup command before the agent starts.
 type Check struct {
 	Name string `yaml:"name" json:"name"`

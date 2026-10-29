@@ -16,12 +16,12 @@ import (
 //
 // The temp directories are removed after the tests. os.Exit skips defers, so cleanup is explicit.
 func TestMain(m *testing.M) {
-	agents, err := os.MkdirTemp("", "onlet-test-agents-*")
+	agents, err := os.MkdirTemp("", "onett-test-agents-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create test LaunchAgents dir: %v\n", err)
 		os.Exit(1)
 	}
-	home, err := os.MkdirTemp("", "onlet-test-home-*")
+	home, err := os.MkdirTemp("", "onett-test-home-*")
 	if err != nil {
 		_ = os.RemoveAll(agents)
 		fmt.Fprintf(os.Stderr, "create test HOME: %v\n", err)

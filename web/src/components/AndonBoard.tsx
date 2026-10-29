@@ -27,7 +27,7 @@ export function AndonBoard() {
           );
         })}
         {projects.isSuccess && projects.data.length === 0 ? (
-          <p className="board-empty">No projects yet. Add one with <code>onlet project add</code> and it appears here.</p>
+          <p className="board-empty">No projects yet. Add one with <code>onett project add</code> and it appears here.</p>
         ) : null}
         {projects.error ? (
           <div className="board-empty">

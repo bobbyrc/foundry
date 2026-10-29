@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/auth"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/auth"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // Sign-in limits: a username that fails signInLimit times within signInWindow is locked until the
@@ -200,7 +200,7 @@ func userPrincipal(w http.ResponseWriter, r *http.Request) (principal, bool) {
 	return p, true
 }
 
-// cookie returns the session cookie with the attributes onlet always uses. Secure is set when
+// cookie returns the session cookie with the attributes onett always uses. Secure is set when
 // the public URL is https or the request itself came over TLS. maxAge -1 clears the cookie.
 func (s *server) cookie(r *http.Request, value string, maxAge int) *http.Cookie {
 	return &http.Cookie{

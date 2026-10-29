@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onett/internal/config"
 )
 
 // Config editing is owner-only (see apiRoutes). The file is the source of truth: every save

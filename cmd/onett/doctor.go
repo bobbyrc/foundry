@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bobbyrc/onlet/internal/client"
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onett/internal/client"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/harness"
 )
 
 // doctor collects one line per check and counts the failures.
@@ -42,7 +42,7 @@ func (d *doctor) fail(msg, fix string) { d.line("FAIL", msg, fix) }
 // check fails.
 func cmdDoctor(e *env, args []string) error {
 	fs := newFlagSet("doctor", e)
-	cfgFlag := fs.String("config", "", "config file (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
+	cfgFlag := fs.String("config", "", "config file (default $ONETT_CONFIG or ~/.config/onett/onett.yaml)")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func cmdDoctor(e *env, args []string) error {
 	d := &doctor{out: e.out}
 	cfg, cfgErr := loadConfig(path)
 	if cfgErr != nil {
-		d.fail("config: "+cfgErr.Error(), "fix the file, or run `onlet init` to write one")
+		d.fail("config: "+cfgErr.Error(), "fix the file, or run `onett init` to write one")
 	} else {
 		d.ok("config loads: " + path)
 		d.checkDataDir(cfg.Server.DataDir)
@@ -240,7 +240,7 @@ func (d *doctor) checkDaemon(base string) {
 	h, err := client.New(base, "").Health(ctx)
 	if err != nil {
 		d.warn(fmt.Sprintf("daemon: not reachable at %s (%v)", base, err),
-			"run `onlet serve`, or `onlet service install` to keep it running")
+			"run `onett serve`, or `onett service install` to keep it running")
 		return
 	}
 	if !h.OK {

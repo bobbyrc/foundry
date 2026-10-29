@@ -1,5 +1,5 @@
 /**
- * The onlet mark: a loop with one lit segment, work going round the line. The loop takes the
+ * The onett mark: a loop with one lit segment, work going round the line. The loop takes the
  * surrounding text colour, so it reads on the charcoal rail and on a light card alike. The
  * geometry matches web/public/icon.svg, cropped to the loop.
  */

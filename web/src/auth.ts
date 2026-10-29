@@ -7,7 +7,7 @@ import { can, type Action } from './lib/roles';
 import type { User } from './types';
 
 /** Dispatched on window by api.ts when a normal call comes back 401: the session has ended. */
-export const UNAUTHORIZED_EVENT = 'onlet:unauthorized';
+export const UNAUTHORIZED_EVENT = 'onett:unauthorized';
 
 export type AuthState =
   | { status: 'loading' }

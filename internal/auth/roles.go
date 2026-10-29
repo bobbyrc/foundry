@@ -1,6 +1,6 @@
 package auth
 
-import "github.com/bobbyrc/onlet/internal/domain"
+import "github.com/bobbyrc/onett/internal/domain"
 
 // Action is something a request asks the server to do, grouped by how much trust it needs.
 type Action int

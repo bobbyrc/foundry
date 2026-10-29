@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/harness"
 )
 
 func init() {
@@ -99,12 +99,12 @@ func (s *session) Cancel() {
 //	[fake:deny]         report a denied tool call and fail
 //	[fake:fail]         write a failed result.json
 //	[fake:block]        write a blocked result.json
-//	ONLET_ROLE=reviewer  write a review verdict; [fake:reject] rejects it
+//	ONETT_ROLE=reviewer  write a review verdict; [fake:reject] rejects it
 //	[fake:commit]       commit a new file on the branch and write a completed result.json;
 //	                    [fake:risk-high] rates the change high risk
 //	(none of the above) write a no_changes result.json
 //
-// Any result.json is written to Workdir/.onlet-run/result.json.
+// Any result.json is written to Workdir/.onett-run/result.json.
 func DefaultScript(ctx context.Context, spec harness.Spec, emit func(harness.Event)) (harness.Result, error) {
 	prompt := spec.Prompt
 	sessionID := "fake-" + spec.RunID
@@ -136,7 +136,7 @@ func DefaultScript(ctx context.Context, spec harness.Spec, emit func(harness.Eve
 		rr := domain.RunResult{Status: domain.ResultBlocked, BlockedReason: "fake needs a human"}
 		return report(spec, sessionID, say, rr, "wrote blocked result")
 
-	case spec.Env["ONLET_ROLE"] == "reviewer":
+	case spec.Env["ONETT_ROLE"] == "reviewer":
 		reject := strings.Contains(prompt, "[fake:reject]")
 		verdict := &domain.ReviewVerdict{Approve: !reject}
 		if reject {
@@ -184,7 +184,7 @@ func report(spec harness.Spec, sessionID string, say func(domain.LogKind, string
 	return harness.Result{SessionID: sessionID, FinalText: final}, nil
 }
 
-// writeResult writes rr to Workdir/.onlet-run/result.json.
+// writeResult writes rr to Workdir/.onett-run/result.json.
 func writeResult(workdir string, rr domain.RunResult) error {
 	if workdir == "" {
 		return fmt.Errorf("fake harness: Spec.Workdir is required to write %s", domain.ResultFile)
@@ -213,7 +213,7 @@ func commitFile(ctx context.Context, dir, file, content string) error {
 	}
 	steps := [][]string{
 		{"add", "--", file},
-		{"-c", "user.name=Onlet", "-c", "user.email=onlet@localhost", "commit", "-m", "fake change"},
+		{"-c", "user.name=Onett", "-c", "user.email=onett@localhost", "commit", "-m", "fake change"},
 	}
 	for _, args := range steps {
 		cmd := exec.CommandContext(ctx, "git", args...)

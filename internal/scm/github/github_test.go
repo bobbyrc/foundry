@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onett/internal/scm"
 )
 
 const repo = "owner/name"
@@ -81,30 +81,30 @@ func TestOpenPRCreatesLabelsAndReturnsPR(t *testing.T) {
 	f := newFake()
 	f.on["pr create"] = "Creating pull request...\nhttps://github.com/owner/name/pull/12\n"
 	f.on["pr view"] = `{"number":12,"url":"https://github.com/owner/name/pull/12","state":"OPEN",
-		"headRefName":"onlet/x","headRefOid":"abc","mergeCommit":null,"mergeable":"MERGEABLE",
-		"labels":[{"name":"onlet"},{"name":"bug"}],"statusCheckRollup":[]}`
+		"headRefName":"onett/x","headRefOid":"abc","mergeCommit":null,"mergeable":"MERGEABLE",
+		"labels":[{"name":"onett"},{"name":"bug"}],"statusCheckRollup":[]}`
 	g := NewWithRunner(repo, f.runner())
 
 	pr, err := g.OpenPR(context.Background(), scm.PRSpec{
-		Head: "onlet/x", Base: "main", Title: "Fix it", Body: "the body",
-		Labels: []string{"onlet", "bug"}, Draft: true,
+		Head: "onett/x", Base: "main", Title: "Fix it", Body: "the body",
+		Labels: []string{"onett", "bug"}, Draft: true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 12, pr.Number)
 	assert.Equal(t, "open", pr.State)
-	assert.Equal(t, "onlet/x", pr.HeadBranch)
-	assert.Equal(t, []string{"onlet", "bug"}, pr.Labels)
+	assert.Equal(t, "onett/x", pr.HeadBranch)
+	assert.Equal(t, []string{"onett", "bug"}, pr.Labels)
 	assert.Equal(t, scm.CINone, pr.CI)
 
 	require.Len(t, f.calls, 5)
-	assert.Equal(t, []string{"pr", "create", "--repo", repo, "--head", "onlet/x", "--base", "main",
+	assert.Equal(t, []string{"pr", "create", "--repo", repo, "--head", "onett/x", "--base", "main",
 		"--title", "Fix it", "--body-file", "-", "--draft"}, f.calls[0].args)
 	assert.Equal(t, "the body", f.calls[0].stdin)
-	assert.Equal(t, []string{"label", "create", "onlet", "--repo", repo, "--force", "--color"},
+	assert.Equal(t, []string{"label", "create", "onett", "--repo", repo, "--force", "--color"},
 		f.calls[1].args[:7])
 	assert.Equal(t, []string{"label", "create", "bug", "--repo", repo, "--force", "--color"},
 		f.calls[2].args[:7])
-	assert.Equal(t, []string{"pr", "edit", "12", "--repo", repo, "--add-label", "onlet,bug"},
+	assert.Equal(t, []string{"pr", "edit", "12", "--repo", repo, "--add-label", "onett,bug"},
 		f.calls[3].args)
 	assert.Equal(t, []string{"pr", "view", "12", "--repo", repo, "--json", prViewFields}, f.calls[4].args)
 }
@@ -223,20 +223,20 @@ func TestFindPR(t *testing.T) {
 		f := newFake()
 		f.on["pr list"] = `[]`
 		g := NewWithRunner(repo, f.runner())
-		pr, ok, err := g.FindPR(context.Background(), "onlet/x")
+		pr, ok, err := g.FindPR(context.Background(), "onett/x")
 		require.NoError(t, err)
 		assert.False(t, ok)
 		assert.Equal(t, scm.PR{}, pr)
 		require.Len(t, f.calls, 1)
-		assert.Equal(t, []string{"pr", "list", "--repo", repo, "--head", "onlet/x",
+		assert.Equal(t, []string{"pr", "list", "--repo", repo, "--head", "onett/x",
 			"--state", "open", "--json", "number", "--limit", "1"}, f.calls[0].args)
 	})
 	t.Run("found", func(t *testing.T) {
 		f := newFake()
 		f.on["pr list"] = `[{"number":7}]`
-		f.on["pr view"] = `{"number":7,"state":"OPEN","headRefName":"onlet/x","statusCheckRollup":[]}`
+		f.on["pr view"] = `{"number":7,"state":"OPEN","headRefName":"onett/x","statusCheckRollup":[]}`
 		g := NewWithRunner(repo, f.runner())
-		pr, ok, err := g.FindPR(context.Background(), "onlet/x")
+		pr, ok, err := g.FindPR(context.Background(), "onett/x")
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, 7, pr.Number)
@@ -269,7 +269,7 @@ func TestMergePRMatchesHeadCommit(t *testing.T) {
 
 func TestCILogFetchesFailedRunsAndTails(t *testing.T) {
 	f := newFake()
-	f.on["pr view"] = `{"number":2,"state":"OPEN","headRefName":"onlet/x","statusCheckRollup":[]}`
+	f.on["pr view"] = `{"number":2,"state":"OPEN","headRefName":"onett/x","statusCheckRollup":[]}`
 	f.on["run list"] = `[
 		{"databaseId":101,"conclusion":"failure","name":"ci"},
 		{"databaseId":102,"conclusion":"success","name":"docs"},
@@ -285,7 +285,7 @@ func TestCILogFetchesFailedRunsAndTails(t *testing.T) {
 	log, err := g.CILog(context.Background(), 2, 10000)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"pr", "view", "2", "--repo", repo, "--json", prViewFields}, f.calls[0].args)
-	assert.Equal(t, []string{"run", "list", "--repo", repo, "--branch", "onlet/x",
+	assert.Equal(t, []string{"run", "list", "--repo", repo, "--branch", "onett/x",
 		"--json", "databaseId,conclusion,name", "--limit", "10"}, f.calls[1].args)
 	assert.Equal(t, 3, f.countCalls("run", "view"))
 	assert.Equal(t, []string{"run", "view", "101", "--repo", repo, "--log-failed"}, f.calls[2].args)
@@ -299,14 +299,14 @@ func TestCILogFetchesFailedRunsAndTails(t *testing.T) {
 }
 
 const sampleFailedLog = "Go vet, format, test\tSet up job\t2026-10-28T04:08:10.1000000Z \x1b[36;1mgo version\x1b[0m\n" +
-	"Go vet, format, test\tgo test\t2026-10-28T04:08:18.5700000Z ok  \tonlet/internal/a\t0.1s\n" +
+	"Go vet, format, test\tgo test\t2026-10-28T04:08:18.5700000Z ok  \tonett/internal/a\t0.1s\n" +
 	"Go vet, format, test\tgo test\t2026-10-28T04:08:18.5800911Z --- FAIL: TestExecTimeout (5.01s)\n" +
 	"Go vet, format, test\tgo test\t2026-10-28T04:08:18.5900000Z \x1b[31;1mFAIL\x1b[0m\n" +
 	"Go vet, format, test\tUpload\t2026-10-28T04:08:19.0000000Z ##[error]Process completed with exit code 1.\n"
 
 func TestCleanLog(t *testing.T) {
 	assert.Equal(t, "=== Go vet, format, test / Set up job ===\ngo version\n"+
-		"=== Go vet, format, test / go test ===\nok  \tonlet/internal/a\t0.1s\n"+
+		"=== Go vet, format, test / go test ===\nok  \tonett/internal/a\t0.1s\n"+
 		"--- FAIL: TestExecTimeout (5.01s)\nFAIL\n"+
 		"=== Go vet, format, test / Upload ===\n##[error]Process completed with exit code 1.\n",
 		cleanLog(sampleFailedLog))
@@ -334,7 +334,7 @@ func TestCondenseLogKeepsContextAroundFailures(t *testing.T) {
 
 func TestCILogCleansAndCondensesRealLines(t *testing.T) {
 	f := newFake()
-	f.on["pr view"] = `{"number":2,"state":"OPEN","headRefName":"onlet/x","statusCheckRollup":[]}`
+	f.on["pr view"] = `{"number":2,"state":"OPEN","headRefName":"onett/x","statusCheckRollup":[]}`
 	f.on["run list"] = `[{"databaseId":101,"conclusion":"failure","name":"ci"}]`
 	f.on["run view 101"] = sampleFailedLog
 	g := NewWithRunner(repo, f.runner())
@@ -409,12 +409,12 @@ func TestCreateIssueEnsuresLabelsOnce(t *testing.T) {
 	g := NewWithRunner(repo, f.runner())
 
 	issue, err := g.CreateIssue(context.Background(), scm.IssueSpec{
-		Title: "Friction: slow tests", Body: "details", Labels: []string{"friction", "onlet"},
+		Title: "Friction: slow tests", Body: "details", Labels: []string{"friction", "onett"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, scm.Issue{
 		Number: 21, URL: "https://github.com/owner/name/issues/21", Title: "Friction: slow tests",
-		Body: "details", State: "open", Labels: []string{"friction", "onlet"},
+		Body: "details", State: "open", Labels: []string{"friction", "onett"},
 	}, issue)
 
 	createIdx := -1
@@ -425,7 +425,7 @@ func TestCreateIssueEnsuresLabelsOnce(t *testing.T) {
 	}
 	require.NotEqual(t, -1, createIdx)
 	assert.Equal(t, []string{"issue", "create", "--repo", repo, "--title", "Friction: slow tests",
-		"--body-file", "-", "--label", "friction", "--label", "onlet"}, f.calls[createIdx].args)
+		"--body-file", "-", "--label", "friction", "--label", "onett"}, f.calls[createIdx].args)
 	assert.Equal(t, "details", f.calls[createIdx].stdin)
 
 	// Labels are created once per process, so a later edit with the same label does not
@@ -449,11 +449,11 @@ func TestCloseIssueClosesOpenIssueWithComment(t *testing.T) {
 	f := newFake()
 	f.on["issue view 8"] = `{"state":"OPEN"}`
 	g := NewWithRunner(repo, f.runner())
-	require.NoError(t, g.CloseIssue(context.Background(), 8, "Fixed by #12 (merged by onlet into `staging`)."))
+	require.NoError(t, g.CloseIssue(context.Background(), 8, "Fixed by #12 (merged by onett into `staging`)."))
 	require.Len(t, f.calls, 2)
 	assert.Equal(t, []string{"issue", "view", "8", "--repo", repo, "--json", "state"}, f.calls[0].args)
 	assert.Equal(t, []string{"issue", "close", "8", "--repo", repo, "--reason", "completed",
-		"--comment", "Fixed by #12 (merged by onlet into `staging`)."}, f.calls[1].args)
+		"--comment", "Fixed by #12 (merged by onett into `staging`)."}, f.calls[1].args)
 	assert.Empty(t, f.calls[1].stdin)
 }
 
@@ -502,9 +502,9 @@ func TestEditLabelsAddAndRemove(t *testing.T) {
 
 func TestLabelColorIsStableHex(t *testing.T) {
 	re := regexp.MustCompile(`^[0-9a-f]{6}$`)
-	assert.Regexp(t, re, labelColor("onlet"))
+	assert.Regexp(t, re, labelColor("onett"))
 	assert.Equal(t, labelColor("friction"), labelColor("friction"))
-	assert.NotEqual(t, labelColor("friction"), labelColor("onlet"))
+	assert.NotEqual(t, labelColor("friction"), labelColor("onett"))
 }
 
 func TestNumberFromURL(t *testing.T) {

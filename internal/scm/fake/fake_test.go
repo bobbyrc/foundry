@@ -8,21 +8,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onett/internal/scm"
 )
 
 var ctx = context.Background()
 
 func TestOpenPRDefaultsAndSharedNumbering(t *testing.T) {
 	f := New()
-	issue := f.AddIssue("first", "body", "onlet")
+	issue := f.AddIssue("first", "body", "onett")
 	assert.Equal(t, 1, issue.Number)
 
-	pr, err := f.OpenPR(ctx, scm.PRSpec{Head: "onlet/a", Base: "main", Title: "t", Labels: []string{"bug"}})
+	pr, err := f.OpenPR(ctx, scm.PRSpec{Head: "onett/a", Base: "main", Title: "t", Labels: []string{"bug"}})
 	require.NoError(t, err)
 	assert.Equal(t, 2, pr.Number, "PRs and issues share one numbering")
 	assert.Equal(t, "open", pr.State)
-	assert.Equal(t, "onlet/a", pr.HeadBranch)
+	assert.Equal(t, "onett/a", pr.HeadBranch)
 	assert.Equal(t, "mergeable", pr.Mergeable)
 	assert.Equal(t, scm.CISuccess, pr.CI, "zero DefaultCI means success")
 	assert.Equal(t, []string{"bug"}, pr.Labels)
@@ -187,9 +187,9 @@ func TestCILog(t *testing.T) {
 
 func TestListIssuesFiltersAndSorts(t *testing.T) {
 	f := New()
-	a := f.AddIssue("a", "", "onlet")
+	a := f.AddIssue("a", "", "onett")
 	b := f.AddIssue("b", "", "other")
-	c := f.AddIssue("c", "", "onlet")
+	c := f.AddIssue("c", "", "onett")
 	require.NoError(t, f.EditLabels(ctx, c.Number, nil, nil))
 	_, err := f.CreateIssue(ctx, scm.IssueSpec{Title: "closed one"})
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func TestListIssuesFiltersAndSorts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []int{b.Number, c.Number, 4}, numbers(open))
 
-	labelled, err := f.ListIssues(ctx, "onlet", "all")
+	labelled, err := f.ListIssues(ctx, "onett", "all")
 	require.NoError(t, err)
 	assert.Equal(t, []int{a.Number, c.Number}, numbers(labelled))
 

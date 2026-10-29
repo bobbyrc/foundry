@@ -1,4 +1,4 @@
-// Package api is onlet's HTTP surface: the JSON API under /api/v1, the event stream, and the
+// Package api is onett's HTTP surface: the JSON API under /api/v1, the event stream, and the
 // embedded web UI. Handlers read from the store and act through a Controller.
 package api
 
@@ -12,9 +12,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/bobbyrc/onlet/internal/auth"
-	"github.com/bobbyrc/onlet/internal/events"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/auth"
+	"github.com/bobbyrc/onett/internal/events"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // Options configures NewServer.
@@ -55,7 +55,7 @@ type server struct {
 	configMu sync.Mutex
 }
 
-// NewServer returns the handler for every onlet HTTP route.
+// NewServer returns the handler for every onett HTTP route.
 func NewServer(o Options) http.Handler {
 	if o.Logger == nil {
 		o.Logger = slog.Default()

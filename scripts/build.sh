@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build onlet with the web UI embedded. OUT overrides the output path (default ./onlet).
+# Build onett with the web UI embedded. OUT overrides the output path (default ./onett).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -12,8 +12,8 @@ fi
 
 version=$(git describe --tags --always --dirty 2>/dev/null || true)
 version=${version:-dev}
-out=${OUT:-./onlet}
+out=${OUT:-./onett}
 
-go build -trimpath -ldflags "-X main.version=${version}" -o "$out" ./cmd/onlet
+go build -trimpath -ldflags "-X main.version=${version}" -o "$out" ./cmd/onett
 
 echo "built $out (version $version)"
