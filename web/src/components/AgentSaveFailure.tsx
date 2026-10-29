@@ -32,7 +32,7 @@ export function AgentSaveFailure({ error }: { error: unknown }) {
     case 'written-not-reloaded':
       return (
         <Callout tone="danger" title="Saved, not reloaded">
-          Saved to the file, but onlet could not reload it: {failure.message}. Fix the problem and
+          Saved to the file, but onett could not reload it: {failure.message}. Fix the problem and
           reload the page.
         </Callout>
       );

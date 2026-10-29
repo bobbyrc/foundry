@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 func newStore(t *testing.T) *Store {
@@ -630,7 +630,7 @@ func TestLoopState(t *testing.T) {
 }
 
 func TestReopenFileKeepsData(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "onlet.db")
+	path := filepath.Join(t.TempDir(), "onett.db")
 	ctx := context.Background()
 
 	s, err := Open(path)

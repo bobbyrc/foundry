@@ -327,7 +327,7 @@ func isNull(n *yaml.Node) bool {
 	return n.Kind == yaml.ScalarNode && n.ShortTag() == "!!null"
 }
 
-// blockStyle makes a value that onlet writes read as block YAML, the form people edit by hand:
+// blockStyle makes a value that onett writes read as block YAML, the form people edit by hand:
 // mappings and lists are block style, and a multi-line string is a literal block, one text line
 // per file line. yaml.v3 writes a multi-line string as a quoted line with \n escapes when it sits
 // inside a flow mapping, so keeping the value out of flow style matters.

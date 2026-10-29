@@ -3,9 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Owners can add, edit, remove, restore and reset agents from the Agents page or
-`onlet.yaml`, and every agent card shows its full prompt and every way it is used.
+`onett.yaml`, and every agent card shows its full prompt and every way it is used.
 
-**Architecture:** `onlet.yaml` stays the only store. Config gains `disabled` and `prompt_text`
+**Architecture:** `onett.yaml` stays the only store. Config gains `disabled` and `prompt_text`
 on agents, a computed origin, and a computed list of uses; validation refuses removals that
 something depends on. The engine reads inline prompts and refuses disabled agents. `GET /agents`
 returns the richer view; the UI writes through the existing owner-only `PATCH /config/document`.
@@ -24,7 +24,7 @@ returns the richer view; the UI writes through the existing owner-only `PATCH /c
 - New Go tests go in **new files** (other PRs touch the existing test files).
 - Tests never touch `~`, the network or a fixed port.
 - Keep in sync in the same task: `docs/api.md`, `docs/openapi.yaml`, `web/src/types.ts` (API);
-  `onlet.example.yaml`, README (config keys); README **Commands** table (CLI flag); `docs/ui.md`
+  `onett.example.yaml`, README (config keys); README **Commands** table (CLI flag); `docs/ui.md`
   (UI page); `docs/design.md` (behaviour).
 - Error messages start with the dotted path of the setting at fault, then `: `.
 - The Agents page manages **global** agent entries only. Per-project overrides
@@ -56,7 +56,7 @@ returns the richer view; the UI writes through the existing owner-only `PATCH /c
 - Modify: `internal/config/validate.go` (agents ~41, routing ~51, projects ~89-110)
 - Create: `internal/config/agents.go` (origin type, `AgentUse`, `AgentUses`, `KindUse`)
 - Test: `internal/config/agents_test.go` (new)
-- Docs: `onlet.example.yaml`, README (roles paragraph), `docs/design.md` (agent profile entry)
+- Docs: `onett.example.yaml`, README (roles paragraph), `docs/design.md` (agent profile entry)
 
 **Interfaces:**
 - Produces (frozen; later tasks use these exact names):
@@ -151,7 +151,7 @@ returns the richer view; the UI writes through the existing owner-only `PATCH /c
 - [ ] **Step 4: Run the package tests and see them pass**
   Run: `mise exec -- go test -race -count=1 ./internal/config/`
   Expected: PASS (including the existing `validate_test.go`, `schema_test.go` and `TestExampleFileLoads` wherever it lives).
-- [ ] **Step 5: Docs.** In `onlet.example.yaml`, under `agents`, add commented examples of
+- [ ] **Step 5: Docs.** In `onett.example.yaml`, under `agents`, add commented examples of
   `disabled: true` on a built-in and a custom agent with `prompt_text: |`. README roles paragraph:
   built-ins can be edited or removed (`disabled: true`), custom agents can be added, prompts can
   be inline. `docs/design.md` agent-profile entry: origin, disabled, prompt_text, and that
@@ -208,9 +208,9 @@ returns the richer view; the UI writes through the existing owner-only `PATCH /c
 - Modify: `internal/api/handlers.go:78` (`AgentView`), `:421` (`listAgents`)
 - Modify: the api tests' fake controller (find it with `grep -rn "func (.*) SendChat" internal/api`)
 - Modify: `internal/client/client.go:379` (`Agents` takes a project)
-- Modify: `cmd/onlet/commands.go:171` (`cmdAgents`)
+- Modify: `cmd/onett/commands.go:171` (`cmdAgents`)
 - Docs: `docs/api.md`, `docs/openapi.yaml`, README **Commands** table
-- Test: `internal/api/agents_view_test.go`, `cmd/onlet/agents_cmd_test.go` (new)
+- Test: `internal/api/agents_view_test.go`, `cmd/onett/agents_cmd_test.go` (new)
 
 **Interfaces:**
 - Consumes: Task 1 (`Origin`, `Disabled`, `AgentUses`, `BuiltinAgents`), Task 2 (`AgentPrompt`, `BuiltinPrompt`).
@@ -251,24 +251,24 @@ returns the richer view; the UI writes through the existing owner-only `PATCH /c
     that does not exist → 200, that agent has `prompt_error` non-empty and `prompt_text ""`.
   - `TestAgentsViewListsDisabled`: `improver: {disabled: true}` → present with `disabled true`, `uses []`.
   - `TestAgentsViewProjectQuery`: `?project=app` with an app override reflects it; `?project=nope` → 400.
-  - CLI (`agents_cmd_test.go`, stubbed API as existing CLI tests do): `onlet agents` omits disabled
-    agents and prints an `ORIGIN` column; `onlet agents --all` includes them with origin `removed`.
+  - CLI (`agents_cmd_test.go`, stubbed API as existing CLI tests do): `onett agents` omits disabled
+    agents and prints an `ORIGIN` column; `onett agents --all` includes them with origin `removed`.
 - [ ] **Step 2: Run and see them fail**
-  Run: `mise exec -- go test -race -count=1 -run 'AgentsView|Agents' ./internal/api/ ./cmd/onlet/`
+  Run: `mise exec -- go test -race -count=1 -run 'AgentsView|Agents' ./internal/api/ ./cmd/onett/`
   Expected: FAIL (fields missing / compile errors).
 - [ ] **Step 3: Implement.** `listAgents` builds views as specified; `PromptUpdates` is
   `a.Prompt == "builtin:"+name && a.PromptText == ""`; `BuiltinPromptText` is filled only when the
   name is in `BuiltinAgents()` and `PromptUpdates` is false. Engine already satisfies the two new
   Controller methods from Task 2; add them to the fake. Client `Agents(ctx, project string)`
   adds `?project=` when non-empty. `cmdAgents`: new `--all` flag; columns
-  `ROLE, ORIGIN, HARNESS, MODEL, KINDS, DESCRIPTION`. The orchestrator reads `onlet agents`, so
+  `ROLE, ORIGIN, HARNESS, MODEL, KINDS, DESCRIPTION`. The orchestrator reads `onett agents`, so
   hiding disabled agents there is what keeps them out of its choices.
 - [ ] **Step 4: Docs.** `docs/api.md`: the `GET /agents` row gets `?project=`, and a paragraph
   describing `AgentView` fields, including that anyone who can read sees `prompt_text`, because
   every agent run is given it verbatim, so prompts must never hold secrets. `docs/openapi.yaml`:
   same. README Commands table: `agents [--all]`.
 - [ ] **Step 5: Run and see them pass**
-  Run: `mise exec -- go vet ./... && mise exec -- go test -race -count=1 ./internal/api/ ./cmd/onlet/`
+  Run: `mise exec -- go vet ./... && mise exec -- go test -race -count=1 ./internal/api/ ./cmd/onett/`
   Expected: PASS, including `TestOpenAPISpecMatchesRoutes`.
 - [ ] **Step 6: Commit** `git commit -m "Show each agent's origin, prompt and uses in the API and CLI"`.
 
@@ -319,7 +319,7 @@ returns the richer view; the UI writes through the existing owner-only `PATCH /c
     description; harness (type) and model (`harness default` when empty); **Used for**: one line
     per use: kind tag (when set), description, `in <project>` (when set); **Prompt**: the first
     8 lines in a `<pre>` with "Show full prompt"; `prompt_error` instead, in the error style, when
-    set. Edited with `prompt_updates` false: the line "Customized: no longer receives onlet's
+    set. Edited with `prompt_updates` false: the line "Customized: no longer receives onett's
     prompt updates" and a "Compare with built-in" toggle showing `builtin_prompt_text` beside the
     prompt (stacked under phone width).
   - Owner-only controls (left out for others): Edit, Remove (built-in/edited; sets `disabled`)

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/harness"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/harness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -226,7 +226,7 @@ func TestStartRunsCommandWithPromptOnStdin(t *testing.T) {
 		Prompt:       "Reply with exactly: OK",
 		Instructions: "be brief",
 		Model:        "haiku",
-		Env:          map[string]string{"ONLET_TEST": "1"},
+		Env:          map[string]string{"ONETT_TEST": "1"},
 	})
 	require.NoError(t, err)
 

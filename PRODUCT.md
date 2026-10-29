@@ -8,10 +8,10 @@ web
 
 ## Users
 
-The primary user is a developer who runs onlet as their own software factory: they hand work
+The primary user is a developer who runs onett as their own software factory: they hand work
 to coding agents and want it carried through PR, review, merge and deploy with as little of their
 attention as the risk allows. Today that is the maintainer; next come other developers who
-self-host onlet, and later customers of a paid managed version. The UI is designed for that
+self-host onett, and later customers of a paid managed version. The UI is designed for that
 customer now: it should read as a product people would pay for, not a personal tool.
 
 Two situations are equally common:
@@ -23,7 +23,7 @@ Two situations are equally common:
 
 ## Product Purpose
 
-Onlet is one self-hosted daemon that takes work from chat, GitHub issues, production errors
+Onett is one self-hosted daemon that takes work from chat, GitHub issues, production errors
 and its own friction reports, runs a coding agent on it in an isolated git worktree, and carries
 the result through PR, CI, agent review, a risk policy, merge, deploy, health check and rollback.
 The web UI is a control room: see what the factory is doing, answer what it needs from you, and
@@ -35,12 +35,12 @@ when they look back, understands in seconds what happened and what is waiting on
 **Agents judge, code acts.** Agents write code, review diffs and triage; only deterministic code
 commits, pushes, merges, deploys and rolls back. Risk is computed from the diff and can only go
 up, an approval covers exactly one commit, and a denied tool call or a stalled run stops and
-reports rather than retrying. Onlet is a gated pipeline the user owns end to end (one binary,
+reports rather than retrying. Onett is a gated pipeline the user owns end to end (one binary,
 SQLite, a config file, their own agent logins), not a chat window that edits code.
 
 ## Operating Context
 
-- The UI is a client of onlet's HTTP+SSE API; state updates arrive live over one event stream.
+- The UI is a client of onett's HTTP+SSE API; state updates arrive live over one event stream.
 - Phone use is through the installed web app, often over a VPN such as Tailscale.
 - The things that wait on the user: approvals (merge a medium or high risk PR) and blocked tasks
   (denied, stalled, agent needs a human, attempts exhausted). Everything else is observation.
@@ -65,7 +65,7 @@ SQLite, a config file, their own agent logins), not a chat window that edits cod
 
 ## Brand Commitments
 
-The product name is **onlet**, written in lower case (renamed from "foundry" on 2026-10-28). No visual element of the current UI (wordmark style, amber
+The product name is **onett**, written in lower case (renamed from "onlet" on 2026-10-29, and from "foundry" on 2026-10-28). No visual element of the current UI (wordmark style, amber
 accent, dark-by-default theme) was made binding; the redesign may replace them.
 
 ## Evidence on Hand

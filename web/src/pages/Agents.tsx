@@ -105,7 +105,7 @@ export function Agents() {
       ) : null}
 
       {agents.isSuccess && all.length === 0 ? (
-        <Empty>No agents are configured. Roles are set under agents in onlet.yaml.</Empty>
+        <Empty>No agents are configured. Roles are set under agents in onett.yaml.</Empty>
       ) : null}
       <div className="card-grid">
         {enabled.map((agent) => (

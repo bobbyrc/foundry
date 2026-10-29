@@ -48,11 +48,11 @@ func TestNtfyNotify(t *testing.T) {
 	}{
 		{
 			name:         "body and all headers",
-			notification: Notification{Title: "Merged", Body: "PR 42 merged", Priority: PriorityHigh, URL: "https://onlet.local/t/1", Tags: []string{"merge", "ok"}},
+			notification: Notification{Title: "Merged", Body: "PR 42 merged", Priority: PriorityHigh, URL: "https://onett.local/t/1", Tags: []string{"merge", "ok"}},
 			wantBody:     "PR 42 merged",
 			wantPriority: "5",
 			wantTags:     "merge,ok",
-			wantClick:    "https://onlet.local/t/1",
+			wantClick:    "https://onett.local/t/1",
 		},
 		{
 			name:         "empty body falls back to title",
@@ -83,7 +83,7 @@ func TestNtfyNotify(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv, got := newNtfyServer(t, http.StatusOK, "")
-			n, err := newNtfy(map[string]any{"server": srv.URL + "/", "topic": "onlet-alerts"}, srv.Client())
+			n, err := newNtfy(map[string]any{"server": srv.URL + "/", "topic": "onett-alerts"}, srv.Client())
 			require.NoError(t, err)
 
 			require.NoError(t, n.Notify(context.Background(), tt.notification))
@@ -91,7 +91,7 @@ func TestNtfyNotify(t *testing.T) {
 			require.Len(t, *got, 1)
 			req := (*got)[0]
 			assert.Equal(t, http.MethodPost, req.method)
-			assert.Equal(t, "/onlet-alerts", req.path)
+			assert.Equal(t, "/onett-alerts", req.path)
 			assert.Equal(t, tt.wantBody, req.body)
 			assert.Equal(t, strings.ReplaceAll(tt.notification.Title, "\n", " "), req.header.Get("Title"))
 			assert.Equal(t, tt.wantPriority, req.header.Get("Priority"))
@@ -103,9 +103,9 @@ func TestNtfyNotify(t *testing.T) {
 }
 
 func TestNtfyBearerToken(t *testing.T) {
-	t.Setenv("ONLET_TEST_NTFY_TOKEN", "s3cret")
+	t.Setenv("ONETT_TEST_NTFY_TOKEN", "s3cret")
 	srv, got := newNtfyServer(t, http.StatusOK, "")
-	n, err := newNtfy(map[string]any{"server": srv.URL, "topic": "t", "token_env": "ONLET_TEST_NTFY_TOKEN"}, srv.Client())
+	n, err := newNtfy(map[string]any{"server": srv.URL, "topic": "t", "token_env": "ONETT_TEST_NTFY_TOKEN"}, srv.Client())
 	require.NoError(t, err)
 
 	require.NoError(t, n.Notify(context.Background(), Notification{Title: "hi"}))
@@ -114,10 +114,10 @@ func TestNtfyBearerToken(t *testing.T) {
 }
 
 func TestNtfyTokenEnvEmptyIsError(t *testing.T) {
-	t.Setenv("ONLET_TEST_NTFY_EMPTY", "")
-	_, err := newNtfy(map[string]any{"topic": "t", "token_env": "ONLET_TEST_NTFY_EMPTY"}, nil)
+	t.Setenv("ONETT_TEST_NTFY_EMPTY", "")
+	_, err := newNtfy(map[string]any{"topic": "t", "token_env": "ONETT_TEST_NTFY_EMPTY"}, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ONLET_TEST_NTFY_EMPTY")
+	assert.Contains(t, err.Error(), "ONETT_TEST_NTFY_EMPTY")
 }
 
 func TestNtfyOptionValidation(t *testing.T) {

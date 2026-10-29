@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // An observer signal whose title, culprit or URL carries a project secret becomes an incident and

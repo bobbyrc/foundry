@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/auth"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/auth"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // pingInterval is how often a ": ping" comment keeps idle connections open. It is a variable so

@@ -4,9 +4,9 @@ Status: proposal, for the owner's approval. Two phases; phase 2 builds on phase 
 
 ## Why
 
-Today onlet compiles six roles into the binary (`orchestrator`, `implementer`, `reviewer`,
+Today onett compiles six roles into the binary (`orchestrator`, `implementer`, `reviewer`,
 `triager`, `sre`, `improver`, in `internal/config/defaults.go`) and adds back any that
-`onlet.yaml` leaves out on every config load. So a person can override a built-in but never
+`onett.yaml` leaves out on every config load. So a person can override a built-in but never
 remove one, and the Agents page is read-only. The page also shows `builtin:reviewer` instead of
 the instructions, and lists only the task kinds routed to an agent, not the other ways it gets
 used. An agent with "none routed" can still be picked by the orchestrator, which sees every
@@ -23,15 +23,15 @@ works well for them, while staying editable.
 - Every agent is visible, editable and removable. People can add their own.
 - Each default is a strong example: its full prompt is readable, and it says plainly when it is
   used.
-- Removing something another part of onlet depends on fails with a message that says what to
+- Removing something another part of onett depends on fails with a message that says what to
   change first.
-- Untouched defaults improve when onlet is upgraded; a customized one stays the owner's.
+- Untouched defaults improve when onett is upgraded; a customized one stays the owner's.
 - (Phase 2) The default set follows the model-economy strategy: a strong model plans and
   accepts, a cheaper model executes, and failures re-plan before they step up a tier.
 
 ## Non-goals
 
-- A second place to store agents. `onlet.yaml` stays the single source of truth; the UI edits it.
+- A second place to store agents. `onett.yaml` stays the single source of truth; the UI edits it.
 - Per-user agents. Agents belong to the instance, as config does.
 - Changing how harnesses work, or adding new harnesses.
 
@@ -69,12 +69,12 @@ high risk, so the owner approves each PR.
 
 ### Config
 
-- Built-ins stay defaults that are merged in when `onlet.yaml` does not name them. That keeps the
+- Built-ins stay defaults that are merged in when `onett.yaml` does not name them. That keeps the
   zero-config experience.
 - New agent field `disabled: true` removes an agent, built-in or not. A disabled agent is not
   routable, not usable with `--role`, and not shown to the orchestrator. It still appears on the
   Agents page, marked removed, so it can be restored.
-- New agent field `prompt_text`: the instructions inline in `onlet.yaml`. An agent has exactly one
+- New agent field `prompt_text`: the instructions inline in `onett.yaml`. An agent has exactly one
   of `prompt` (`builtin:<name>` or a file path, as today) or `prompt_text`. This is what the UI
   writes when someone edits a prompt, so editing never needs a second file. *(Builder's call on
   the exact YAML style, such as a block scalar.)*
@@ -98,9 +98,9 @@ high risk, so the owner approves each PR.
 
 Each agent has an origin, computed rather than stored:
 
-- **built-in**: not named in `onlet.yaml`.
-- **edited built-in**: a built-in name that `onlet.yaml` overrides. If its prompt is still
-  `builtin:<name>`, it keeps getting onlet's prompt updates. If its prompt was replaced
+- **built-in**: not named in `onett.yaml`.
+- **edited built-in**: a built-in name that `onett.yaml` overrides. If its prompt is still
+  `builtin:<name>`, it keeps getting onett's prompt updates. If its prompt was replaced
   (`prompt_text` or a file), it no longer does, and the UI says so.
 - **custom**: any other name.
 
@@ -140,11 +140,11 @@ Keep `docs/api.md`, `docs/openapi.yaml` and `web/src/types.ts` in step.
   validation message shows inline when something depends on it), **Restore** for a removed
   agent, **Reset to built-in** for an edited built-in (drops its override), and **New agent**
   (blank, or "copy from" an existing agent).
-- An edited built-in whose prompt was replaced says "Customized: no longer receives onlet's
+- An edited built-in whose prompt was replaced says "Customized: no longer receives onett's
   prompt updates", with a link to compare against the current built-in.
 - Operators and viewers see everything read-only. Controls a role cannot use are left out
   (`docs/ui.md` convention).
-- `onlet agents` prints origin and uses too.
+- `onett agents` prints origin and uses too.
 
 ### Strong defaults
 
@@ -163,22 +163,22 @@ step at a time and with a stated reason. The strong model accepts or rejects the
 Defect review goes to a separate fresh-context agent that never sees the plan, and automated
 checks outrank any reviewer.
 
-Onlet already has some of this: the orchestrator runs on Opus and writes tasks for others, the
+Onett already has some of this: the orchestrator runs on Opus and writes tasks for others, the
 reviewer is not given the author's reasoning, and CI and the risk policy are deterministic gates.
 
 ### What changes
 
 1. **A planner role.** New built-in `planner` (Claude, Opus, `builtin:planner`). New agent field
-   `planner: <agent name>`: before this agent runs a task, onlet runs the planner on it. The
+   `planner: <agent name>`: before this agent runs a task, onett runs the planner on it. The
    planner reads the code and writes a plan (goal, files, steps, edge cases, the check that must
-   pass). Onlet puts the plan in the task body under `## Plan`, then runs the agent. Defaults:
+   pass). Onett puts the plan in the task body under `## Plan`, then runs the agent. Defaults:
    `implementer`, `improver` and `sre` are planned by `planner`.
 
    How a planner run fits the lifecycle *(Claude's calls)*: it is an ordinary Run on the same
    task, role `planner`, in the task's worktree, while the task is `running`. It does not count
-   toward `max_attempts`. Its prompt says it must not change files; onlet still resets the
+   toward `max_attempts`. Its prompt says it must not change files; onett still resets the
    worktree to the branch head afterwards (git with hooks disabled, invariant 7), so anything it
-   wrote is discarded. Its report carries the plan as text; onlet stores only that. A planner
+   wrote is discarded. Its report carries the plan as text; onett stores only that. A planner
    that fails, stalls or is denied blocks the task with the reason. It never falls through to an
    unplanned run, because that would hide the failure. A re-plan *replaces* the `## Plan`
    section; the existing `## Attempt N` failure notes keep accumulating as today. The plan lives
@@ -186,11 +186,11 @@ reviewer is not given the author's reasoning, and CI and the risk policy are det
    (invariant 6) cover the extra steps like any other run.
 2. **Skip planning for tasks the orchestrator wrote.** Those already come from a strong model
    with a plan in the body. The CLI already sends `source` on task create
-   (`cmd/onlet/commands.go`); it sends `"orchestrator"` instead of `"api"` when
-   `ONLET_ROLE=orchestrator`, so the API surface does not change. The source is self-reported,
+   (`cmd/onett/commands.go`); it sends `"orchestrator"` instead of `"api"` when
+   `ONETT_ROLE=orchestrator`, so the API surface does not change. The source is self-reported,
    which is acceptable because it only affects cost and quality, never safety. *(Claude's call.)*
 3. **Acceptance.** After an agent that has a planner finishes and its checks pass, and before
-   onlet commits and pushes, the planner reads the diff and report against the plan in the task
+   onett commits and pushes, the planner reads the diff and report against the plan in the task
    body and accepts or rejects, with reasons. This applies to orchestrator-written tasks too:
    they skip planning, not acceptance. A rejection counts as a failed attempt; on the last
    attempt the task blocks with the reasons, as attempt exhaustion does today. The reasons are
@@ -220,7 +220,7 @@ reviewer is not given the author's reasoning, and CI and the risk policy are det
    Execution and review run on the vendor's cheapest tier, as the owner's rule says, because a
    strong model wrote the plan and accepts the result. *(Builder: confirm the exact model
    strings the Codex CLI takes for Sol and Luna, and whether Codex has a tier between them for
-   `step_up`.)* `onlet init` asks which vendor to use and writes the key. Changing the key later
+   `step_up`.)* `onett init` asks which vendor to use and writes the key. Changing the key later
    switches every untouched built-in at once; overridden agents keep their own settings. Today's
    default implementer and improver run on Codex, so `claude` installs move to Claude Haiku on
    upgrade; the release notes say so.

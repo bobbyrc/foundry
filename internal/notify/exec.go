@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/sysproc"
+	"github.com/bobbyrc/onett/internal/sysproc"
 )
 
 // execTimeout bounds one notification command. It is a variable so tests can shorten it.
@@ -26,13 +26,13 @@ func init() {
 }
 
 // execNotifier runs a shell command for each notification, so users can wire any channel
-// (a push CLI, a chat webhook script) without onlet needing a built-in driver for it.
+// (a push CLI, a chat webhook script) without onett needing a built-in driver for it.
 type execNotifier struct {
 	command string
 }
 
-// Notify runs the command with `sh -c` and the notification in ONLET_NOTIFY_TITLE,
-// ONLET_NOTIFY_BODY, ONLET_NOTIFY_PRIORITY and ONLET_NOTIFY_URL. A non-zero exit is an
+// Notify runs the command with `sh -c` and the notification in ONETT_NOTIFY_TITLE,
+// ONETT_NOTIFY_BODY, ONETT_NOTIFY_PRIORITY and ONETT_NOTIFY_URL. A non-zero exit is an
 // error that includes the command's combined output.
 func (e *execNotifier) Notify(ctx context.Context, n Notification) error {
 	ctx, cancel := context.WithTimeout(ctx, execTimeout)
@@ -44,10 +44,10 @@ func (e *execNotifier) Notify(ctx context.Context, n Notification) error {
 	// A command that exits 0 but leaves such a child behind still succeeds (see sysproc.Wait).
 	sysproc.Configure(cmd)
 	cmd.Env = append(os.Environ(),
-		"ONLET_NOTIFY_TITLE="+n.Title,
-		"ONLET_NOTIFY_BODY="+n.Body,
-		"ONLET_NOTIFY_PRIORITY="+string(effectivePriority(n.Priority)),
-		"ONLET_NOTIFY_URL="+n.URL,
+		"ONETT_NOTIFY_TITLE="+n.Title,
+		"ONETT_NOTIFY_BODY="+n.Body,
+		"ONETT_NOTIFY_PRIORITY="+string(effectivePriority(n.Priority)),
+		"ONETT_NOTIFY_URL="+n.URL,
 	)
 	var out bytes.Buffer
 	cmd.Stdout = &out

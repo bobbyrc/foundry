@@ -21,7 +21,7 @@ var atSignEntity = regexp.MustCompile(`^&(?:#0*64|#[xX]0*40|commat);`)
 // mention can leave it bare.
 const neutralizeMention = "\u200b"
 
-// quoteMentions stops every @mention from notifying anyone, so text onlet posts for an agent
+// quoteMentions stops every @mention from notifying anyone, so text onett posts for an agent
 // cannot ping people. Agent text is written by a model that has no reason to know which spellings
 // GitHub links, so the rule is conservative. Only a fenced code block is copied byte for byte,
 // because it holds commands people copy. Everywhere else, including inline code, a mention gets a

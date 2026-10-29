@@ -81,7 +81,7 @@ func TestValidateAcceptsRepoForms(t *testing.T) {
 	cfg, err := Parse([]byte(`
 projects:
   gh:
-    repo: bobbyrc/onlet.v2_x
+    repo: bobbyrc/onett.v2_x
   local:
     repo: /src/local
 `), "")
@@ -210,13 +210,13 @@ func TestValidateIntakeSources(t *testing.T) {
 }
 
 func TestValidateAllowedHosts(t *testing.T) {
-	_, err := Parse([]byte("server:\n  allowed_hosts: [onlet.lan, 'onlet.lan:7777']\n"), "")
+	_, err := Parse([]byte("server:\n  allowed_hosts: [onett.lan, 'onett.lan:7777']\n"), "")
 	require.NoError(t, err, "a bare host name, with or without a port, is valid")
 
 	cases := map[string]struct{ src, want string }{
 		"empty":  {"server:\n  allowed_hosts: ['  ']\n", "server.allowed_hosts[0]: must not be empty"},
-		"scheme": {"server:\n  allowed_hosts: [https://onlet.lan]\n", "server.allowed_hosts[0]: want a host name, not a URL with a scheme"},
-		"path":   {"server:\n  allowed_hosts: [onlet.lan/ui]\n", "server.allowed_hosts[0]: must not include a path"},
+		"scheme": {"server:\n  allowed_hosts: [https://onett.lan]\n", "server.allowed_hosts[0]: want a host name, not a URL with a scheme"},
+		"path":   {"server:\n  allowed_hosts: [onett.lan/ui]\n", "server.allowed_hosts[0]: must not include a path"},
 	}
 	for name, tc := range cases {
 		_, err := Parse([]byte(tc.src), "")

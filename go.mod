@@ -1,4 +1,4 @@
-module github.com/bobbyrc/onlet
+module github.com/bobbyrc/onett
 
 go 1.27.1
 

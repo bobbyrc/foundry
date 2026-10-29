@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // GetLoopState returns the stored state of a loop, or a zero state with Name and Project set when

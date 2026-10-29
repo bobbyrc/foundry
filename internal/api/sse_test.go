@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // sseFrame is one parsed SSE message.
@@ -123,7 +123,7 @@ func TestSSEReplayThenLive(t *testing.T) {
 	assert.Equal(t, "3", live.id)
 	assert.Equal(t, "stored live", live.data.Message)
 
-	x.bus.Emit(ctx, domain.EvRunLog, "onlet", "", "run-1", "log line", nil)
+	x.bus.Emit(ctx, domain.EvRunLog, "onett", "", "run-1", "log line", nil)
 	logFrame := nextFrame(t, frames)
 	assert.Empty(t, logFrame.id, "live-only events have no id line")
 	assert.Equal(t, domain.EvRunLog, logFrame.event)

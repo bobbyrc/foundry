@@ -12,12 +12,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/deploy"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/notify"
-	"github.com/bobbyrc/onlet/internal/store"
-	"github.com/bobbyrc/onlet/internal/sysproc"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/deploy"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/notify"
+	"github.com/bobbyrc/onett/internal/store"
+	"github.com/bobbyrc/onett/internal/sysproc"
 )
 
 const (
@@ -489,7 +489,7 @@ func serviceLogsEvidence(ctx context.Context, p *config.Project) string {
 }
 
 // runServiceLogs runs the project's deploy.logs command with sh -c in the project directory. The
-// environment is onlet's, then the project's env. It returns the last 8KB of stdout and stderr
+// environment is onett's, then the project's env. It returns the last 8KB of stdout and stderr
 // together, and the error if the command failed or ran past serviceLogsTimeout.
 func runServiceLogs(ctx context.Context, p *config.Project) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, serviceLogsTimeout)

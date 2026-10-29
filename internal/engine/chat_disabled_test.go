@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // A disabled agent is not in the factory the orchestrator is told about, so it cannot be

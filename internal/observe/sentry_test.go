@@ -37,9 +37,9 @@ func TestSentryPollMapsIssues(t *testing.T) {
 			"org":       "acme",
 			"project":   "web",
 			"base_url":  srv.URL + "/",
-			"token_env": "ONLET_TEST_SENTRY_TOKEN",
+			"token_env": "ONETT_TEST_SENTRY_TOKEN",
 		},
-		Env: map[string]string{"ONLET_TEST_SENTRY_TOKEN": "tok-123"},
+		Env: map[string]string{"ONETT_TEST_SENTRY_TOKEN": "tok-123"},
 	}, srv.Client())
 	require.NoError(t, err)
 
@@ -131,7 +131,7 @@ func TestSentryPollNon2xx(t *testing.T) {
 }
 
 func TestSentryTokenFromProcessEnv(t *testing.T) {
-	t.Setenv("ONLET_TEST_PROCESS_TOKEN", "from-process")
+	t.Setenv("ONETT_TEST_PROCESS_TOKEN", "from-process")
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -142,7 +142,7 @@ func TestSentryTokenFromProcessEnv(t *testing.T) {
 	o, err := newSentry(Config{
 		Name: "sentry",
 		Options: map[string]any{
-			"org": "acme", "project": "web", "base_url": srv.URL, "token_env": "ONLET_TEST_PROCESS_TOKEN",
+			"org": "acme", "project": "web", "base_url": srv.URL, "token_env": "ONETT_TEST_PROCESS_TOKEN",
 		},
 	}, srv.Client())
 	require.NoError(t, err)
@@ -152,16 +152,16 @@ func TestSentryTokenFromProcessEnv(t *testing.T) {
 }
 
 func TestSentryMissingTokenIsFactoryError(t *testing.T) {
-	t.Setenv("ONLET_TEST_UNSET_TOKEN", "")
+	t.Setenv("ONETT_TEST_UNSET_TOKEN", "")
 	_, err := New(Config{
 		Name: "sentry",
 		Type: "sentry",
 		Options: map[string]any{
-			"org": "acme", "project": "web", "token_env": "ONLET_TEST_UNSET_TOKEN",
+			"org": "acme", "project": "web", "token_env": "ONETT_TEST_UNSET_TOKEN",
 		},
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ONLET_TEST_UNSET_TOKEN")
+	assert.Contains(t, err.Error(), "ONETT_TEST_UNSET_TOKEN")
 }
 
 func TestSentryFactoryRequiresOrgAndProject(t *testing.T) {

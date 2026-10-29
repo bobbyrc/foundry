@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobbyrc/onlet/internal/api"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/api"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // A loop error that echoes a project secret is stored and emitted redacted.

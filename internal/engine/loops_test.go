@@ -17,18 +17,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/api"
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/deploy"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/events"
-	"github.com/bobbyrc/onlet/internal/harness"
-	"github.com/bobbyrc/onlet/internal/observe"
-	"github.com/bobbyrc/onlet/internal/scm"
-	scmfake "github.com/bobbyrc/onlet/internal/scm/fake"
-	"github.com/bobbyrc/onlet/internal/store"
-	"github.com/bobbyrc/onlet/internal/store/sqlite"
-	"github.com/bobbyrc/onlet/internal/workspace"
+	"github.com/bobbyrc/onett/internal/api"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/deploy"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/events"
+	"github.com/bobbyrc/onett/internal/harness"
+	"github.com/bobbyrc/onett/internal/observe"
+	"github.com/bobbyrc/onett/internal/scm"
+	scmfake "github.com/bobbyrc/onett/internal/scm/fake"
+	"github.com/bobbyrc/onett/internal/store"
+	"github.com/bobbyrc/onett/internal/store/sqlite"
+	"github.com/bobbyrc/onett/internal/workspace"
 )
 
 // lpYAML is the config every loop test starts from. %[3]s is extra lines under project demo
@@ -283,7 +283,7 @@ func lpRevParse(t *testing.T, dir, ref string) string {
 func lpGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	full := append([]string{
-		"-c", "user.name=onlet-test",
+		"-c", "user.name=onett-test",
 		"-c", "user.email=test@example.invalid",
 		"-c", "commit.gpgsign=false",
 	}, args...)

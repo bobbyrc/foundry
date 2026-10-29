@@ -8,10 +8,10 @@ import (
 )
 
 func TestValidatePublicURL(t *testing.T) {
-	_, err := Parse([]byte("server:\n  public_url: https://onlet.example.com\n"), "")
+	_, err := Parse([]byte("server:\n  public_url: https://onett.example.com\n"), "")
 	require.NoError(t, err)
 
-	_, err = Parse([]byte("server:\n  public_url: onlet.lan:7777\n"), "")
+	_, err = Parse([]byte("server:\n  public_url: onett.lan:7777\n"), "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), `server.public_url "onlet.lan:7777" must be an absolute http or https URL`)
+	assert.Contains(t, err.Error(), `server.public_url "onett.lan:7777" must be an absolute http or https URL`)
 }

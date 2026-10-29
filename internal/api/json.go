@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // maxBodyBytes caps request bodies.

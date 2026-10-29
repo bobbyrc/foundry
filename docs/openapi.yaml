@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: onlet
+  title: onett
   version: v1
-  summary: HTTP API of the onlet agent factory.
+  summary: HTTP API of the onett agent factory.
   description: |
-    Every client (the web UI, the `onlet` CLI, the orchestrator agent, and native or mobile
+    Every client (the web UI, the `onett` CLI, the orchestrator agent, and native or mobile
     apps) uses this API. It is the source for client code generation. The prose contract is in
     docs/api.md. `internal/api/openapi_test.go` fails when a route is added, removed or renamed
     without a matching change here.
@@ -21,7 +21,7 @@ info:
     name: Proprietary
 servers:
   - url: http://127.0.0.1:7777/api/v1
-    description: Local onlet daemon (default listen address)
+    description: Local onett daemon (default listen address)
 security:
   - bearer: []
   - session: []
@@ -46,7 +46,7 @@ tags:
   - name: friction
   - name: loops
   - name: config
-    description: Reading and saving onlet.yaml. Owner sessions only; the API token cannot.
+    description: Reading and saving onett.yaml. Owner sessions only; the API token cannot.
   - name: conversations
     description: Chat threads with the orchestrator agent.
 
@@ -261,7 +261,7 @@ paths:
       operationId: pauseProject
       tags: [projects]
       summary: Pause one project at runtime.
-      description: While the project is paused, the scheduler starts none of its runs and its loops create no tasks. The pause is saved and survives restarts. A project paused in onlet.yaml is already paused, and this call reports paused_by as config and leaves the state unchanged.
+      description: While the project is paused, the scheduler starts none of its runs and its loops create no tasks. The pause is saved and survives restarts. A project paused in onett.yaml is already paused, and this call reports paused_by as config and leaves the state unchanged.
       parameters:
         - $ref: '#/components/parameters/ProjectName'
       responses:
@@ -283,7 +283,7 @@ paths:
       operationId: resumeProject
       tags: [projects]
       summary: Resume a project paused at runtime.
-      description: A project paused in onlet.yaml cannot be resumed through the API; edit the config instead and reload it.
+      description: A project paused in onett.yaml cannot be resumed through the API; edit the config instead and reload it.
       parameters:
         - $ref: '#/components/parameters/ProjectName'
       responses:
@@ -380,7 +380,7 @@ paths:
       summary: Create a task.
       description: |
         The task is queued and the scheduler is woken. The `review` kind is rejected, because
-        onlet creates review tasks itself.
+        onett creates review tasks itself.
       requestBody:
         required: true
         content:
@@ -1302,7 +1302,7 @@ components:
     session:
       type: apiKey
       in: cookie
-      name: onlet_session
+      name: onett_session
       description: Set by signing in (POST /auth/login or /auth/setup). HttpOnly, SameSite=Strict. Browsers only. The role decides what the session may do.
     queryToken:
       type: apiKey
@@ -1351,7 +1351,7 @@ components:
       name: name
       in: path
       required: true
-      description: Project name as it appears in onlet.yaml.
+      description: Project name as it appears in onett.yaml.
       schema:
         type: string
     ConversationId:
@@ -1420,7 +1420,7 @@ components:
 
   headers:
     SessionCookie:
-      description: onlet_session=<value>; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000 (30 days). Secure when public_url is https.
+      description: onett_session=<value>; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000 (30 days). Secure when public_url is https.
       schema:
         type: string
 
@@ -1640,7 +1640,7 @@ components:
         paused_by:
           type: string
           enum: ['', config, owner]
-          description: Why the project is paused. `config` means paused in onlet.yaml, which the API cannot change. `owner` means paused through the API. Empty when running.
+          description: Why the project is paused. `config` means paused in onett.yaml, which the API cannot change. `owner` means paused through the API. Empty when running.
 
     Stats:
       type: object
@@ -1892,7 +1892,7 @@ components:
 
     Approval:
       type: object
-      description: A decision onlet is waiting for a human to make.
+      description: A decision onett is waiting for a human to make.
       required: [id, task_id, project, kind, title, reason, status, created_at]
       properties:
         id:
@@ -1924,7 +1924,7 @@ components:
 
     Deployment:
       type: object
-      description: onlet's record of one release of a project.
+      description: onett's record of one release of a project.
       required: [id, project, ref, provider_id, state, started_at, updated_at]
       properties:
         id:
@@ -2138,11 +2138,11 @@ components:
           properties:
             paused:
               type: boolean
-              description: Effective pause state. True when paused_by is set, whether in onlet.yaml or through the API.
+              description: Effective pause state. True when paused_by is set, whether in onett.yaml or through the API.
             paused_by:
               type: string
               enum: ['', config, owner]
-              description: Why the project is paused. `config` means paused in onlet.yaml. `owner` means paused through the API. Empty when running.
+              description: Why the project is paused. `config` means paused in onett.yaml. `owner` means paused through the API. Empty when running.
             counts:
               type: object
               description: Count of tasks in each live status.
@@ -2302,7 +2302,7 @@ components:
 
     Config:
       type: object
-      description: The loaded onlet.yaml, redacted as in GET /config. Env values and deploy and observer option values are `"***"`.
+      description: The loaded onett.yaml, redacted as in GET /config. Env values and deploy and observer option values are `"***"`.
       required: [server, limits, harnesses, agents, routing, policies, projects, loops, notify, self_project, path]
       properties:
         server:
@@ -2338,7 +2338,7 @@ components:
             $ref: '#/components/schemas/Notifier'
         self_project:
           type: string
-          description: The project that is onlet itself. Factory friction is filed there.
+          description: The project that is onett itself. Factory friction is filed there.
         path:
           type: string
           description: The file the configuration was loaded from.
@@ -2577,7 +2577,7 @@ components:
               properties:
                 label:
                   type: string
-                  description: Default `onlet`.
+                  description: Default `onett`.
         exec_intake:
           description: >-
             Runs each project's intake sources (their commands print tasks as JSON lines) and

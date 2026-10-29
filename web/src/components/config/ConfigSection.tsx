@@ -173,7 +173,7 @@ function FieldRow({ node, path, ctx }: { node: SchemaNode; path: Path; ctx: Edit
       </div>
       {envName ? (
         <p className="muted config-env">
-          Read from the environment variable {envName} when onlet loads the file.
+          Read from the environment variable {envName} when onett loads the file.
         </p>
       ) : null}
       <Issues messages={issues} />

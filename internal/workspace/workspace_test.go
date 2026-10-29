@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/policy"
+	"github.com/bobbyrc/onett/internal/policy"
 )
 
 // runGit runs git in dir for test setup and assertions, failing the test on error.
@@ -94,7 +94,7 @@ func TestConcurrentPrepareOnOneClone(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := m.Prepare(ctx, repo, fmt.Sprintf("onlet/c%d", i), fmt.Sprintf("run%d", i))
+			_, err := m.Prepare(ctx, repo, fmt.Sprintf("onett/c%d", i), fmt.Sprintf("run%d", i))
 			assert.NoError(t, err, "prepare %d", i)
 		}()
 	}
@@ -129,19 +129,19 @@ func TestPrepareNewBranchAndOutboxExclude(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
 
-	ws1, err := m.Prepare(ctx, repo, "onlet/a", "run1")
+	ws1, err := m.Prepare(ctx, repo, "onett/a", "run1")
 	require.NoError(t, err)
-	ws2, err := m.Prepare(ctx, repo, "onlet/b", "run2")
+	ws2, err := m.Prepare(ctx, repo, "onett/b", "run2")
 	require.NoError(t, err)
 
 	mainSHA := runGit(t, repo.Path, "rev-parse", "origin/main")
 	assert.Equal(t, filepath.Join(m.Root, "demo", "run1"), ws1.Dir)
-	assert.Equal(t, "onlet/a", ws1.Branch)
+	assert.Equal(t, "onett/a", ws1.Branch)
 	assert.Equal(t, "origin/main", ws1.BaseRef)
 	assert.Equal(t, mainSHA, ws1.StartSHA)
 	assert.Equal(t, mainSHA, ws2.StartSHA)
-	assert.Equal(t, "onlet/a", runGit(t, ws1.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
-	assert.DirExists(t, filepath.Join(ws1.Dir, ".onlet-run"))
+	assert.Equal(t, "onett/a", runGit(t, ws1.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	assert.DirExists(t, filepath.Join(ws1.Dir, ".onett-run"))
 
 	// The exclude line is written once across both Prepare calls.
 	exclude, err := os.ReadFile(filepath.Join(repo.Path, ".git", "info", "exclude"))
@@ -149,14 +149,14 @@ func TestPrepareNewBranchAndOutboxExclude(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(string(exclude), outboxExclude))
 
 	// The outbox is ignored: a file written there does not show in status.
-	writeFile(t, filepath.Join(ws1.Dir, ".onlet-run", "result.json"), "{}")
+	writeFile(t, filepath.Join(ws1.Dir, ".onett-run", "result.json"), "{}")
 	assert.Empty(t, runGit(t, ws1.Dir, "status", "--porcelain"))
 }
 
 func TestCommitWithAndWithoutChanges(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/c", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/c", "run1")
 	require.NoError(t, err)
 
 	committed, err := m.Commit(ctx, ws, "nothing here")
@@ -164,15 +164,15 @@ func TestCommitWithAndWithoutChanges(t *testing.T) {
 	assert.False(t, committed)
 	assert.Equal(t, ws.StartSHA, runGit(t, ws.Dir, "rev-parse", "HEAD"))
 
-	// No user.email is configured (global config is empty), so Onlet's identity is used.
+	// No user.email is configured (global config is empty), so Onett's identity is used.
 	// The outbox file must stay out of the commit.
 	writeFile(t, filepath.Join(ws.Dir, "README.md"), "hello\nworld\n")
-	writeFile(t, filepath.Join(ws.Dir, ".onlet-run", "result.json"), "{}")
+	writeFile(t, filepath.Join(ws.Dir, ".onett-run", "result.json"), "{}")
 	committed, err = m.Commit(ctx, ws, "add world")
 	require.NoError(t, err)
 	assert.True(t, committed)
 	assert.Equal(t, "add world", runGit(t, ws.Dir, "log", "-1", "--format=%s"))
-	assert.Equal(t, "Onlet <onlet@localhost>", runGit(t, ws.Dir, "log", "-1", "--format=%an <%ae>"))
+	assert.Equal(t, "Onett <onett@localhost>", runGit(t, ws.Dir, "log", "-1", "--format=%an <%ae>"))
 	assert.Equal(t, "README.md", runGit(t, ws.Dir, "show", "--name-only", "--format=", "HEAD"))
 
 	// With a configured identity, git's configuration wins.
@@ -189,7 +189,7 @@ func TestPushThenPrepareSameBranchPicksUpCommit(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
 
-	ws1, err := m.Prepare(ctx, repo, "onlet/p", "run1")
+	ws1, err := m.Prepare(ctx, repo, "onett/p", "run1")
 	require.NoError(t, err)
 	writeFile(t, filepath.Join(ws1.Dir, "feature.txt"), "feature\n")
 	committed, err := m.Commit(ctx, ws1, "add feature")
@@ -197,20 +197,20 @@ func TestPushThenPrepareSameBranchPicksUpCommit(t *testing.T) {
 	require.True(t, committed)
 	pushed := runGit(t, ws1.Dir, "rev-parse", "HEAD")
 	require.NoError(t, m.Push(ctx, repo, ws1))
-	assert.Equal(t, pushed, runGit(t, repo.Path, "rev-parse", "origin/onlet/p"))
+	assert.Equal(t, pushed, runGit(t, repo.Path, "rev-parse", "origin/onett/p"))
 	require.NoError(t, m.Remove(ctx, repo, ws1))
 
-	ws2, err := m.Prepare(ctx, repo, "onlet/p", "run2")
+	ws2, err := m.Prepare(ctx, repo, "onett/p", "run2")
 	require.NoError(t, err)
 	assert.Equal(t, pushed, ws2.StartSHA)
-	assert.Equal(t, "onlet/p", runGit(t, ws2.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	assert.Equal(t, "onett/p", runGit(t, ws2.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
 	assert.FileExists(t, filepath.Join(ws2.Dir, "feature.txt"))
 }
 
 func TestDiffNumstatRenameAndBinary(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/d", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/d", "run1")
 	require.NoError(t, err)
 
 	// README gains one line; pkg/a.txt is renamed within its directory (brace form); pkg/b.txt
@@ -224,7 +224,7 @@ func TestDiffNumstatRenameAndBinary(t *testing.T) {
 	require.True(t, committed)
 	require.NoError(t, m.Push(ctx, repo, ws))
 
-	changes, err := m.Diff(ctx, repo, "main", "onlet/d")
+	changes, err := m.Diff(ctx, repo, "main", "onett/d")
 	require.NoError(t, err)
 	got := map[string]policy.FileChange{}
 	for _, c := range changes {
@@ -243,7 +243,7 @@ func TestDiffNumstatRenameAndBinary(t *testing.T) {
 func TestDiffPinsToCommitSHA(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/pin", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/pin", "run1")
 	require.NoError(t, err)
 
 	writeFile(t, filepath.Join(ws.Dir, "first.txt"), "one\n")
@@ -259,13 +259,13 @@ func TestDiffPinsToCommitSHA(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, committed)
 	// Plain git: Push's lease is the SHA Prepare saw, so a second Push from the same workspace is refused.
-	runGit(t, ws.Dir, "push", "origin", "onlet/pin")
+	runGit(t, ws.Dir, "push", "origin", "onett/pin")
 
 	byCommit, err := m.Diff(ctx, repo, "main", judged)
 	require.NoError(t, err)
 	assert.Equal(t, []policy.FileChange{{Path: "first.txt", Added: 1}}, byCommit)
 
-	byBranch, err := m.Diff(ctx, repo, "main", "onlet/pin")
+	byBranch, err := m.Diff(ctx, repo, "main", "onett/pin")
 	require.NoError(t, err)
 	assert.Len(t, byBranch, 2, "the branch name follows the newest push")
 }
@@ -273,11 +273,11 @@ func TestDiffPinsToCommitSHA(t *testing.T) {
 func TestDiffNoChangesReturnsEmptySlice(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/e", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/e", "run1")
 	require.NoError(t, err)
 	require.NoError(t, m.Push(ctx, repo, ws))
 
-	changes, err := m.Diff(ctx, repo, "main", "onlet/e")
+	changes, err := m.Diff(ctx, repo, "main", "onett/e")
 	require.NoError(t, err)
 	assert.NotNil(t, changes)
 	assert.Empty(t, changes)
@@ -294,7 +294,7 @@ func TestNewPath(t *testing.T) {
 func TestRemove(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/r", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/r", "run1")
 	require.NoError(t, err)
 
 	require.NoError(t, m.Remove(ctx, repo, ws))
@@ -310,20 +310,20 @@ func TestPrepareSameBranchTwiceWithoutRemove(t *testing.T) {
 	ctx := context.Background()
 
 	// A failed run keeps its worktree, so the retry for the same branch must still set up.
-	ws1, err := m.Prepare(ctx, repo, "onlet/retry", "run1")
+	ws1, err := m.Prepare(ctx, repo, "onett/retry", "run1")
 	require.NoError(t, err)
-	ws2, err := m.Prepare(ctx, repo, "onlet/retry", "run2")
+	ws2, err := m.Prepare(ctx, repo, "onett/retry", "run2")
 	require.NoError(t, err)
 	assert.NoDirExists(t, ws1.Dir, "the stale worktree is removed")
-	assert.Equal(t, "onlet/retry", runGit(t, ws2.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
+	assert.Equal(t, "onett/retry", runGit(t, ws2.Dir, "rev-parse", "--abbrev-ref", "HEAD"))
 }
 
-// conflictingWorkspace returns a worktree on onlet/m whose README.md conflicts with origin/main.
+// conflictingWorkspace returns a worktree on onett/m whose README.md conflicts with origin/main.
 func conflictingWorkspace(t *testing.T) (Repo, *Manager, Workspace) {
 	t.Helper()
 	repo, m, seed := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/m", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/m", "run1")
 	require.NoError(t, err)
 
 	writeFile(t, filepath.Join(ws.Dir, "README.md"), "branch side\n")
@@ -340,7 +340,7 @@ func conflictingWorkspace(t *testing.T) (Repo, *Manager, Workspace) {
 func TestMergeBaseCleanMerge(t *testing.T) {
 	repo, m, seed := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/clean", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/clean", "run1")
 	require.NoError(t, err)
 
 	writeFile(t, filepath.Join(seed, "NEW.md"), "new\n")
@@ -368,7 +368,7 @@ func TestMergeBaseReportsConflictsAndLeavesMerge(t *testing.T) {
 func TestMergeBaseOtherFailureAbortsAndReturnsError(t *testing.T) {
 	repo, m, seed := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/dirty", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/dirty", "run1")
 	require.NoError(t, err)
 
 	writeFile(t, filepath.Join(seed, "pkg", "a.txt"), "upstream\n")
@@ -417,7 +417,7 @@ func TestCommitConcludesResolvedMerge(t *testing.T) {
 func TestCommitIgnoresWhitespaceProblems(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/ws", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/ws", "run1")
 	require.NoError(t, err)
 
 	writeFile(t, filepath.Join(ws.Dir, "README.md"), "hello   \n")
@@ -449,19 +449,19 @@ func humanPush(t *testing.T, repo Repo, branch, file string) string {
 }
 
 // A human pushes to an existing PR branch after Prepare, and a background fetch moves
-// origin/<branch>. Onlet's push must not overwrite the human's commit.
+// origin/<branch>. Onett's push must not overwrite the human's commit.
 func TestPushRefusesWhenRemoteBranchMovedAfterPrepare(t *testing.T) {
 	repo, m, seed := setup(t)
 	ctx := context.Background()
-	runGit(t, seed, "push", repo.Remote, "main:refs/heads/onlet/pr")
+	runGit(t, seed, "push", repo.Remote, "main:refs/heads/onett/pr")
 
-	ws, err := m.Prepare(ctx, repo, "onlet/pr", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/pr", "run1")
 	require.NoError(t, err)
-	assert.Equal(t, runGit(t, repo.Remote, "rev-parse", "refs/heads/onlet/pr"), ws.RemoteSHA)
+	assert.Equal(t, runGit(t, repo.Remote, "rev-parse", "refs/heads/onett/pr"), ws.RemoteSHA)
 
-	humanSHA := humanPush(t, repo, "onlet/pr", "human.txt")
-	require.NoError(t, m.EnsureClone(ctx, repo)) // the background fetch that moves origin/onlet/pr
-	require.Equal(t, humanSHA, runGit(t, repo.Path, "rev-parse", "origin/onlet/pr"))
+	humanSHA := humanPush(t, repo, "onett/pr", "human.txt")
+	require.NoError(t, m.EnsureClone(ctx, repo)) // the background fetch that moves origin/onett/pr
+	require.Equal(t, humanSHA, runGit(t, repo.Path, "rev-parse", "origin/onett/pr"))
 
 	writeFile(t, filepath.Join(ws.Dir, "agent.txt"), "agent work\n")
 	committed, err := m.Commit(ctx, ws, "agent work")
@@ -471,21 +471,21 @@ func TestPushRefusesWhenRemoteBranchMovedAfterPrepare(t *testing.T) {
 	err = m.Push(ctx, repo, ws)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rejected")
-	assert.Equal(t, humanSHA, runGit(t, repo.Remote, "rev-parse", "refs/heads/onlet/pr"),
+	assert.Equal(t, humanSHA, runGit(t, repo.Remote, "rev-parse", "refs/heads/onett/pr"),
 		"the human's commit is still on origin")
 }
 
-// Prepare finds no onlet/new on origin, someone creates it, and a background fetch sees it.
-// Onlet's push must fail rather than overwrite it.
+// Prepare finds no onett/new on origin, someone creates it, and a background fetch sees it.
+// Onett's push must fail rather than overwrite it.
 func TestPushRefusesWhenBranchCreatedRemotelyAfterPrepare(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
 
-	ws, err := m.Prepare(ctx, repo, "onlet/new", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/new", "run1")
 	require.NoError(t, err)
 	assert.Empty(t, ws.RemoteSHA)
 
-	humanSHA := humanPush(t, repo, "onlet/new", "human.txt")
+	humanSHA := humanPush(t, repo, "onett/new", "human.txt")
 	require.NoError(t, m.EnsureClone(ctx, repo))
 
 	writeFile(t, filepath.Join(ws.Dir, "agent.txt"), "agent work\n")
@@ -496,7 +496,7 @@ func TestPushRefusesWhenBranchCreatedRemotelyAfterPrepare(t *testing.T) {
 	err = m.Push(ctx, repo, ws)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rejected")
-	assert.Equal(t, humanSHA, runGit(t, repo.Remote, "rev-parse", "refs/heads/onlet/new"),
+	assert.Equal(t, humanSHA, runGit(t, repo.Remote, "rev-parse", "refs/heads/onett/new"),
 		"the human's branch is still on origin")
 }
 
@@ -504,22 +504,22 @@ func TestPushRefusesWhenBranchCreatedRemotelyAfterPrepare(t *testing.T) {
 func TestPushSucceedsWhenRemoteUnchangedSincePrepare(t *testing.T) {
 	repo, m, seed := setup(t)
 	ctx := context.Background()
-	runGit(t, seed, "push", repo.Remote, "main:refs/heads/onlet/pr")
+	runGit(t, seed, "push", repo.Remote, "main:refs/heads/onett/pr")
 
-	ws, err := m.Prepare(ctx, repo, "onlet/pr", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/pr", "run1")
 	require.NoError(t, err)
 	writeFile(t, filepath.Join(ws.Dir, "agent.txt"), "agent work\n")
 	_, err = m.Commit(ctx, ws, "agent work")
 	require.NoError(t, err)
 	require.NoError(t, m.Push(ctx, repo, ws))
-	assert.Equal(t, runGit(t, ws.Dir, "rev-parse", "HEAD"), runGit(t, repo.Remote, "rev-parse", "refs/heads/onlet/pr"))
+	assert.Equal(t, runGit(t, ws.Dir, "rev-parse", "HEAD"), runGit(t, repo.Remote, "rev-parse", "refs/heads/onett/pr"))
 }
 
-// Hooks in the clone's shared hooks dir must not run for onlet's git commands.
+// Hooks in the clone's shared hooks dir must not run for onett's git commands.
 func TestGitCommandsDoNotRunHooks(t *testing.T) {
 	repo, m, _ := setup(t)
 	ctx := context.Background()
-	ws, err := m.Prepare(ctx, repo, "onlet/hooks", "run1")
+	ws, err := m.Prepare(ctx, repo, "onett/hooks", "run1")
 	require.NoError(t, err)
 
 	marker := filepath.Join(t.TempDir(), "hook-ran")

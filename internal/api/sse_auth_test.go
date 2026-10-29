@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/auth"
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/auth"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // streamServerWithPing serves only the principal check and GET /events, with the ping interval

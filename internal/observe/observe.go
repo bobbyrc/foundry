@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // Observer reports production problems seen since a point in time.
@@ -15,7 +15,7 @@ type Observer interface {
 	Poll(ctx context.Context, since time.Time) ([]domain.SignalObservation, error)
 }
 
-// Config is one entry of a project's observe list from onlet.yaml.
+// Config is one entry of a project's observe list from onett.yaml.
 type Config struct {
 	Name    string // unique per project; becomes Signal.Source
 	Type    string

@@ -28,7 +28,7 @@ function Wordmark() {
   return (
     <span className="wordmark">
       <BrandMark />
-      onlet
+      onett
     </span>
   );
 }

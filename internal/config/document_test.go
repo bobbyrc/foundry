@@ -11,11 +11,11 @@ import (
 )
 
 func TestDocumentTreeKeepsEnvReferencesUnexpanded(t *testing.T) {
-	t.Setenv("ONLET_TEST_TOKEN", "should-not-appear")
-	v, err := DocumentTree([]byte("server:\n  addr: ${ONLET_TEST_TOKEN}\n"))
+	t.Setenv("ONETT_TEST_TOKEN", "should-not-appear")
+	v, err := DocumentTree([]byte("server:\n  addr: ${ONETT_TEST_TOKEN}\n"))
 	require.NoError(t, err)
 	server := v.(map[string]any)["server"].(map[string]any)
-	assert.Equal(t, "${ONLET_TEST_TOKEN}", server["addr"])
+	assert.Equal(t, "${ONETT_TEST_TOKEN}", server["addr"])
 }
 
 func TestDocumentTreeReturnsJSONTypes(t *testing.T) {
@@ -131,7 +131,7 @@ func TestApplyChangesErrors(t *testing.T) {
 }
 
 func TestApplyChangesRoundTripParses(t *testing.T) {
-	example, err := os.ReadFile("../../onlet.example.yaml")
+	example, err := os.ReadFile("../../onett.example.yaml")
 	require.NoError(t, err)
 	out, err := ApplyChanges(example, []Change{{Op: "set", Path: []string{"limits", "max_attempts"}, Value: float64(5)}})
 	require.NoError(t, err)

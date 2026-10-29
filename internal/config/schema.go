@@ -17,7 +17,7 @@ import (
 //go:embed config.go
 var configSource string
 
-// SchemaNode describes one setting of onlet.yaml for the web UI's editor.
+// SchemaNode describes one setting of onett.yaml for the web UI's editor.
 type SchemaNode struct {
 	Key    string       `json:"key"`              // YAML key; "" for map values and list elements
 	Type   string       `json:"type"`             // section | map | list | string | int | float | bool | duration | any (a free-form value, such as a deployer's options map, that the UI edits as YAML text)

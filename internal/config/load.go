@@ -11,16 +11,16 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 	"go.yaml.in/yaml/v3"
 )
 
 // envRef matches ${NAME} references. A bare $NAME is left alone, so shell snippets in
-// config values such as "vercel rollback $ONLET_ROLLBACK_ID" pass through unchanged.
+// config values such as "vercel rollback $ONETT_ROLLBACK_ID" pass through unchanged.
 var envRef = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // EnvRefs returns the names of the environment variables that data references as ${NAME},
-// sorted and each once. `onlet service install` records them, because a daemon started by
+// sorted and each once. `onett service install` records them, because a daemon started by
 // launchd does not inherit the installing shell's environment.
 func EnvRefs(data []byte) []string {
 	seen := map[string]bool{}

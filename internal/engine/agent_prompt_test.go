@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 func TestAgentPromptPrefersInlineText(t *testing.T) {
@@ -59,7 +59,7 @@ func TestDisabledRoleBlocksRun(t *testing.T) {
 	ctx := context.Background()
 	r := ctNewRig(t)
 	dataDir := t.TempDir()
-	enabled, err := config.Parse([]byte(ctDocsYAML(dataDir, false)), filepath.Join(t.TempDir(), "onlet.yaml"))
+	enabled, err := config.Parse([]byte(ctDocsYAML(dataDir, false)), filepath.Join(t.TempDir(), "onett.yaml"))
 	require.NoError(t, err)
 	r.cfg = enabled
 	e := r.engine(func(path string) (*config.Config, error) {

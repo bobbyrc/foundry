@@ -1,6 +1,6 @@
-# Onlet design (v0)
+# Onett design (v0)
 
-Onlet is a personal software factory: one daemon that takes work (from chat, GitHub issues,
+Onett is a personal software factory: one daemon that takes work (from chat, GitHub issues,
 production errors, its own friction reports), hands it to coding agents, and carries the result
 through PR, merge, deploy and verification with as little human involvement as the risk allows.
 
@@ -9,8 +9,8 @@ cheap to revisit; the ones most worth a second look are marked **(review)**.
 
 ## Product direction
 
-Onlet is a **self-hosted** app: anyone runs it on their own machine or server, with their own
-agent logins and repositories. Later the owner plans a **paid managed version** (onlet hosted
+Onett is a **self-hosted** app: anyone runs it on their own machine or server, with their own
+agent logins and repositories. Later the owner plans a **paid managed version** (onett hosted
 for customers). Build for self-hosting now, and keep the seams a managed version needs, so it is
 an extension rather than a rewrite.
 
@@ -20,12 +20,12 @@ Self-hosted, now:
 - Nothing about the owner's own setup in defaults, code or docs (user names, host names, paths).
 - Runs headless on a Linux server as well as on a Mac: services beyond launchd (systemd), and a
   documented way to reach the UI remotely (reverse proxy with TLS, `allowed_hosts`).
-- Users bring their own agent CLIs and logins; onlet never needs the maintainer's accounts.
+- Users bring their own agent CLIs and logins; onett never needs the maintainer's accounts.
 
 Managed, later (do not build these yet, but do not close them off):
 
 - **Tenancy:** a daemon serves one owner today. The likely first managed shape is one isolated
-  onlet instance per customer, running the same code as self-hosted; true multi-tenancy is a
+  onett instance per customer, running the same code as self-hosted; true multi-tenancy is a
   later choice. Keep all state behind `store.Store` so another database can be added.
 - **Auth:** people already sign in with accounts and sessions (roles viewer, operator, owner;
   `docs/proposals/accounts-and-config-editor.md`), and the API token is for the CLI and the
@@ -33,11 +33,11 @@ Managed, later (do not build these yet, but do not close them off):
   App, which also gives agents a bot identity.
 - **Agent isolation is mandatory** when customers' code and agents run on shared hardware:
   containers or VMs per run (option B in `docs/proposals/agent-isolation.md`), never option C.
-- **Secrets:** per-project secrets held by onlet and given to runs explicitly, not the daemon's
+- **Secrets:** per-project secrets held by onett and given to runs explicitly, not the daemon's
   own environment.
 - **Metering:** runs already record cost and tokens; billing and quotas build on that.
 - **Open questions for the owner:** licence and open-core split; whether managed customers bring
-  their own model keys or pay through onlet (check each provider's terms before reselling
+  their own model keys or pay through onett (check each provider's terms before reselling
   access to a subscription).
 
 Rule for changes now: prefer the choice that keeps these seams cheap (interfaces, no hard-coded
@@ -48,22 +48,22 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
 1. **Agents do judgment, code does gates.** Agents write code, review diffs, triage issues and
    diagnose incidents. Deterministic Go code commits, pushes branches, opens PRs, decides risk,
    merges, deploys and rolls back. An agent can never lower a risk rating or merge its own work;
-   it can only raise risk. Worker agents get no API token, so they cannot act on onlet at all;
+   it can only raise risk. Worker agents get no API token, so they cannot act on onett at all;
    only the orchestrator (the agent you chat with) can, and only through the CLI.
 2. **A permission denial or a stall is terminal for that run.** A run that is denied a tool, or
    produces no output for `limits.stall_timeout`, is stopped, its task becomes `blocked`, and you
-   are notified with the exact reason. Onlet never retries a denial or rephrases around it.
+   are notified with the exact reason. Onett never retries a denial or rephrases around it.
 3. **Everything is a plugin.** Harnesses, SCM, deployers, observers and notifiers are Go
    interfaces with built-in implementations. Harnesses, observers and notifiers also have an
    `exec` type that runs any external program speaking a small JSON protocol, and the `command`
    deployer runs any shell commands, so you can add a harness or provider in any language
    without recompiling. (The code host is GitHub only in v0.)
-4. **Configuration is a file you own.** `onlet.yaml` (plus per-repo `.onlet/` overrides) is
+4. **Configuration is a file you own.** `onett.yaml` (plus per-repo `.onett/` overrides) is
    the source of truth for projects, agents, policies and loops. The database holds only runtime
    state (tasks, runs, events). Put the config in your dotfiles repo if you like.
 5. **One API for every client.** The web UI is just a client of the HTTP+SSE API
    (`docs/api.md`); native and mobile apps later use the same API.
-6. **Onlet manages itself.** The onlet repo is registered as a project, so friction that
+6. **Onett manages itself.** The onett repo is registered as a project, so friction that
    agents report becomes issues that agents fix — that is the self-improvement loop.
 
 ## Shape
@@ -72,7 +72,7 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
             chat / web UI / CLI / future apps
                          │  HTTP + SSE (/api/v1)
                 ┌────────▼─────────┐
-                │      onletd    │  single Go binary, SQLite state
+                │      onettd    │  single Go binary, SQLite state
                 │                  │
    loops ──────►│  task queue ──► scheduler ──► supervisor ──► harness (claude, codex, exec…)
  (issues, PRs,  │                  │                 │            runs in a git worktree
@@ -85,7 +85,7 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
 
 ### Concepts
 
-- **Project** — a repository onlet manages: GitHub repo, local clone path, default branch,
+- **Project** — a repository onett manages: GitHub repo, local clone path, default branch,
   policy, deployer, observers. Defined in config.
 - **Agent profile (role)** — a named recipe: which harness, which model, which prompt file,
   extra args. Built-in roles: `orchestrator` (the agent you chat with), `implementer`, `reviewer`,
@@ -104,7 +104,7 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
   (`github_issue:42`, `signal:<fingerprint>`, `chat:<conversation>`).
 - **Run** — one attempt at a task by one harness session, in its own git worktree, with a
   streamed log, cost, and an outcome.
-- **Outbox** — files an agent writes in `<worktree>/.onlet-run/` to report back:
+- **Outbox** — files an agent writes in `<worktree>/.onett-run/` to report back:
   `result.json` (status, summary, self-assessed risk, PR title/body, follow-up tasks, friction).
   Files, not network calls, so it works inside sandboxed harnesses such as Codex's.
 - **Policy** — deterministic rules mapping a diff (paths, size, labels, task kind) to a risk
@@ -127,16 +127,16 @@ queued ─► running ─► review ─► merged ─► deploying ─► done
 
 - `running` → the scheduler picked it and a run is live.
 - Agents never commit (Codex's sandbox keeps `.git` read-only, so they could not anyway). When
-  the run ends with changes, onlet commits them with the agent's PR title, pushes branch
-  `onlet/<task-id-suffix>-<slug>` and opens a PR; the task moves to `review`.
-- Before a re-run on a branch that already has a PR, onlet merges the default branch in. If
+  the run ends with changes, onett commits them with the agent's PR title, pushes branch
+  `onett/<task-id-suffix>-<slug>` and opens a PR; the task moves to `review`.
+- Before a re-run on a branch that already has a PR, onett merges the default branch in. If
   that conflicts, the agent is given the conflicted files to resolve; leftover conflict
   markers fail the attempt instead of being committed.
 - In `review` the shepherd waits for CI, dispatches a `reviewer` run when the policy requires
   review, then asks the policy: auto-merge → `merged`; otherwise → `awaiting_approval`. Every
   merge is pinned to the PR head commit that CI, review and the policy judged
   (`gh pr merge --match-head-commit`), and an approval is for one head: if the PR changes after
-  you were asked, onlet withdraws the approval request and re-checks.
+  you were asked, onett withdraws the approval request and re-checks.
 - Every automatic status change is guarded by the status it expects, atomically. A run or loop
   that finishes after you cancelled or blocked a task cannot revive it.
 - An agent-reported failure, failing CI, a merge conflict or "request changes" from the
@@ -160,11 +160,11 @@ The supervisor owns every harness session:
 Risk is `low < medium < high`. Final risk = max(rules matched by the diff, agent's own rating).
 Default policy: auto-merge `low` after green CI and an approving reviewer run; `medium` and
 `high` need your approval. Default high-risk paths: migrations, auth, CI/deploy config, secrets,
-infra, dependency manifests with major bumps, `.onlet/`, and onlet's own gates and agent
-prompts (in onlet's repo only); default size limit 400 changed lines. A policy's `extra_rules`
+infra, dependency manifests with major bumps, `.onett/`, and onett's own gates and agent
+prompts (in onett's repo only); default size limit 400 changed lines. A policy's `extra_rules`
 add to these defaults, while `rules` replaces them, so use `extra_rules` unless you mean to drop
 the built-in protections.
-Work onlet assigned itself (follow-ups and retrospectives, matched by task source) is rated
+Work onett assigned itself (follow-ups and retrospectives, matched by task source) is rated
 `medium` by default, so a human approves it until the owner relaxes that rule.
 
 ### Deploy watch
@@ -187,7 +187,7 @@ reverts it: the code shipped, so nothing is left to do for it.
 A deploy command that exits 0 may leave a service running in the background, and that service
 keeps running. A failed or timed-out deploy has its whole process group killed. The command's
 output goes to temporary files rather than pipes, so a service that keeps printing is not killed
-when onlet stops reading.
+when onett stops reading.
 
 ### Production watch
 
@@ -198,10 +198,10 @@ signal that keeps firing after its fix merged reopens.
 ### Friction and self-improvement
 
 Every agent prompt ends with the outbox contract, including a `friction` list: anything that
-slowed the agent down (missing docs, flaky test, bad tooling, onlet itself). Onlet dedupes
+slowed the agent down (missing docs, flaky test, bad tooling, onett itself). Onett dedupes
 friction by fingerprint and, when `friction.auto_file` is on, files a GitHub issue in the right
-repo (the project, or onlet's own repo for factory friction) labelled `friction`. Issue intake
-picks up issues labelled `onlet` (configurable), so turning a friction issue into work is one
+repo (the project, or onett's own repo for factory friction) labelled `friction`. Issue intake
+picks up issues labelled `onett` (configurable), so turning a friction issue into work is one
 label — or automatic with `friction.auto_queue`. Comments from OWNER/MEMBER/COLLABORATOR are
 included in the task body; others are ignored.
 
@@ -209,23 +209,23 @@ The retro loop (`loops.retro`, default every 24h) is the factory's retrospective
 gathers the evidence of the last `lookback` (blocked and failed tasks with their reasons,
 re-queued attempts, friction, incidents, review findings sent back) and files one improve task
 for the improver agent with that evidence. The agent picks the most valuable root cause to fix,
-files the rest as followups, and names duplicate friction issues in its summary, since onlet
+files the rest as followups, and names duplicate friction issues in its summary, since onett
 never closes issues itself. Nothing is filed when there is no evidence. It is on only for
 `self_project` unless `enabled` says otherwise.
 
 ### The orchestrator (main agent)
 
 Chat messages go to a persistent `orchestrator` harness session (resumed by session ID per
-conversation). It runs with the `onlet` CLI on its PATH and `ONLET_API`/`ONLET_TOKEN` in
-its environment, so it delegates by running `onlet task create …`, inspects with `onlet
-task list`, `onlet run logs`, and so on. Its answer streams back to the UI over SSE.
+conversation). It runs with the `onett` CLI on its PATH and `ONETT_API`/`ONETT_TOKEN` in
+its environment, so it delegates by running `onett task create …`, inspects with `onett
+task list`, `onett run logs`, and so on. Its answer streams back to the UI over SSE.
 
 ## Code layout
 
 ```text
-cmd/onlet/          one binary: `onlet serve` (daemon) and CLI subcommands (API client)
+cmd/onett/          one binary: `onett serve` (daemon) and CLI subcommands (API client)
 internal/domain/      shared types: Task, Run, Event, Approval, Deployment, Signal, Friction, outbox
-internal/config/      onlet.yaml schema, loading, defaults, validation
+internal/config/      onett.yaml schema, loading, defaults, validation
 internal/store/       Store interface; store/sqlite implementation (modernc.org/sqlite, no cgo)
 internal/events/      event bus: persist + fan-out to SSE subscribers
 internal/harness/     Harness interface + registry; claude/, codex/, exec/, fake/
@@ -246,25 +246,25 @@ web/                  React + Vite + TypeScript UI (built into internal/api/webd
 - Binds `127.0.0.1:7777`. Every API call needs `Authorization: Bearer <token>`; the token is
   generated on first start at `<data_dir>/token` (mode 600). Expose remotely only over a VPN
   such as Tailscale.
-- Agents never get push credentials from onlet; onlet pushes. Harness permissions are
+- Agents never get push credentials from onett; onett pushes. Harness permissions are
   configured per agent profile (`claude-code` defaults to `acceptEdits` plus an allowed-tools
   list; `codex` defaults to `--approve-for-me`, its workspace-write sandbox with automatic review of escalations).
-- Secrets for providers come from the environment or `~/.config/onlet/secrets.env`.
-- Agents get an allowlist of onlet's environment (PATH, HOME, locale, their own provider
-  keys), plus what a harness's `inherit_env` and the project's `env` add. Onlet's GitHub and
+- Secrets for providers come from the environment or `~/.config/onett/secrets.env`.
+- Agents get an allowlist of onett's environment (PATH, HOME, locale, their own provider
+  keys), plus what a harness's `inherit_env` and the project's `env` add. Onett's GitHub and
   observer tokens never reach them. A project's `setup` and `checks` commands run with the same
   environment, because they execute code the agent may have written.
 - The server answers only requests whose Host header is localhost, a loopback address, the bind
   host, the `public_url` host, or `server.allowed_hosts`. This blocks DNS rebinding, where a web
   page points its own name at 127.0.0.1. Responses carry a strict CSP and refuse framing.
-- Agent text that onlet posts to GitHub (PR bodies, issues, comments) has an invisible
+- Agent text that onett posts to GitHub (PR bodies, issues, comments) has an invisible
   zero-width space inserted after the @ of every mention outside fenced code blocks, so an agent
   cannot notify people. Release evidence is redacted
   (see Deploy watch).
 
 ### Known limits of the harnesses
 
-- Claude Code reports refused tool calls as `permission_denials`; onlet treats any as a
+- Claude Code reports refused tool calls as `permission_denials`; onett treats any as a
   denial. Codex does not report sandbox refusals in machine-readable form (only in prose), so
   for Codex the "denial is terminal" rule relies on the prompt ("if denied, report blocked")
   and the stall timeout.

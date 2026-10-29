@@ -1,4 +1,4 @@
-// Package engine is onlet's brain: the scheduler and run supervisor (scheduler.go,
+// Package engine is onett's brain: the scheduler and run supervisor (scheduler.go,
 // runner.go, supervise.go), the recurring loops (loop_*.go), and the api.Controller
 // implementation (controller.go, chat.go). This file and helpers.go are the shared contract
 // those files build on.
@@ -13,20 +13,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/deploy"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/events"
-	"github.com/bobbyrc/onlet/internal/harness"
-	"github.com/bobbyrc/onlet/internal/notify"
-	"github.com/bobbyrc/onlet/internal/observe"
-	"github.com/bobbyrc/onlet/internal/scm"
-	"github.com/bobbyrc/onlet/internal/store"
-	"github.com/bobbyrc/onlet/internal/workspace"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/deploy"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/events"
+	"github.com/bobbyrc/onett/internal/harness"
+	"github.com/bobbyrc/onett/internal/notify"
+	"github.com/bobbyrc/onett/internal/observe"
+	"github.com/bobbyrc/onett/internal/scm"
+	"github.com/bobbyrc/onett/internal/store"
+	"github.com/bobbyrc/onett/internal/workspace"
 )
 
 // Deps are the engine's collaborators. The *For factories exist so tests can inject fakes;
-// cmd/onlet wires the real implementations.
+// cmd/onett wires the real implementations.
 type Deps struct {
 	Config     *config.Config
 	Store      store.Store
@@ -43,10 +43,10 @@ type Deps struct {
 	ReloadConfig func(path string) (*config.Config, error)
 
 	// AgentEnv is added to every agent session (e.g. PATH). It must not hold the API token:
-	// worker agents may not act on onlet, or one could approve its own work.
+	// worker agents may not act on onett, or one could approve its own work.
 	AgentEnv map[string]string
-	// OrchestratorEnv is added only to orchestrator (chat) sessions: ONLET_API and
-	// ONLET_TOKEN, so the orchestrator can run the `onlet` CLI.
+	// OrchestratorEnv is added only to orchestrator (chat) sessions: ONETT_API and
+	// ONETT_TOKEN, so the orchestrator can run the `onett` CLI.
 	OrchestratorEnv map[string]string
 	// Now defaults to time.Now.
 	Now func() time.Time
@@ -167,13 +167,13 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.lifeMu.Lock()
 	e.stopped = true
 	e.lifeMu.Unlock()
-	e.cancelAllRuns("onlet is shutting down")
+	e.cancelAllRuns("onett is shutting down")
 	e.wg.Wait()
 	return nil
 }
 
 // errStopped is returned by work refused because the engine is shutting down.
-var errStopped = errors.New("onlet is shutting down")
+var errStopped = errors.New("onett is shutting down")
 
 // goTracked runs fn in a goroutine that Run waits for. It returns false (and does not run fn)
 // once Run has begun shutting down, so no goroutine starts after wg.Wait.
@@ -221,7 +221,7 @@ func (e *Engine) recover(ctx context.Context) error {
 	for _, r := range runs {
 		now := e.d.Now().UTC()
 		if _, err := e.d.Store.UpdateRun(ctx, r.ID, func(r *domain.Run) error {
-			r.Status, r.Error, r.EndedAt = domain.RunFailed, "onlet restarted during this run", &now
+			r.Status, r.Error, r.EndedAt = domain.RunFailed, "onett restarted during this run", &now
 			return nil
 		}); err != nil {
 			return err
@@ -240,7 +240,7 @@ func (e *Engine) recover(ctx context.Context) error {
 		if t.Attempts >= t.MaxAttempts {
 			// The attempt that was running counted, so this task has no attempts left.
 			e.blockTaskFrom(context.WithoutCancel(ctx), t.ID, []domain.TaskStatus{domain.TaskRunning},
-				"onlet restarted during the last attempt and attempts are exhausted")
+				"onett restarted during the last attempt and attempts are exhausted")
 			continue
 		}
 		if _, _, err := e.setTaskFrom(ctx, t.ID, []domain.TaskStatus{domain.TaskRunning},

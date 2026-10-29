@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/notify"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/notify"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // runScheduler claims queued tasks and starts runs until ctx is done. It looks for work on every

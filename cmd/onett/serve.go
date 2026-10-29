@@ -20,24 +20,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/api"
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/deploy"
-	"github.com/bobbyrc/onlet/internal/engine"
-	"github.com/bobbyrc/onlet/internal/events"
-	"github.com/bobbyrc/onlet/internal/harness"
-	"github.com/bobbyrc/onlet/internal/notify"
-	"github.com/bobbyrc/onlet/internal/observe"
-	"github.com/bobbyrc/onlet/internal/scm"
-	"github.com/bobbyrc/onlet/internal/scm/github"
-	"github.com/bobbyrc/onlet/internal/store/sqlite"
-	"github.com/bobbyrc/onlet/internal/workspace"
+	"github.com/bobbyrc/onett/internal/api"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/deploy"
+	"github.com/bobbyrc/onett/internal/engine"
+	"github.com/bobbyrc/onett/internal/events"
+	"github.com/bobbyrc/onett/internal/harness"
+	"github.com/bobbyrc/onett/internal/notify"
+	"github.com/bobbyrc/onett/internal/observe"
+	"github.com/bobbyrc/onett/internal/scm"
+	"github.com/bobbyrc/onett/internal/scm/github"
+	"github.com/bobbyrc/onett/internal/store/sqlite"
+	"github.com/bobbyrc/onett/internal/workspace"
 
 	// Harness adapters register themselves in init; serve must know every built-in type.
-	_ "github.com/bobbyrc/onlet/internal/harness/claude"
-	_ "github.com/bobbyrc/onlet/internal/harness/codex"
-	_ "github.com/bobbyrc/onlet/internal/harness/exec"
-	_ "github.com/bobbyrc/onlet/internal/harness/fake"
+	_ "github.com/bobbyrc/onett/internal/harness/claude"
+	_ "github.com/bobbyrc/onett/internal/harness/codex"
+	_ "github.com/bobbyrc/onett/internal/harness/exec"
+	_ "github.com/bobbyrc/onett/internal/harness/fake"
 )
 
 // shutdownTimeout bounds how long in-flight HTTP requests get after Ctrl-C.
@@ -45,7 +45,7 @@ const shutdownTimeout = 10 * time.Second
 
 func cmdServe(e *env, args []string) error {
 	fs := newFlagSet("serve", e)
-	cfgFlag := fs.String("config", "", "config file (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
+	cfgFlag := fs.String("config", "", "config file (default $ONETT_CONFIG or ~/.config/onett/onett.yaml)")
 	if _, err := parseArgs(fs, args); err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func cmdServe(e *env, args []string) error {
 
 	logger := slog.New(slog.NewJSONHandler(e.errOut, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	st, err := sqlite.Open(filepath.Join(cfg.Server.DataDir, "onlet.db"))
+	st, err := sqlite.Open(filepath.Join(cfg.Server.DataDir, "onett.db"))
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func cmdServe(e *env, args []string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		_ = st.Close()
-		return fmt.Errorf("find onlet binary: %w", err)
+		return fmt.Errorf("find onett binary: %w", err)
 	}
 
 	agentEnv, orchestratorEnv := serveEnvs(exe, cfg.Server.Addr, token)
@@ -154,7 +154,7 @@ func cmdServe(e *env, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Fprintf(e.out, "onlet %s listening on http://%s — open the UI with `onlet open`\n", version, cfg.Server.Addr)
+	fmt.Fprintf(e.out, "onett %s listening on http://%s — open the UI with `onett open`\n", version, cfg.Server.Addr)
 
 	engineDone := make(chan error, 1)
 	go func() { engineDone <- eng.Run(ctx) }()
@@ -339,16 +339,16 @@ func serveAllowedHosts(s config.Server) []string {
 
 // signalContext is cancelled by SIGINT or SIGTERM.
 // serveEnvs returns the environment added to agent sessions and to orchestrator (chat) sessions.
-// Every agent gets the onlet binary on PATH and no credentials: a worker that could call the
-// API could approve its own work. Only the orchestrator, which runs the onlet CLI, gets the API
+// Every agent gets the onett binary on PATH and no credentials: a worker that could call the
+// API could approve its own work. Only the orchestrator, which runs the onett CLI, gets the API
 // address and token.
 func serveEnvs(exe, addr, token string) (agent, orchestrator map[string]string) {
 	agent = map[string]string{
 		"PATH": filepath.Dir(exe) + string(os.PathListSeparator) + os.Getenv("PATH"),
 	}
 	orchestrator = map[string]string{
-		"ONLET_API":   config.LocalURL(addr),
-		"ONLET_TOKEN": token,
+		"ONETT_API":   config.LocalURL(addr),
+		"ONETT_TOKEN": token,
 	}
 	return agent, orchestrator
 }

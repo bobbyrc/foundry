@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/sysproc"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/sysproc"
 )
 
 const (
@@ -40,8 +40,8 @@ type ProcSpec struct {
 	Dir     string
 	// Env is added to the agent environment (sysproc.AgentEnv); entries win over inherited values.
 	Env map[string]string
-	// InheritEnv names onlet environment variables to pass through, on top of the base
-	// allowlist. Everything else in onlet's environment is withheld.
+	// InheritEnv names onett environment variables to pass through, on top of the base
+	// allowlist. Everything else in onett's environment is withheld.
 	InheritEnv []string
 	// Stdin is written to the process and then closed. Empty means no stdin.
 	Stdin string

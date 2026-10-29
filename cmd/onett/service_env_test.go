@@ -15,20 +15,20 @@ import (
 func TestInstallRecordsTheConfigsVariables(t *testing.T) {
 	plistDir := stubHost(t)
 	fakeRunner(t, nil)
-	t.Setenv("ONLET_SVC_ROOT", t.TempDir())
-	t.Setenv("ONLET_SVC_SUB", "a&b")
-	cfg := filepath.Join(t.TempDir(), "onlet.yaml")
-	require.NoError(t, os.WriteFile(cfg, []byte("server:\n  data_dir: ${ONLET_SVC_ROOT}/${ONLET_SVC_SUB}\n"), 0o600))
+	t.Setenv("ONETT_SVC_ROOT", t.TempDir())
+	t.Setenv("ONETT_SVC_SUB", "a&b")
+	cfg := filepath.Join(t.TempDir(), "onett.yaml")
+	require.NoError(t, os.WriteFile(cfg, []byte("server:\n  data_dir: ${ONETT_SVC_ROOT}/${ONETT_SVC_SUB}\n"), 0o600))
 
 	code, out, errOut := runCLI("service", "install", "--config", cfg)
 	require.Equal(t, 0, code, errOut)
 
-	plist := filepath.Join(plistDir, "io.onlet.serve.plist")
+	plist := filepath.Join(plistDir, "io.onett.serve.plist")
 	body, err := os.ReadFile(plist)
 	require.NoError(t, err)
-	assert.Contains(t, string(body), "<key>ONLET_SVC_ROOT</key>\n\t\t<string>"+xmlEscape(os.Getenv("ONLET_SVC_ROOT"))+"</string>")
-	assert.Contains(t, string(body), "<key>ONLET_SVC_SUB</key>\n\t\t<string>a&amp;b</string>")
-	assert.Contains(t, out, "ONLET_SVC_ROOT, ONLET_SVC_SUB")
+	assert.Contains(t, string(body), "<key>ONETT_SVC_ROOT</key>\n\t\t<string>"+xmlEscape(os.Getenv("ONETT_SVC_ROOT"))+"</string>")
+	assert.Contains(t, string(body), "<key>ONETT_SVC_SUB</key>\n\t\t<string>a&amp;b</string>")
+	assert.Contains(t, out, "ONETT_SVC_ROOT, ONETT_SVC_SUB")
 
 	info, err := os.Stat(plist)
 	require.NoError(t, err)
@@ -38,13 +38,13 @@ func TestInstallRecordsTheConfigsVariables(t *testing.T) {
 func TestInstallDoesNotRecordPathTwice(t *testing.T) {
 	plistDir := stubHost(t)
 	fakeRunner(t, nil)
-	cfg := filepath.Join(t.TempDir(), "onlet.yaml")
+	cfg := filepath.Join(t.TempDir(), "onett.yaml")
 	require.NoError(t, os.WriteFile(cfg, []byte("server:\n  data_dir: "+t.TempDir()+"\nprojects:\n  p:\n    repo: o/p\n    env:\n      TOOLS: ${PATH}\n"), 0o600))
 
 	code, _, errOut := runCLI("service", "install", "--config", cfg)
 	require.Equal(t, 0, code, errOut)
 
-	body, err := os.ReadFile(filepath.Join(plistDir, "io.onlet.serve.plist"))
+	body, err := os.ReadFile(filepath.Join(plistDir, "io.onett.serve.plist"))
 	require.NoError(t, err)
 	assert.Equal(t, 1, strings.Count(string(body), "<key>PATH</key>"))
 }

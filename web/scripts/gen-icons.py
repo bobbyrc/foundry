@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the onlet PNG app icons with the standard library only.
+"""Generate the onett PNG app icons with the standard library only.
 
 Run from anywhere with `python3 -I web/scripts/gen-icons.py`. Writes web/public/icon-180.png
 and web/public/icon-512.png: the mark from web/public/icon.svg (a pale loop with one lit

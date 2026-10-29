@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/deploy"
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/deploy"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // lpMergedTask creates a task that is merged at sha and waiting for a release.

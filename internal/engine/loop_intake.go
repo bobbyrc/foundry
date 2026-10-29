@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/scm"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/scm"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // intakeLoop turns open GitHub issues carrying the intake label into tasks, once each.
@@ -53,7 +53,7 @@ func (e *Engine) intakeLoop(ctx context.Context, p *config.Project) error {
 			errs = append(errs, fmt.Errorf("issue #%d: %w", is.Number, err))
 			continue
 		}
-		msg := fmt.Sprintf("Onlet queued this as task `%s`. It will open a pull request that fixes this issue, or explain here why not.", t.ID)
+		msg := fmt.Sprintf("Onett queued this as task `%s`. It will open a pull request that fixes this issue, or explain here why not.", t.ID)
 		if err := s.CommentIssue(ctx, is.Number, msg); err != nil {
 			e.d.Logger.Warn("comment on issue", "project", p.Name, "issue", is.Number, "err", err)
 		}

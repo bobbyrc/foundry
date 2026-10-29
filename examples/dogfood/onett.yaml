@@ -1,7 +1,7 @@
-# Dogfood: onlet improving its own repo, with each merged change released to a local staging
-# copy of onlet. Agent PRs target the 'dogfood' branch of bobbyrc/onlet, never main.
-# Set DOGFOOD to the directory that holds the clone and staging copy before running onlet;
-# see README.md. The Go binary (go, gofmt) must be on PATH when onlet starts.
+# Dogfood: onett improving its own repo, with each merged change released to a local staging
+# copy of onett. Agent PRs target the 'dogfood' branch of bobbyrc/onett, never main.
+# Set DOGFOOD to the directory that holds the clone and staging copy before running onett;
+# see README.md. The Go binary (go, gofmt) must be on PATH when onett starts.
 # Notifications are log-only overnight.
 server:
   addr: 127.0.0.1:7797
@@ -26,29 +26,29 @@ routing:
   chore: implementer-claude
   issue: implementer-claude
   improve: implementer-claude
-# Built-in rules apply (incl. onlet's own gates and self-assigned work). This repo always runs
+# Built-in rules apply (incl. onett's own gates and self-assigned work). This repo always runs
 # CI, so a PR with no checks never passes.
 policies:
   default:
     require_checks: true
     extra_rules:
-      # The release scripts run on this machine with onlet's environment: a change to them
+      # The release scripts run on this machine with onett's environment: a change to them
       # is a change to the deploy pipeline, so a human approves it.
       - risk: high
         reason: dogfood release pipeline
         paths: ["examples/dogfood/**"]
 projects:
-  onlet:
-    repo: bobbyrc/onlet
+  onett:
+    repo: bobbyrc/onett
     default_branch: dogfood
     path: ${DOGFOOD}/clone
     env:
-      GOCACHE: /tmp/onlet-dogfood-gocache
+      GOCACHE: /tmp/onett-dogfood-gocache
       GOTOOLCHAIN: local
       GOFLAGS: -mod=readonly
       GOPROXY: "off"
     instructions: |
-      This repo is onlet itself (Go 1.27 + a React/Vite UI in web/). Read README.md and
+      This repo is onett itself (Go 1.27 + a React/Vite UI in web/). Read README.md and
       docs/design.md first. Use `go` and `gofmt` from PATH (mise provides them; see README.md).
       Before reporting success run `go vet ./...` and
       `go test -race -count=1` on every package you touched, and gofmt every Go file you changed.
@@ -56,10 +56,10 @@ projects:
     deploy:
       type: command
       options:
-        # The scripts run from onlet's own clone of the dogfood branch, so a merged PR that
+        # The scripts run from onett's own clone of the dogfood branch, so a merged PR that
         # changes them takes effect on the next release.
-        deploy: ${DOGFOOD}/clone/examples/dogfood/staging/release.sh "$ONLET_REF"
-        rollback: ${DOGFOOD}/clone/examples/dogfood/staging/release.sh "$ONLET_ROLLBACK_REF"
+        deploy: ${DOGFOOD}/clone/examples/dogfood/staging/release.sh "$ONETT_REF"
+        rollback: ${DOGFOOD}/clone/examples/dogfood/staging/release.sh "$ONETT_ROLLBACK_REF"
         timeout: 10m
       health_url: http://127.0.0.1:7798/api/v1/health
       verify_for: 2m
@@ -82,6 +82,6 @@ projects:
       issue_intake:
         enabled: true
         every: 1m
-self_project: onlet
+self_project: onett
 notify:
   - type: log

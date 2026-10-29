@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // lpRetroTask stores a task with explicit timestamps (the store stamps UpdatedAt on every update,

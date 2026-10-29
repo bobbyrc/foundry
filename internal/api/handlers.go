@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/store"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 // defaultLimit is the page size of list routes when ?limit= is absent.
@@ -92,7 +92,7 @@ type AgentView struct {
 	PromptText  string `json:"prompt_text"`
 	PromptError string `json:"prompt_error,omitempty"`
 	// PromptUpdates is true when the agent runs the built-in prompt of its own name, so a new
-	// onlet release changes its instructions.
+	// onett release changes its instructions.
 	PromptUpdates bool `json:"prompt_updates"`
 	// BuiltinPromptText is the built-in prompt of this name, set only for a built-in whose
 	// instructions the file replaces, so the owner can compare the two.

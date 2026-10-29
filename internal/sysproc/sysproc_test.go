@@ -63,7 +63,7 @@ func TestKillGroupMissingGroupIsNotAnError(t *testing.T) {
 }
 
 func TestKillGroupRejectsInvalidPid(t *testing.T) {
-	assert.Error(t, KillGroup(0, syscall.SIGKILL), "pid 0 would signal onlet's own group")
+	assert.Error(t, KillGroup(0, syscall.SIGKILL), "pid 0 would signal onett's own group")
 	assert.Error(t, KillGroup(-5, syscall.SIGKILL))
 }
 
@@ -124,9 +124,9 @@ func TestAgentEnvKeepsBaseVariables(t *testing.T) {
 }
 
 func TestAgentEnvPassesInheritedName(t *testing.T) {
-	t.Setenv("ONLET_TEST_INHERIT", "yes")
-	assert.Contains(t, AgentEnv([]string{"ONLET_TEST_INHERIT"}, nil), "ONLET_TEST_INHERIT=yes")
-	assert.NotContains(t, AgentEnv(nil, nil), "ONLET_TEST_INHERIT=yes")
+	t.Setenv("ONETT_TEST_INHERIT", "yes")
+	assert.Contains(t, AgentEnv([]string{"ONETT_TEST_INHERIT"}, nil), "ONETT_TEST_INHERIT=yes")
+	assert.NotContains(t, AgentEnv(nil, nil), "ONETT_TEST_INHERIT=yes")
 }
 
 func TestAgentEnvInheritCanReleaseWithheldName(t *testing.T) {
@@ -136,18 +136,18 @@ func TestAgentEnvInheritCanReleaseWithheldName(t *testing.T) {
 
 func TestAgentEnvExtraOverrides(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin")
-	t.Setenv("ONLET_TEST_INHERIT", "from-onlet")
+	t.Setenv("ONETT_TEST_INHERIT", "from-onett")
 
-	env := AgentEnv([]string{"ONLET_TEST_INHERIT"}, map[string]string{
+	env := AgentEnv([]string{"ONETT_TEST_INHERIT"}, map[string]string{
 		"PATH":                "/custom",
-		"ONLET_TEST_INHERIT":  "from-extra",
-		"ONLET_TEST_NEW_ONLY": "x",
+		"ONETT_TEST_INHERIT":  "from-extra",
+		"ONETT_TEST_NEW_ONLY": "x",
 	})
 	assert.Contains(t, env, "PATH=/custom")
-	assert.Contains(t, env, "ONLET_TEST_INHERIT=from-extra")
-	assert.Contains(t, env, "ONLET_TEST_NEW_ONLY=x")
+	assert.Contains(t, env, "ONETT_TEST_INHERIT=from-extra")
+	assert.Contains(t, env, "ONETT_TEST_NEW_ONLY=x")
 	assert.NotContains(t, env, "PATH=/usr/bin")
-	assert.NotContains(t, env, "ONLET_TEST_INHERIT=from-onlet")
+	assert.NotContains(t, env, "ONETT_TEST_INHERIT=from-onett")
 }
 
 func TestAgentEnvIsSorted(t *testing.T) {

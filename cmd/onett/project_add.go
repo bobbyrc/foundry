@@ -7,16 +7,16 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onett/internal/config"
 	"go.yaml.in/yaml/v3"
 )
 
-// addProject adds a project to an existing config: `onlet project add NAME --repo OWNER/NAME`.
+// addProject adds a project to an existing config: `onett project add NAME --repo OWNER/NAME`.
 // It runs without the daemon, because it only edits the config file; the daemon reads that file
 // when it starts or reloads.
 func addProject(e *env, args []string) error {
 	fs := newFlagSet("project add", e)
-	cfgFlag := fs.String("config", "", "config file to edit (default $ONLET_CONFIG or ~/.config/onlet/onlet.yaml)")
+	cfgFlag := fs.String("config", "", "config file to edit (default $ONETT_CONFIG or ~/.config/onett/onett.yaml)")
 	repo := fs.String("repo", "", "the project's GitHub repository, owner/name (required)")
 	dir := fs.String("path", "", "the project's local clone (default <data_dir>/repos/<name>)")
 	branch := fs.String("branch", "", "the branch agents base their work on (default main)")
@@ -40,7 +40,7 @@ func addProject(e *env, args []string) error {
 	}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("no config at %s; run \"onlet init\" first", path)
+		return fmt.Errorf("no config at %s; run \"onett init\" first", path)
 	} else if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func addProject(e *env, args []string) error {
 		return err
 	}
 	fmt.Fprintf(e.out, "added project %s (%s) to %s\n", name, *repo, path)
-	fmt.Fprintln(e.out, `run "onlet config --reload" (or restart onlet) to start using it`)
+	fmt.Fprintln(e.out, `run "onett config --reload" (or restart onett) to start using it`)
 	return nil
 }
 
@@ -130,7 +130,7 @@ func insertProject(data []byte, path, name, repo, dir, branch string) ([]byte, e
 	}
 	lines = insertLines(lines, at, append(prefix, entry...))
 
-	// Onlet's own repository becomes the self_project, as init does, but an existing choice
+	// Onett's own repository becomes the self_project, as init does, but an existing choice
 	// is never overwritten.
 	if repo == selfRepo && selfProject == nil {
 		setsSelf = true

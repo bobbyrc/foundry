@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bobbyrc/onlet/internal/config"
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/config"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 //go:embed prompts/*.md
@@ -65,7 +65,7 @@ func (e *Engine) buildInstructions(agent config.Agent, p *config.Project) (strin
 
 // buildTaskPrompt is the user turn for a run: the task's facts and body. For a review task it
 // names the pull request under review and includes the task the change was meant to
-// accomplish (the parent's body). conflicts lists the files that conflicted when onlet merged
+// accomplish (the parent's body). conflicts lists the files that conflicted when onett merged
 // the default branch into the task's branch; the agent must resolve them.
 func buildTaskPrompt(t domain.Task, p *config.Project, parent *domain.Task, conflicts []string) string {
 	isReview := t.Kind == domain.KindReview && parent != nil
@@ -107,11 +107,11 @@ func buildTaskPrompt(t domain.Task, p *config.Project, parent *domain.Task, conf
 		if p != nil {
 			base = "origin/" + p.DefaultBranch
 		}
-		fmt.Fprintf(&b, "## Merge conflicts to resolve\n\nOnlet merged %s into this branch and git reported conflicts in:\n", base)
+		fmt.Fprintf(&b, "## Merge conflicts to resolve\n\nOnett merged %s into this branch and git reported conflicts in:\n", base)
 		for _, f := range conflicts {
 			fmt.Fprintf(&b, "- %s\n", f)
 		}
-		b.WriteString("\nResolve every conflict marker in these files. Do not commit; onlet commits when you finish.\n\n")
+		b.WriteString("\nResolve every conflict marker in these files. Do not commit; onett commits when you finish.\n\n")
 	}
 
 	b.WriteString("## Details\n\n")

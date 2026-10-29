@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onett/internal/scm"
 )
 
 // ErrNotFound is wrapped by errors for PR, issue or comment targets that do not exist.

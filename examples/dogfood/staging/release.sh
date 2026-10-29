@@ -1,12 +1,12 @@
 #!/bin/bash
-# Build (once per commit) and (re)start the staging copy of onlet at REF.
-# Used by onlet's deploy and rollback commands (see ../onlet.yaml). Last stdout line is the
+# Build (once per commit) and (re)start the staging copy of onett at REF.
+# Used by onett's deploy and rollback commands (see ../onett.yaml). Last stdout line is the
 # deploy JSON.
 #
 # Needs DOGFOOD (the directory holding clone/ and staging/; see ../README.md). Optional:
 #   GO             go binary to build with (default: go on PATH)
 #   STAGING_ADDR   address for the staging copy (default: 127.0.0.1:7798)
-#   STAGING_REPO   repo written into the staging config (default: bobbyrc/onlet)
+#   STAGING_REPO   repo written into the staging config (default: bobbyrc/onett)
 set -euo pipefail
 
 DOGFOOD=${DOGFOOD:?set DOGFOOD to the dogfood directory}
@@ -33,7 +33,7 @@ mkdir -p "$STAGE/bin" "$STAGE/src" "$STAGE/log" "$STAGE/data"
 git -C "$CLONE" fetch -q origin
 FULL=$(git -C "$CLONE" rev-parse --verify "$REF_IN^{commit}")
 REF12=${FULL:0:12}
-BIN=$STAGE/bin/onlet-$REF12
+BIN=$STAGE/bin/onett-$REF12
 log "ref $REF_IN -> $FULL"
 
 # (b) Build the binary for this commit, unless it is already built.
@@ -47,7 +47,7 @@ if [ ! -x "$BIN" ]; then
   log "building $BIN"
   (
     cd "$SRC"
-    GOTOOLCHAIN=local GOFLAGS=-mod=mod GOCACHE=$STAGE/gocache "$GO" build -o "$BIN.tmp" ./cmd/onlet
+    GOTOOLCHAIN=local GOFLAGS=-mod=mod GOCACHE=$STAGE/gocache "$GO" build -o "$BIN.tmp" ./cmd/onett
   )
   mv "$BIN.tmp" "$BIN"
 else
@@ -58,7 +58,7 @@ fi
 if [ -f "$STAGE/pid" ]; then
   OLD=$(cat "$STAGE/pid" || true)
   if [ -n "$OLD" ] && kill -0 "$OLD" 2>/dev/null \
-     && ps -p "$OLD" -o command= 2>/dev/null | grep -qF "$STAGE/bin/onlet-"; then
+     && ps -p "$OLD" -o command= 2>/dev/null | grep -qF "$STAGE/bin/onett-"; then
     log "stopping staging pid $OLD"
     kill -TERM "$OLD"
     for _ in $(seq 1 10); do
@@ -76,7 +76,7 @@ fi
 # (d) First use only: write the staging config and check it with doctor.
 CONF=$STAGE/staging.yaml
 if [ ! -f "$CONF" ]; then
-  REPO=${STAGING_REPO:-bobbyrc/onlet}
+  REPO=${STAGING_REPO:-bobbyrc/onett}
   mkdir -p "$STAGE/scratch-clone"
   cat > "$CONF" <<YAML
 server:
@@ -97,7 +97,7 @@ YAML
   fi
 fi
 
-# (e) Start the instance in the background, logging to the staging log. onlet leaves processes
+# (e) Start the instance in the background, logging to the staging log. onett leaves processes
 # started by a successful deploy running, and kills them if the deploy fails.
 nohup "$BIN" serve --config "$CONF" >> "$LOG" 2>&1 < /dev/null &
 NEW=$!

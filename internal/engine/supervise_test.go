@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/domain"
-	"github.com/bobbyrc/onlet/internal/harness"
-	hfake "github.com/bobbyrc/onlet/internal/harness/fake"
+	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/harness"
+	hfake "github.com/bobbyrc/onett/internal/harness/fake"
 )
 
 func TestSuperviseStallBlocksTask(t *testing.T) {

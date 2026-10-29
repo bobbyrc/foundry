@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bobbyrc/onlet/internal/config"
+	"github.com/bobbyrc/onett/internal/config"
 )
 
 // secretEnvWords mark an environment variable as holding a secret when one of them is a whole
@@ -92,7 +92,7 @@ func urlPasswordSecrets(value string) []string {
 	return out
 }
 
-// evidenceEnv returns the environment that the deploy and logs commands of p run with: onlet's
+// evidenceEnv returns the environment that the deploy and logs commands of p run with: onett's
 // environment, then the project's env. It is the input to redactSecrets for their output.
 func evidenceEnv(p *config.Project) []string {
 	return append(os.Environ(), projectEnvPairs(p.Env)...)

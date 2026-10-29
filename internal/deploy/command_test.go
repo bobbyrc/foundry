@@ -49,10 +49,10 @@ func TestCommandDeployPlainOutput(t *testing.T) {
 }
 
 func TestCommandDeployEnvReachesScript(t *testing.T) {
-	t.Setenv("ONLET_TEST_PARENT", "parent")
+	t.Setenv("ONETT_TEST_PARENT", "parent")
 	d := newTestCommand(t, map[string]any{
-		"deploy": `echo "https://$ONLET_REF.example/$ONLET_TEST_CFG/$ONLET_TEST_PARENT"`,
-	}, map[string]string{"ONLET_TEST_CFG": "cfg"})
+		"deploy": `echo "https://$ONETT_REF.example/$ONETT_TEST_CFG/$ONETT_TEST_PARENT"`,
+	}, map[string]string{"ONETT_TEST_CFG": "cfg"})
 	h, err := d.Deploy(context.Background(), "sha1")
 	require.NoError(t, err)
 	assert.Equal(t, "https://sha1.example/cfg/parent", h.URL)
@@ -135,7 +135,7 @@ func TestCommandDeployNoOutputIsEmpty(t *testing.T) {
 func TestCommandStatusJSON(t *testing.T) {
 	d := newTestCommand(t, map[string]any{
 		"deploy": `echo https://ignored.example`,
-		"status": `echo "{\"state\":\"building\",\"url\":\"https://$ONLET_DEPLOY_ID.example\",\"message\":\"compiling\"}"`,
+		"status": `echo "{\"state\":\"building\",\"url\":\"https://$ONETT_DEPLOY_ID.example\",\"message\":\"compiling\"}"`,
 	}, nil)
 	st, err := d.Status(context.Background(), "dpl_9")
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestCommandRollbackRunsWithEnv(t *testing.T) {
 	dir := t.TempDir()
 	d, err := New(Config{Type: "command", Dir: dir, Options: map[string]any{
 		"deploy":   "echo x",
-		"rollback": `printf '%s %s' "$ONLET_ROLLBACK_ID" "$ONLET_ROLLBACK_REF" > rb.txt`,
+		"rollback": `printf '%s %s' "$ONETT_ROLLBACK_ID" "$ONETT_ROLLBACK_REF" > rb.txt`,
 	}})
 	require.NoError(t, err)
 	require.NoError(t, d.Rollback(context.Background(), "dpl_old", "prev-sha"))

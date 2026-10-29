@@ -40,7 +40,7 @@ type Deployer interface {
 	Rollback(ctx context.Context, id, ref string) error
 }
 
-// Config is a project's deploy block from onlet.yaml. Options holds the type-specific keys.
+// Config is a project's deploy block from onett.yaml. Options holds the type-specific keys.
 type Config struct {
 	Type    string
 	Options map[string]any

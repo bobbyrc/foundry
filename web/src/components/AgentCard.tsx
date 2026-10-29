@@ -93,7 +93,7 @@ export function AgentCard({
       ) : (
         <>
           {customized ? (
-            <p className="muted small">Customized: no longer receives onlet&apos;s prompt updates.</p>
+            <p className="muted small">Customized: no longer receives onett&apos;s prompt updates.</p>
           ) : null}
           {canCompare && comparing ? (
             <div className="agent-compare">

@@ -62,13 +62,13 @@ export function ConfigNotes({
       {saved ? <p className="muted config-saved">Saved and reloaded.</p> : null}
       {reloadFailed !== null ? (
         <Callout tone="danger">
-          Saved to the file, but onlet could not reload it: {reloadFailed}. Fix the problem and press Reload
+          Saved to the file, but onett could not reload it: {reloadFailed}. Fix the problem and press Reload
           from file.
         </Callout>
       ) : null}
       {restart.length > 0 ? (
         <Callout tone="info">
-          These settings take effect after onlet restarts: {restart.join(', ')}.{' '}
+          These settings take effect after onett restarts: {restart.join(', ')}.{' '}
           <button type="button" className="link-button" onClick={onDismissRestart}>
             Dismiss
           </button>

@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onlet/internal/auth"
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/auth"
+	"github.com/bobbyrc/onett/internal/domain"
 )
 
 // testPassword is the password every user made by newUserSession has.
@@ -77,7 +77,7 @@ func TestTokenCanReadAndOperateButNotAdminister(t *testing.T) {
 	rec := x.authReq(t, http.MethodGet, "/api/v1/stats", "", withToken(testToken))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks", `{"project":"onlet","title":"x"}`, withToken(testToken))
+	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks", `{"project":"onett","title":"x"}`, withToken(testToken))
 	assert.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 
 	rec = x.authReq(t, http.MethodGet, "/api/v1/config/file", "", withToken(testToken))
@@ -98,7 +98,7 @@ func TestViewerReadsButCannotAct(t *testing.T) {
 	rec := x.authReq(t, http.MethodGet, "/api/v1/stats", "", withCookie(c))
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks", `{"project":"onlet","title":"x"}`, withCookie(c))
+	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks", `{"project":"onett","title":"x"}`, withCookie(c))
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Empty(t, x.ctl.calls, "a viewer must not reach the controller")
 }
@@ -107,7 +107,7 @@ func TestOperatorActsButCannotAdminister(t *testing.T) {
 	x := newHarness(t)
 	c := x.newUserSession(t, "ops", domain.RoleOperator)
 
-	rec := x.authReq(t, http.MethodPost, "/api/v1/tasks", `{"project":"onlet","title":"x"}`, withCookie(c))
+	rec := x.authReq(t, http.MethodPost, "/api/v1/tasks", `{"project":"onett","title":"x"}`, withCookie(c))
 	assert.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 
 	rec = x.authReq(t, http.MethodGet, "/api/v1/users", "", withCookie(c))
@@ -130,7 +130,7 @@ func TestOwnerReachesUsers(t *testing.T) {
 func TestCookieCrossSiteWriteIsRefused(t *testing.T) {
 	x := newHarness(t)
 	c := x.newUserSession(t, "ops", domain.RoleOperator)
-	body := `{"project":"onlet","title":"x"}`
+	body := `{"project":"onett","title":"x"}`
 
 	rec := x.authReq(t, http.MethodPost, "/api/v1/tasks", body,
 		withCookie(c), withHeader("Sec-Fetch-Site", "cross-site"))
@@ -272,7 +272,7 @@ func TestStateWithoutSessionIsNotUnauthorized(t *testing.T) {
 	assert.JSONEq(t, `{"setup_required":false,"user":null}`, rec.Body.String())
 }
 
-// sessionCookieFrom returns the onlet session cookie a response sets.
+// sessionCookieFrom returns the onett session cookie a response sets.
 func sessionCookieFrom(t *testing.T, rec *httptest.ResponseRecorder) *http.Cookie {
 	t.Helper()
 	for _, c := range rec.Result().Cookies() {

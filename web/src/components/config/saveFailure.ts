@@ -9,7 +9,7 @@ export type SaveFailure =
   /** 422: the edited file is invalid. Nothing was written; `problems` says where. */
   | { kind: 'problems'; problems: ConfigProblem[] }
   /**
-   * 500: onlet writes the file before it reloads it, so the new text may already be on disk
+   * 500: onett writes the file before it reloads it, so the new text may already be on disk
    * even though the save reports failure. The editor must show the file as it is now.
    */
   | { kind: 'written-not-reloaded'; message: string }

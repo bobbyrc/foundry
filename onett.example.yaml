@@ -1,20 +1,20 @@
-# onlet.example.yaml: every section of onlet.yaml, annotated.
-# Copy it to onlet.yaml and edit. Every key is optional; unset keys take the defaults
+# onett.example.yaml: every section of onett.yaml, annotated.
+# Copy it to onett.yaml and edit. Every key is optional; unset keys take the defaults
 # noted below. Unknown keys are errors, so a typo fails at startup.
 #
 # A dollar sign followed by NAME in braces is replaced with the environment variable NAME before
 # parsing. A variable that is not set is an error that names it, so the daemon will not start.
-# A bare $NAME is left alone, so shell snippets such as "vercel rollback $ONLET_ROLLBACK_ID"
+# A bare $NAME is left alone, so shell snippets such as "vercel rollback $ONETT_ROLLBACK_ID"
 # pass through unchanged.
 
-# Server: where onlet listens and where it keeps its state.
+# Server: where onett listens and where it keeps its state.
 server:
   addr: 127.0.0.1:7777                 # address the HTTP API and UI listen on (default 127.0.0.1:7777)
-  data_dir: ~/.local/share/onlet     # database, logs and default clones live here (default shown)
+  data_dir: ~/.local/share/onett     # database, logs and default clones live here (default shown)
   public_url: http://127.0.0.1:7777    # base URL used in notification links (default http://<addr>, with 0.0.0.0 or :: shown as loopback)
   retain_events: 720h                  # event history kept this long; older events are deleted daily (default 720h = 30 days)
   retain_run_logs: 2160h               # agent run logs kept this long (default 2160h = 90 days)
-  # allowed_hosts: [onlet.tailnet.ts.net]   # extra Host names the API accepts (e.g. a Tailscale name); needed for remote access (default none)
+  # allowed_hosts: [onett.tailnet.ts.net]   # extra Host names the API accepts (e.g. a Tailscale name); needed for remote access (default none)
 
 # Limits: caps on how much runs at once and how long a run may go.
 limits:
@@ -25,30 +25,30 @@ limits:
   max_attempts: 3                      # tries per task before it is blocked until a human retries it (default 3)
   daily_budget_usd: 20                 # task-run cost per local day (USD) before new runs stop; 0 = no limit. Codex reports no cost, so it is not counted
 
-# Harnesses: the agent CLIs onlet can drive. "claude" and "codex" are always present; you
+# Harnesses: the agent CLIs onett can drive. "claude" and "codex" are always present; you
 # only list one here to change its settings or to add another.
 harnesses:
   claude:
     type: claude-code                  # built-in harness type; default for "claude"
   codex:
     type: codex                        # built-in harness type; default for "codex"
-    # Codex reports tokens but no dollar cost. With a price, onlet estimates each run's cost
+    # Codex reports tokens but no dollar cost. With a price, onett estimates each run's cost
     # (shown as ~$0.42) so limits.daily_budget_usd counts it. USD per million tokens; 0 = unknown.
     # These are PLACEHOLDERS: fill in the real prices for your plan or model.
     price:
       input_per_mtok: 1.25
       output_per_mtok: 10.00
       cached_input_per_mtok: 0.125
-  # A harness of type "exec" runs any command that speaks onlet's protocol.
+  # A harness of type "exec" runs any command that speaks onett's protocol.
   my-agent:
     type: exec
     command: ["/usr/local/bin/my-agent", "--json"]   # argv to run; required for exec
     args: ["--model", "fast"]                        # extra arguments appended to command
     env:                                             # added to the environment of each run
       MY_AGENT_MODE: "headless"
-    # Agents get only an allowlist of onlet's environment (PATH, HOME, LANG, ...), so tokens
-    # onlet holds (GH_TOKEN and the like) never reach them. inherit_env passes named variables
-    # through; give an agent only what it needs, and never onlet's own GitHub token.
+    # Agents get only an allowlist of onett's environment (PATH, HOME, LANG, ...), so tokens
+    # onett holds (GH_TOKEN and the like) never reach them. inherit_env passes named variables
+    # through; give an agent only what it needs, and never onett's own GitHub token.
     inherit_env: ["MY_AGENT_API_KEY"]
 
 # Agents: roles. Each role runs on one harness with one model and one set of instructions.
@@ -116,7 +116,7 @@ policies:
     require_checks: false              # true: a PR with no CI checks waits (then blocks after 30m) instead of counting as "no CI"; use for repos that always run CI
     ci_grace: 3m                       # after a push, a PR with no checks yet counts as CI pending this long (default 3m)
     # "rules" REPLACES the built-in rules (migrations, CI/deploy, auth, dependency manifests,
-    # onlet's own gates) with the list you give. Setting it drops all of those protections
+    # onett's own gates) with the list you give. Setting it drops all of those protections
     # unless you copy them. "extra_rules" is usually what you want: it adds to the built-in rules.
     extra_rules:
       # An extra rule: changes to public API definitions need a human.
@@ -128,7 +128,7 @@ policies:
         reason: labelled as risky
         labels: ["risky"]
       # A rule can match on the task's source ("followup", "retro", "github_issue", "signal", ...),
-      # and a source rule with no paths is valid. Onlet's built-in default already rates
+      # and a source rule with no paths is valid. Onett's built-in default already rates
       # follow-up and retro work medium, so it waits for you; uncomment to do the same for signals:
       #   - risk: medium
       #     reason: production signal fix
@@ -147,33 +147,33 @@ policies:
         require_review: true
         require_ci: true
 
-# Projects: the repositories onlet works on. The key is the project name.
+# Projects: the repositories onett works on. The key is the project name.
 projects:
-  onlet:
-    repo: bobbyrc/onlet              # GitHub owner/name, or an absolute local path
-    path: ~/code/onlet               # local clone; default <data_dir>/repos/<name>
+  onett:
+    repo: bobbyrc/onett              # GitHub owner/name, or an absolute local path
+    path: ~/code/onett               # local clone; default <data_dir>/repos/<name>
     default_branch: main               # default main
     policy: default                    # a name from policies; default "default"
     instructions: |                    # appended to every agent prompt for this project
       Run `mise exec -- go test -race ./...` before you report done.
     env:                               # added to each agent session for this project
-      ONLET_PROJECT: onlet
+      ONETT_PROJECT: onett
     # Setup and checks run with the agent's environment (the allowlist, the harness's inherit_env
-    # and this project's env), not onlet's, because they run code the agent may have written.
+    # and this project's env), not onett's, because they run code the agent may have written.
     # setup:                           # run in each fresh worktree before the agent starts
     #   - name: web deps
     #     run: cd web && npm ci --prefer-offline --no-audit
     #     timeout: 5m
-    # checks:                          # run after the agent, before onlet commits and pushes
+    # checks:                          # run after the agent, before onett commits and pushes
     #   - name: test                   # a failing check re-queues the task with its output
     #     run: mise exec -- go test -race ./...
     #     timeout: 10m                 # default 10m
     # intake:                          # external queues that become tasks; see docs/plugins.md, "Intake sources"
     #   - name: inbox                  # lowercase letters, digits, - and _; unique per project
-    #     command: cat ~/onlet-inbox.jsonl   # prints one JSON item per line: {"id","title","body","kind","priority","role"}
+    #     command: cat ~/onett-inbox.jsonl   # prints one JSON item per line: {"id","title","body","kind","priority","role"}
     #     kind: feature                # default kind for items that name none (default feature)
     #     timeout: 60s                 # for one run of the command (default 60s)
-    # No deploy block: merged work is not released by onlet.
+    # No deploy block: merged work is not released by onett.
     paused: false                      # true stops new runs and loop-created tasks (default false)
 
   myapp:
@@ -192,11 +192,11 @@ projects:
       type: command                    # runs the commands under options below
       options:
         # Shell commands for the "command" deploy type. A deploy may start a long-running service in
-        # the background: it keeps running after a successful deploy, and onlet kills it if the
+        # the background: it keeps running after a successful deploy, and onett kills it if the
         # deploy fails or times out. Redirect its output (e.g. "> app.log 2>&1 &").
         deploy: "vercel deploy --prod --yes"
-        # $ONLET_ROLLBACK_ID is set by onlet to the release to roll back to.
-        rollback: "vercel rollback $ONLET_ROLLBACK_ID --yes"
+        # $ONETT_ROLLBACK_ID is set by onett to the release to roll back to.
+        rollback: "vercel rollback $ONETT_ROLLBACK_ID --yes"
       health_url: https://myapp.example.com/healthz   # must answer 2xx during verify_for; empty skips it
       logs: tail -n 200 /path/to/app.log   # prints recent service logs; attached to failed releases and incidents
       verify_for: 10m                  # watch a release this long before calling it healthy (default 10m)
@@ -223,7 +223,7 @@ loops:
   issue_intake:
     enabled: true                      # default true
     every: 5m                          # default 5m
-    label: onlet                     # open issues with this label become tasks (default "onlet")
+    label: onett                     # open issues with this label become tasks (default "onett")
   pr_shepherd:
     every: 1m                          # moves tasks in review through CI, review, policy and merge (default 1m)
   deploy_watch:
@@ -249,16 +249,16 @@ loops:
 notify:
   - type: ntfy                         # push notifications via ntfy.sh
     options:
-      topic: onlet-bcraig-example    # pick a hard-to-guess topic; anyone who knows it can read it
+      topic: onett-bcraig-example    # pick a hard-to-guess topic; anyone who knows it can read it
     min_priority: normal               # low, normal or high; empty means normal (low-priority messages are not sent)
 
   # An exec notifier runs a command with the message. Uncomment to use it.
   # Push to your phone through the Herdr app. The exec notifier runs a shell command with the
-  # notification in ONLET_NOTIFY_TITLE, _BODY, _PRIORITY and _URL.
+  # notification in ONETT_NOTIFY_TITLE, _BODY, _PRIORITY and _URL.
   # - type: exec
   #   options:
-  #     command: herdr gram send --from onlet "$ONLET_NOTIFY_TITLE — $ONLET_NOTIFY_BODY $ONLET_NOTIFY_URL"
+  #     command: herdr gram send --from onett "$ONETT_NOTIFY_TITLE — $ONETT_NOTIFY_BODY $ONETT_NOTIFY_URL"
   #   min_priority: high
 
-# self_project: the project that is onlet itself. Friction reports are filed there.
-self_project: onlet
+# self_project: the project that is onett itself. Friction reports are filed there.
+self_project: onett

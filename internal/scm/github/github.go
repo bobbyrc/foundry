@@ -19,7 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bobbyrc/onlet/internal/scm"
+	"github.com/bobbyrc/onett/internal/scm"
 )
 
 // Runner runs one gh command with stdin and returns its stdout. Args are passed as-is; stdin is
@@ -96,7 +96,7 @@ func (g *GitHub) OpenPR(ctx context.Context, spec scm.PRSpec) (scm.PR, error) {
 	return g.GetPR(ctx, number)
 }
 
-// prJSON is the subset of `gh pr view --json` that onlet reads.
+// prJSON is the subset of `gh pr view --json` that onett reads.
 type prJSON struct {
 	Number            int         `json:"number"`
 	URL               string      `json:"url"`
@@ -417,7 +417,7 @@ func tail(s string, maxBytes int) string {
 	return s[start:]
 }
 
-// issueJSON is the subset of `gh issue list --json` that onlet reads.
+// issueJSON is the subset of `gh issue list --json` that onett reads.
 type issueJSON struct {
 	Number    int        `json:"number"`
 	URL       string     `json:"url"`

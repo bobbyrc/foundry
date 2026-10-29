@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bobbyrc/onlet/internal/domain"
+	"github.com/bobbyrc/onett/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v3"
@@ -149,47 +149,47 @@ func TestBadDurationNamesTheValue(t *testing.T) {
 func TestUnsetEnvVarIsAnErrorNamingEachOnce(t *testing.T) {
 	_, err := Parse([]byte(`
 server:
-  public_url: "${ONLET_TEST_ZULU}/${ONLET_TEST_ALPHA}"
+  public_url: "${ONETT_TEST_ZULU}/${ONETT_TEST_ALPHA}"
 projects:
   app:
     repo: bob/app
     deploy:
       type: command
       options:
-        rollback: "${ONLET_TEST_ALPHA} ${ONLET_TEST_MIKE}"
+        rollback: "${ONETT_TEST_ALPHA} ${ONETT_TEST_MIKE}"
 `), "")
 	require.Error(t, err)
-	assert.EqualError(t, err, "undefined environment variable ${ONLET_TEST_ALPHA}\n"+
-		"undefined environment variable ${ONLET_TEST_MIKE}\n"+
-		"undefined environment variable ${ONLET_TEST_ZULU}")
+	assert.EqualError(t, err, "undefined environment variable ${ONETT_TEST_ALPHA}\n"+
+		"undefined environment variable ${ONETT_TEST_MIKE}\n"+
+		"undefined environment variable ${ONETT_TEST_ZULU}")
 }
 
 func TestEmptyEnvVarExpandsToNothing(t *testing.T) {
-	t.Setenv("ONLET_TEST_EMPTY", "")
+	t.Setenv("ONETT_TEST_EMPTY", "")
 	cfg, err := Parse([]byte(`
 server:
-  public_url: "https://host${ONLET_TEST_EMPTY}/onlet"
+  public_url: "https://host${ONETT_TEST_EMPTY}/onett"
 `), "")
 	require.NoError(t, err)
-	assert.Equal(t, "https://host/onlet", cfg.Server.PublicURL)
+	assert.Equal(t, "https://host/onett", cfg.Server.PublicURL)
 }
 
 func TestExampleFileLoads(t *testing.T) {
-	cfg, err := Load("../../onlet.example.yaml")
+	cfg, err := Load("../../onett.example.yaml")
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"myapp", "onlet"}, cfg.ProjectNames())
-	assert.Nil(t, cfg.Projects["onlet"].Deploy)
+	assert.Equal(t, []string{"myapp", "onett"}, cfg.ProjectNames())
+	assert.Nil(t, cfg.Projects["onett"].Deploy)
 
 	myapp := cfg.Projects["myapp"]
 	require.NotNil(t, myapp.Deploy)
 	assert.Equal(t, 10*time.Minute, myapp.Deploy.VerifyFor.Duration)
-	assert.Equal(t, "vercel rollback $ONLET_ROLLBACK_ID --yes", myapp.Deploy.Options["rollback"])
+	assert.Equal(t, "vercel rollback $ONETT_ROLLBACK_ID --yes", myapp.Deploy.Options["rollback"])
 	assert.Equal(t, "sentry-prod", myapp.Observe[0].Name)
 
 	assert.Equal(t, "claude", cfg.Agents["implementer"].Harness)
 	assert.Equal(t, "exec", cfg.Harness["my-agent"].Type)
-	assert.Equal(t, "onlet", cfg.SelfProject)
+	assert.Equal(t, "onett", cfg.SelfProject)
 
 	loops := cfg.LoopsFor("myapp")
 	assert.Equal(t, 2*time.Minute, loops.ProdWatch.Every.Duration)
