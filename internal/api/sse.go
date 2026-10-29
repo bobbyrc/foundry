@@ -31,7 +31,7 @@ const (
 // replay, so an event persisted during the replay is delivered at least once; live events with
 // an ID already sent are skipped.
 //
-// Headers are sent before the replay starts and each page of stored events is written as it is
+// Headers and a ": connected" comment are sent before the replay starts, and each page of stored events is written as it is
 // read, so memory use does not grow with the size of the history. Once the stream has started,
 // a store error cannot become a JSON 500; the stream ends and the client reconnects.
 func (s *server) events(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +69,11 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	h.Set("Connection", "keep-alive")
 	h.Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
+	// Firefox fires EventSource "open" only once body bytes arrive, not on the headers, so a
+	// stream with nothing to replay would otherwise look disconnected until the first ping.
+	if _, err := io.WriteString(w, ": connected\n\n"); err != nil {
+		return
+	}
 	flusher.Flush()
 
 	// last is the highest event ID sent so far on this stream.
