@@ -279,7 +279,7 @@ describe('EventStream over WebSocket', () => {
     const { stream } = setup();
     socket().open();
     const w = stream.watch({ run_id: 'r1' });
-    expect(stream.getStatus()).toBe('reconnecting');
+    expect(stream.getStatus()).toBe('live');
 
     w.release();
     expect(stream.getStatus()).toBe('live');
@@ -293,20 +293,56 @@ describe('EventStream over WebSocket', () => {
     expect(stream.getStatus()).toBe('live');
   });
 
-  it('does not let a late subscribed for an earlier watch acknowledge a new one on the same run', () => {
+  it('does not let a late subscribed for an earlier watch acknowledge a new one on the same run', async () => {
     const { stream } = setup();
     socket().open();
     const earlier = stream.watch({ run_id: 'r1' });
     earlier.release();
     const later = stream.watch({ run_id: 'r1' });
-    expect(stream.getStatus()).toBe('reconnecting');
+    let laterReady = false;
+    void later.ready.then(() => {
+      laterReady = true;
+    });
 
     // The server answers in order: the first subscribe (for the earlier watch), then the second.
     socket().receive({ kind: 'subscribed', run_id: 'r1' });
-    expect(stream.getStatus()).toBe('reconnecting');
+    await Promise.resolve();
+    expect(laterReady).toBe(false);
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    return expect(later.ready).resolves.toBeUndefined();
+  });
+
+  it('leaves a live status live when a watch is added and acknowledged', async () => {
+    const { stream } = setup();
+    socket().open();
+    expect(stream.getStatus()).toBe('live');
+
+    const w = stream.watch({ run_id: 'r1' });
+    expect(socket().sentMessages()).toEqual([{ kind: 'subscribe', run_id: 'r1' }]);
+    expect(stream.getStatus()).toBe('live');
+
     socket().receive({ kind: 'subscribed', run_id: 'r1' });
     expect(stream.getStatus()).toBe('live');
-    return expect(later.ready).resolves.toBeUndefined();
+    await w.ready;
+  });
+
+  it('does not hold the status back with a watch added during an open gate', async () => {
+    const { stream } = setup();
+    const gated = stream.watch({ run_id: 'r1' });
+    socket().open();
+    expect(stream.getStatus()).toBe('reconnecting');
+
+    const added = stream.watch({ conversation_id: 'c1' });
+    expect(stream.getStatus()).toBe('reconnecting');
+
+    // Only the gated watch decides; the added one is still unacknowledged.
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    expect(stream.getStatus()).toBe('live');
+    await gated.ready;
+
+    socket().receive({ kind: 'subscribed', conversation_id: 'c1' });
+    await added.ready;
+    expect(stream.getStatus()).toBe('live');
   });
 
   it('does not count a watch as confirmed on a new socket after stop and start', async () => {

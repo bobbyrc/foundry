@@ -25,6 +25,9 @@ interface WatchEntry {
   target: WatchTarget;
   // How many Watch handles hold this entry. The subscription ends when the last one is released.
   count: number;
+  // True when this entry's subscribe was sent in the current socket's open. Only those gate the
+  // live status: a watch added on an open socket is covered by its own `ready` instead.
+  gated: boolean;
   // True once the server has confirmed this entry's own subscribe on the current socket.
   acked: boolean;
   waiters: Array<() => void>;
@@ -114,7 +117,7 @@ export class EventStream {
     const key = watchKey(target);
     let entry = this.watches.get(key);
     if (!entry) {
-      entry = { key, target, count: 0, acked: false, waiters: [] };
+      entry = { key, target, count: 0, gated: false, acked: false, waiters: [] };
       this.watches.set(key, entry);
       this.sendSubscribe(entry);
     }
@@ -125,7 +128,6 @@ export class EventStream {
       if (held.acked) resolve();
       else held.waiters.push(resolve);
     });
-    this.refreshStatus();
     return {
       ready,
       release: () => {
@@ -146,14 +148,15 @@ export class EventStream {
     for (const listener of this.statusListeners) listener();
   }
 
-  // Live only when the socket is open and every watch has been confirmed on it. Components run
-  // their catch-up fetch when this turns live, so it must not turn live before a subscription is in
-  // effect.
+  // Live when the socket is open and every gated watch is confirmed (or released). Components run
+  // their catch-up fetch when this turns live, so after a reconnect it must not turn live before the
+  // re-sent subscriptions are in effect. A watch added on an open socket is not gated, so it never
+  // holds the status back.
   private refreshStatus(): void {
     let live = this.open;
     if (live) {
       for (const entry of this.watches.values()) {
-        if (!entry.acked) {
+        if (entry.gated && !entry.acked) {
           live = false;
           break;
         }
@@ -204,7 +207,10 @@ export class EventStream {
       this.attempt = 0;
       this.open = true;
       // The server knows no subscriptions on a new socket, so every live watch is sent again.
-      for (const entry of this.watches.values()) this.sendSubscribe(entry);
+      for (const entry of this.watches.values()) {
+        entry.gated = true;
+        this.sendSubscribe(entry);
+      }
       this.refreshStatus();
       // Events sent during the outage are not replayed (live-only ones never are), so refetch
       // every query once rather than trust the cache.
