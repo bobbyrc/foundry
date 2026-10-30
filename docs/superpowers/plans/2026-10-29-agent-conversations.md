@@ -367,7 +367,7 @@ no-op with an empty queue.
 so it is not decided here. Closed → `false`, `"Closed by <ClosedBy>: <ClosedReason>"`. No run
 with a session, and nothing live → `false`, `"This agent has no session to continue. Retry the
 task instead."`. The last run's harness (`Run.Harness` is the config name; look up its
-`Type` in `cfg.Harnesses`) has type `codex` and nothing is live → `false`, `"Codex agents
+`Type` in `cfg.Harness`, the `map[string]config.Harness`) has type `codex` and nothing is live → `false`, `"Codex agents
 can't be continued yet: a resumed Codex session's sandbox is unverified."`. Task `queued` with
 no runs → `true` (messages queue). Otherwise `true`. `AgentConversations` lists root tasks that
 have at least one run: open ones (not closed) first, then ones closed or updated in the last 7
