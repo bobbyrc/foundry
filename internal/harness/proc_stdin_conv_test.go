@@ -62,3 +62,50 @@ func TestProcWriteStdinWithoutKeepOpen(t *testing.T) {
 	assert.ErrorIs(t, proc.WriteStdin([]byte("x")), ErrInputClosed)
 	_, _ = proc.Wait()
 }
+
+func TestCancelNotBlockedByStdinWrite(t *testing.T) {
+	proc, err := StartProcess(context.Background(), ProcSpec{
+		Command:       []string{"/bin/sh", "-c", "sleep 30"},
+		KeepStdinOpen: true,
+	})
+	require.NoError(t, err)
+
+	werr := make(chan error, 1)
+	go func() { werr <- proc.WriteStdin(make([]byte, 1<<20)) }()
+	time.Sleep(200 * time.Millisecond) // let the write fill the pipe and block
+
+	start := time.Now()
+	proc.Cancel()
+	assert.Less(t, time.Since(start), time.Second)
+
+	select {
+	case err := <-werr:
+		assert.ErrorIs(t, err, ErrInputClosed)
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked WriteStdin did not return after Cancel")
+	}
+	_, _ = proc.Wait()
+}
+
+func TestStartNotBlockedByLargePrompt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		proc, err := StartProcess(ctx, ProcSpec{
+			Command:       []string{"/bin/sh", "-c", "sleep 30"},
+			Stdin:         string(make([]byte, 1<<20)),
+			KeepStdinOpen: true,
+		})
+		if err == nil {
+			cancel()
+			_, _ = proc.Wait()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("StartProcess blocked on a prompt larger than the pipe buffer")
+	}
+}

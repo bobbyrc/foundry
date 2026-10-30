@@ -1,5 +1,5 @@
-// Package claude runs Claude Code non-interactively (claude -p with stream-json input and output) as a
-// onett harness of type "claude-code".
+// Package claude runs Claude Code non-interactively (claude -p with stream-json input and
+// output) as a onett harness of type "claude-code".
 package claude
 
 import (

@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -79,9 +80,10 @@ type Proc struct {
 
 	cancelOnce sync.Once
 
-	stdinMu     sync.Mutex
+	stdinMu     sync.Mutex     // serialises writers only; never held by CloseStdin
 	stdin       io.WriteCloser // nil unless KeepStdinOpen
-	stdinClosed bool
+	stdinClosed atomic.Bool
+	stdinOnce   sync.Once
 
 	tailMu sync.Mutex
 	tail   []string
@@ -144,11 +146,7 @@ func StartProcess(ctx context.Context, p ProcSpec) (*Proc, error) {
 		stdin:  stdinPipe,
 	}
 	if stdinPipe == nil {
-		proc.stdinClosed = true
-	}
-	if stdinPipe != nil && p.Stdin != "" {
-		// A failed first write means the process already died; its exit explains.
-		_ = proc.WriteStdin([]byte(p.Stdin))
+		proc.stdinClosed.Store(true)
 	}
 
 	proc.readers.Add(2)
@@ -179,6 +177,18 @@ func StartProcess(ctx context.Context, p ProcSpec) (*Proc, error) {
 			case <-ctx.Done():
 				proc.Cancel()
 			case <-proc.done:
+			}
+		}()
+	}
+	if stdinPipe != nil && p.Stdin != "" {
+		// Hold the writer lock while the prompt goes out, so a WriteStdin cannot jump ahead of
+		// it, and write from a goroutine so a prompt larger than the pipe buffer does not block
+		// Start. A failed write means the process is gone or stdin was closed.
+		proc.stdinMu.Lock()
+		go func() {
+			defer proc.stdinMu.Unlock()
+			if _, err := proc.stdin.Write([]byte(p.Stdin)); err != nil {
+				proc.CloseStdin()
 			}
 		}()
 	}
@@ -292,7 +302,6 @@ func (p *Proc) Cancel() {
 	p.cancelOnce.Do(func() {
 		pgid := p.cmd.Process.Pid
 		_ = syscall.Kill(-pgid, syscall.SIGTERM)
-		p.CloseStdin()
 		go func() {
 			select {
 			case <-p.done:
@@ -300,38 +309,36 @@ func (p *Proc) Cancel() {
 				_ = syscall.Kill(-pgid, syscall.SIGKILL)
 			}
 		}()
+		p.CloseStdin()
 	})
 }
 
 // WriteStdin writes b to the process's stdin. It returns ErrInputClosed once stdin is closed,
-// including after the process exits or is cancelled. Only valid with ProcSpec.KeepStdinOpen.
+// including after the process exits or is cancelled, and when a write fails. Writers are
+// serialised so two messages never interleave. Only valid with ProcSpec.KeepStdinOpen.
 func (p *Proc) WriteStdin(b []byte) error {
 	p.stdinMu.Lock()
 	defer p.stdinMu.Unlock()
-	if p.stdinClosed {
+	if p.stdinClosed.Load() {
 		return ErrInputClosed
 	}
 	if _, err := p.stdin.Write(b); err != nil {
-		p.closeStdinLocked()
+		p.CloseStdin()
 		return fmt.Errorf("%w: %v", ErrInputClosed, err)
 	}
 	return nil
 }
 
 // CloseStdin closes the process's stdin. It is safe to call more than once and concurrently
-// with WriteStdin.
+// with WriteStdin; it does not wait for a write in progress, and closing the pipe makes that
+// write fail.
 func (p *Proc) CloseStdin() {
-	p.stdinMu.Lock()
-	defer p.stdinMu.Unlock()
-	p.closeStdinLocked()
-}
-
-func (p *Proc) closeStdinLocked() {
-	if p.stdinClosed {
-		return
-	}
-	p.stdinClosed = true
-	_ = p.stdin.Close()
+	p.stdinClosed.Store(true)
+	p.stdinOnce.Do(func() {
+		if p.stdin != nil {
+			_ = p.stdin.Close()
+		}
+	})
 }
 
 // reapGroup runs once the leader has exited. A background child the leader started (`cmd &`)

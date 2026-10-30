@@ -65,3 +65,18 @@ func TestClaudeSendDuringRun(t *testing.T) {
 	assert.Equal(t, `say "hi"`, res.FinalText) // quotes survive the JSON round trip
 	assert.ErrorIs(t, st.Send("late"), harness.ErrInputClosed)
 }
+
+func TestClaudeSendAnsweredMidRun(t *testing.T) {
+	script, err := filepath.Abs("testdata/echo_two.sh")
+	require.NoError(t, err)
+	r := &runner{cfg: harness.Config{Command: []string{script}}}
+	sess, err := r.Start(context.Background(), harness.Spec{Workdir: t.TempDir(), Prompt: "first"})
+	require.NoError(t, err)
+	require.NoError(t, sess.(harness.Steerable).Send("second"))
+
+	for range sess.Events() {
+	}
+	res, err := sess.Wait()
+	require.NoError(t, err)
+	assert.Equal(t, "first+second", res.FinalText)
+}
