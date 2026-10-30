@@ -31,3 +31,14 @@
   Browsers differ in what they wait for: Firefox fires EventSource "open" only once body bytes
   arrive, Chrome on the headers. (2026-10-28: a reconnect fix measured fast in Chromium, and
   the owner still waited 15s for "live", one full ping interval, in Firefox.)
+- When the owner asks to make an existing surface "first class" or "work like" a product they
+  know, start from that product's behaviour and the agent CLIs' own capabilities, and propose
+  the smallest design built on them. Do not invent new modes or protocols (a separate "steer"
+  versus "message" path) that make onett a harness. (2026-10-29: the owner stopped an agent
+  conversations design with "this feels like we're reinventing the wheel ... I'm worried we're
+  building a harness"; the agreed design used `claude --input-format stream-json` and the CLIs'
+  own resume instead.)
+- After a change to how runs end or resume, run the real flow with the real agent CLI before
+  calling it done. Unit tests with the fake harness passed while every real follow-up run
+  failed: the resumed agent never wrote `result.json`, so each follow-up burned an attempt and
+  re-ran the task in a fresh session. Only the live check showed it.

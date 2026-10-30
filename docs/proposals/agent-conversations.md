@@ -1,6 +1,7 @@
 # Proposal: agent conversations
 
-Status: design agreed with the owner, 2026-10-29. Nothing here is implemented. The clickable
+Status: implemented on branch `agent-convos`, 2026-10-30. Not built: the "read after current step"
+mark on a message delivered mid-run. The clickable
 mockup the owner approved is `agent-conversations-mockup.html` next to this file (throwaway HTML,
 not UI code; open it in a browser).
 
