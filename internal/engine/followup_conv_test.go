@@ -107,7 +107,7 @@ func TestMessageToBlockedTaskResumesSession(t *testing.T) {
 	specs := rec.all()
 	require.Len(t, specs, 2)
 	assert.Equal(t, first.SessionID, specs[1].ResumeSessionID)
-	assert.Equal(t, ownerPrompt([]string{"carry on"}), specs[1].Prompt)
+	assert.Equal(t, ownerPrompt([]string{"carry on"})+"\n\n"+resumeReportReminder, specs[1].Prompt)
 
 	msgs := env.messages(task.ID)
 	require.Len(t, msgs, 1)
@@ -131,7 +131,7 @@ func TestMessageDuringNonSteerableRunQueuesThenFollowsUp(t *testing.T) {
 	runs := fuWaitRuns(t, env, task.ID, 2)
 	specs := rec.all()
 	require.Len(t, specs, 2)
-	assert.Equal(t, ownerPrompt([]string{"also add tests"}), specs[1].Prompt)
+	assert.Equal(t, ownerPrompt([]string{"also add tests"})+"\n\n"+resumeReportReminder, specs[1].Prompt)
 	assert.Equal(t, runs[1].SessionID, specs[1].ResumeSessionID, "resumes the run that just ended")
 	env.waitStatus(task.ID, domain.TaskReview)
 	msgs := env.messages(task.ID)
@@ -160,7 +160,7 @@ func TestQueuedMessageNotDeliveredAfterDenial(t *testing.T) {
 	fuWaitRuns(t, env, task.ID, 2)
 	specs := rec.all()
 	require.Len(t, specs, 2)
-	assert.Equal(t, ownerPrompt([]string{"while you work"}), specs[1].Prompt)
+	assert.Equal(t, ownerPrompt([]string{"while you work"})+"\n\n"+resumeReportReminder, specs[1].Prompt)
 	assert.False(t, env.messages(task.ID)[0].Queued)
 }
 
@@ -200,7 +200,7 @@ func TestMessageAfterMergeCreatesConversationChild(t *testing.T) {
 	specs := rec.all()
 	require.Len(t, specs, 2)
 	assert.Equal(t, rootRun.SessionID, specs[1].ResumeSessionID)
-	assert.Equal(t, ownerPrompt([]string{"one more thing [fake:commit]"}), specs[1].Prompt)
+	assert.Equal(t, ownerPrompt([]string{"one more thing [fake:commit]"})+"\n\n"+resumeReportReminder, specs[1].Prompt)
 }
 
 func TestMessageToQuestionTaskDoneWithoutPRRequeues(t *testing.T) {
@@ -217,7 +217,7 @@ func TestMessageToQuestionTaskDoneWithoutPRRequeues(t *testing.T) {
 	specs := rec.all()
 	require.Len(t, specs, 2)
 	assert.Equal(t, first.SessionID, specs[1].ResumeSessionID)
-	assert.Equal(t, ownerPrompt([]string{"and why"}), specs[1].Prompt)
+	assert.Equal(t, ownerPrompt([]string{"and why"})+"\n\n"+resumeReportReminder, specs[1].Prompt)
 	assert.NotEmpty(t, runs)
 	env.waitStatus(task.ID, domain.TaskDone)
 }
@@ -292,4 +292,17 @@ func TestFollowUpKeepsMergeConflictSection(t *testing.T) {
 	assert.Contains(t, got, "- a.go\n- b.go\n")
 	task := domain.Task{Title: "t", Body: "b"}
 	assert.Contains(t, buildTaskPrompt(task, nil, nil, []string{"a.go"}), mergeConflictSection(nil, []string{"a.go"}))
+}
+
+func TestFollowUpPromptRemindsAboutReport(t *testing.T) {
+	env, rec, _, _ := fuEnv(t)
+	task := env.create(domain.Task{Body: "[fake:block]"})
+	env.waitStatus(task.ID, domain.TaskBlocked)
+	fuWaitRuns(t, env, task.ID, 1)
+	_, err := env.e.SendTaskMessage(env.ctx, task.ID, "carry on")
+	require.NoError(t, err)
+	fuWaitRuns(t, env, task.ID, 2)
+	prompt := rec.all()[1].Prompt
+	assert.True(t, strings.HasPrefix(prompt, "## Message from the owner"))
+	assert.True(t, strings.HasSuffix(prompt, "\n\n"+resumeReportReminder))
 }
