@@ -1,46 +1,48 @@
-// The single event stream. One EventSource to /api/v1/events feeds every subscriber, reconnects
-// with backoff (1s doubling to 5s) and resumes from the last stored event ID.
+// The single event stream. One WebSocket to /api/v1/ws feeds every subscriber, reconnects with
+// backoff (1s doubling to 5s) and resumes from the last stored event ID. Pages can also watch a
+// run's log or a conversation's chat: the server then sends those events only to this socket.
 import { useSyncExternalStore } from 'react';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { ApiError, getStats } from './api';
 import { keys } from './keys';
-import type { OnettEvent } from './types';
-
-// Mirrors the Ev* constants in internal/domain/domain.go. Browsers only deliver named SSE events
-// to listeners registered by name, so each known type is registered below; onmessage covers
-// unnamed events.
-export const EVENT_TYPES = [
-  'task.created',
-  'task.updated',
-  'run.updated',
-  'run.log',
-  'pr.opened',
-  'pr.merged',
-  'policy.decision',
-  'approval.requested',
-  'approval.decided',
-  'deploy.updated',
-  'signal.new',
-  'friction.reported',
-  'issue.filed',
-  'chat.message',
-  'chat.delta',
-  'loop.error',
-  'notification',
-  'system',
-] as const;
+import type { OnettEvent, WsClientMessage, WsServerMessage } from './types';
 
 export type LiveStatus = 'live' | 'reconnecting';
 
+export type WatchTarget = { run_id: string } | { conversation_id: string };
+
+export interface Watch {
+  /** Resolves when the server confirms the subscription. Never resolves if released first. */
+  ready: Promise<void>;
+  /** Lets go of the watch. Returned at once, so an unmount before `ready` can still clean up. */
+  release: () => void;
+}
+
 type Listener = (ev: OnettEvent) => void;
+
+interface WatchEntry {
+  key: string;
+  target: WatchTarget;
+  // How many Watch handles hold this entry. The subscription ends when the last one is released.
+  count: number;
+  // True once the server has confirmed this entry's own subscribe on the current socket.
+  acked: boolean;
+  waiters: Array<() => void>;
+}
 
 const MIN_BACKOFF_MS = 1_000;
 // A retry is one small request to a self-hosted daemon, so the cap stays low: a longer one only
 // leaves the UI disconnected for that long after the daemon comes back.
 const MAX_BACKOFF_MS = 5_000;
 
+function watchKey(target: WatchTarget): string {
+  return 'run_id' in target ? `run:${target.run_id}` : `conversation:${target.conversation_id}`;
+}
+
 export class EventStream {
-  private source: EventSource | null = null;
+  private socket: WebSocket | null = null;
+  // True between a socket's open and its close. Only then can frames be sent.
+  private open = false;
   private queryClient: QueryClient | null = null;
   // Set by the first successful open and kept across stop()/start(), so any later open is a reconnect.
   private everConnected = false;
@@ -51,6 +53,11 @@ export class EventStream {
   private status: LiveStatus = 'reconnecting';
   private readonly listeners = new Set<Listener>();
   private readonly statusListeners = new Set<() => void>();
+  private readonly watches = new Map<string, WatchEntry>();
+  // Subscribe frames sent on the current socket that the server has not answered yet, per key, in
+  // send order. The server answers in order, so the first unanswered one is the next reply. This
+  // stops a reply to an earlier watch on the same run from acknowledging a later one.
+  private readonly pendingSubscribes = new Map<string, WatchEntry[]>();
 
   /** Starts the stream. Only call it while signed in: the session cookie is what authenticates it. */
   start(queryClient: QueryClient): void {
@@ -70,8 +77,13 @@ export class EventStream {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    this.source?.close();
-    this.source = null;
+    const socket = this.socket;
+    // Clear the reference first: the close event fires later, and onclose ignores a socket that is
+    // no longer this.socket.
+    this.socket = null;
+    this.open = false;
+    this.pendingSubscribes.clear();
+    socket?.close();
     this.attempt = 0;
     this.setStatus('reconnecting');
   }
@@ -94,10 +106,75 @@ export class EventStream {
     };
   }
 
+  /**
+   * Asks the server to send one run's log or one conversation's chat tokens to this tab. Watches
+   * on the same target share one subscription.
+   */
+  watch(target: WatchTarget): Watch {
+    const key = watchKey(target);
+    let entry = this.watches.get(key);
+    if (!entry) {
+      entry = { key, target, count: 0, acked: false, waiters: [] };
+      this.watches.set(key, entry);
+      this.sendSubscribe(entry);
+    }
+    const held = entry;
+    held.count += 1;
+    let released = false;
+    const ready = new Promise<void>((resolve) => {
+      if (held.acked) resolve();
+      else held.waiters.push(resolve);
+    });
+    this.refreshStatus();
+    return {
+      ready,
+      release: () => {
+        if (released) return;
+        released = true;
+        held.count -= 1;
+        if (held.count > 0) return;
+        this.watches.delete(held.key);
+        if (this.open) this.send({ kind: 'unsubscribe', ...held.target });
+        this.refreshStatus();
+      },
+    };
+  }
+
   private setStatus(next: LiveStatus): void {
     if (this.status === next) return;
     this.status = next;
     for (const listener of this.statusListeners) listener();
+  }
+
+  // Live only when the socket is open and every watch has been confirmed on it. Components run
+  // their catch-up fetch when this turns live, so it must not turn live before a subscription is in
+  // effect.
+  private refreshStatus(): void {
+    let live = this.open;
+    if (live) {
+      for (const entry of this.watches.values()) {
+        if (!entry.acked) {
+          live = false;
+          break;
+        }
+      }
+    }
+    this.setStatus(live ? 'live' : 'reconnecting');
+  }
+
+  private send(msg: WsClientMessage): void {
+    this.socket?.send(JSON.stringify(msg));
+  }
+
+  private sendSubscribe(entry: WatchEntry): void {
+    if (!this.open) return;
+    // A subscribe on this socket is unconfirmed until its own subscribed arrives. An acked flag
+    // left over from an earlier socket must not count.
+    entry.acked = false;
+    const queue = this.pendingSubscribes.get(entry.key) ?? [];
+    queue.push(entry);
+    this.pendingSubscribes.set(entry.key, queue);
+    this.send({ kind: 'subscribe', ...entry.target });
   }
 
   // Skips the rest of a backoff wait when the network returns or the tab is shown again. Browsers
@@ -113,28 +190,35 @@ export class EventStream {
   private connect(): void {
     if (!this.running) return;
 
-    // The browser sends the session cookie with EventSource, so the URL carries no credential.
+    // The browser sends the session cookie with the WebSocket upgrade, so the URL carries no
+    // credential. The scheme follows the page, so an https page uses wss:.
+    const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const query = this.lastId > 0 ? `?after=${this.lastId}` : '';
-    const source = new EventSource(`/api/v1/events${query}`);
-    this.source = source;
+    const socket = new WebSocket(`${scheme}//${location.host}/api/v1/ws${query}`);
+    this.socket = socket;
 
-    source.onopen = () => {
+    socket.onopen = () => {
+      if (this.socket !== socket) return;
       const reconnected = this.everConnected;
       this.everConnected = true;
       this.attempt = 0;
-      this.setStatus('live');
+      this.open = true;
+      // The server knows no subscriptions on a new socket, so every live watch is sent again.
+      for (const entry of this.watches.values()) this.sendSubscribe(entry);
+      this.refreshStatus();
       // Events sent during the outage are not replayed (live-only ones never are), so refetch
       // every query once rather than trust the cache.
       if (reconnected) void this.queryClient?.invalidateQueries();
     };
-    source.onmessage = (message) => this.handle(message);
-    for (const type of EVENT_TYPES) {
-      source.addEventListener(type, (message) => this.handle(message));
-    }
-    source.onerror = () => {
-      source.close();
-      if (this.source === source) this.source = null;
-      this.setStatus('reconnecting');
+    socket.onmessage = (message) => this.handle(message);
+    // Browsers fire error and then close for a failed connect, so the retry is scheduled here only.
+    socket.onclose = () => {
+      if (this.socket !== socket) return;
+      this.socket = null;
+      this.open = false;
+      this.pendingSubscribes.clear();
+      for (const entry of this.watches.values()) entry.acked = false;
+      this.refreshStatus();
       if (this.running) void this.recover();
     };
   }
@@ -160,12 +244,30 @@ export class EventStream {
   }
 
   private handle(message: MessageEvent<string>): void {
-    let ev: OnettEvent;
+    let msg: WsServerMessage;
     try {
-      ev = JSON.parse(message.data) as OnettEvent;
+      msg = JSON.parse(message.data) as WsServerMessage;
     } catch {
       return;
     }
+    switch (msg.kind) {
+      case 'event':
+        this.deliver(msg.event);
+        return;
+      case 'subscribed':
+        this.acknowledge(msg.run_id, msg.conversation_id);
+        return;
+      case 'error':
+        // The server refused a frame. Nothing to deliver; the watch it named stays unconfirmed.
+        console.error('onett stream refused a frame', msg.message);
+        return;
+      default:
+        // unsubscribed: the client already dropped the watch when it released it.
+        return;
+    }
+  }
+
+  private deliver(ev: OnettEvent): void {
     if (typeof ev.id === 'number' && ev.id > this.lastId) this.lastId = ev.id;
     for (const listener of [...this.listeners]) {
       try {
@@ -175,12 +277,32 @@ export class EventStream {
       }
     }
   }
+
+  private acknowledge(runId: string | undefined, conversationId: string | undefined): void {
+    const key = runId ? `run:${runId}` : conversationId ? `conversation:${conversationId}` : null;
+    if (key === null) return;
+    const queue = this.pendingSubscribes.get(key);
+    const sent = queue?.shift();
+    if (queue && queue.length === 0) this.pendingSubscribes.delete(key);
+    // Only the entry that sent this subscribe is confirmed. A watch released meanwhile has no
+    // entry any more, so its reply is dropped.
+    if (!sent || this.watches.get(key) !== sent) return;
+    sent.acked = true;
+    for (const resolve of sent.waiters) resolve();
+    sent.waiters = [];
+    this.refreshStatus();
+  }
 }
 
 export const eventStream = new EventStream();
 
 export function subscribe(listener: Listener): () => void {
   return eventStream.subscribe(listener);
+}
+
+/** Watches one run or conversation on the shared stream. See EventStream.watch. */
+export function watch(target: WatchTarget): Watch {
+  return eventStream.watch(target);
 }
 
 export function useLiveStatus(): LiveStatus {

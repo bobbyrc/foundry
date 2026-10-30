@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueryClient } from '@tanstack/react-query';
 import { EventStream, invalidateFor, keysFor } from './events';
 import { keys } from './keys';
-import type { OnettEvent } from './types';
+import type { OnettEvent, WsClientMessage, WsServerMessage } from './types';
 
 const ev = (type: string, extra: Partial<OnettEvent> = {}): OnettEvent => ({
   id: 1,
@@ -68,56 +68,111 @@ describe('invalidateFor', () => {
   });
 });
 
-describe('EventStream reconnects', () => {
-  class FakeEventSource {
-    static instances: FakeEventSource[] = [];
+describe('EventStream over WebSocket', () => {
+  // Stands in for the browser WebSocket. Tests drive it: open(), receive() a server frame, drop()
+  // when the connection goes away. close() does nothing, as in a browser where onclose comes later.
+  class FakeWebSocket {
+    static instances: FakeWebSocket[] = [];
     onopen: (() => void) | null = null;
-    onmessage: (() => void) | null = null;
-    onerror: (() => void) | null = null;
+    onmessage: ((message: { data: string }) => void) | null = null;
+    onclose: (() => void) | null = null;
+    readyState = 0;
+    readonly sent: string[] = [];
     constructor(readonly url: string) {
-      FakeEventSource.instances.push(this);
+      FakeWebSocket.instances.push(this);
     }
-    addEventListener(): void {}
-    close(): void {}
+    send(data: string): void {
+      this.sent.push(data);
+    }
+    close(): void {
+      this.readyState = 3;
+    }
+    open(): void {
+      this.readyState = 1;
+      this.onopen?.();
+    }
+    receive(msg: WsServerMessage): void {
+      this.onmessage?.({ data: JSON.stringify(msg) });
+    }
+    drop(): void {
+      this.readyState = 3;
+      this.onclose?.();
+    }
+    sentMessages(): WsClientMessage[] {
+      return this.sent.map((data) => JSON.parse(data) as WsClientMessage);
+    }
   }
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-    FakeEventSource.instances = [];
-  });
 
   // Listeners the stream registers on window and document, so a test can fire them.
   const fired = new EventTarget();
+  const socket = (): FakeWebSocket => FakeWebSocket.instances[FakeWebSocket.instances.length - 1]!;
+  let started: EventStream | null = null;
 
-  function setup() {
+  afterEach(() => {
+    // Stop each stream so its window and document listeners do not pile up across tests.
+    started?.stop();
+    started = null;
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    FakeWebSocket.instances = [];
+  });
+
+  function setup(protocol = 'http:') {
     vi.useFakeTimers();
-    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('location', { protocol, host: 'onett.test' });
     vi.stubGlobal('window', fired);
     vi.stubGlobal('document', Object.assign(fired, { visibilityState: 'visible' }));
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const client = { invalidateQueries } as unknown as QueryClient;
     const stream = new EventStream();
+    started = stream;
     stream.start(client);
     return { stream, client, invalidateQueries };
   }
 
+  // Waits out a failed connect: getStats fails here (no server), then the backoff timer runs.
+  async function reconnect(delay = 1_000): Promise<void> {
+    await vi.advanceTimersByTimeAsync(delay);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  it('connects to /api/v1/ws over ws: on http', () => {
+    setup('http:');
+    expect(socket().url).toBe('ws://onett.test/api/v1/ws');
+  });
+
+  it('connects over wss: on https', () => {
+    setup('https:');
+    expect(socket().url).toBe('wss://onett.test/api/v1/ws');
+  });
+
+  it('resumes from the last event id on reconnect', async () => {
+    setup();
+    socket().open();
+    socket().receive({ kind: 'event', event: ev('task.updated', { id: 7 }) });
+    socket().drop();
+    await reconnect();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(socket().url).toBe('ws://onett.test/api/v1/ws?after=7');
+  });
+
   it('does not invalidate on the first connect', () => {
     const { invalidateQueries } = setup();
-    FakeEventSource.instances[0]!.onopen?.();
+    socket().open();
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
-  it('invalidates all queries once after a reconnect', async () => {
+  it('with no watches, is live on open and invalidates all queries once after a reconnect', async () => {
     const { stream, invalidateQueries } = setup();
-    FakeEventSource.instances[0]!.onopen?.();
-    FakeEventSource.instances[0]!.onerror?.();
-    // recover() awaits getStats (which fails here without a server) then backs off 1s.
-    await vi.advanceTimersByTimeAsync(1_000);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(FakeEventSource.instances).toHaveLength(2);
+    socket().open();
+    expect(stream.getStatus()).toBe('live');
+    socket().drop();
+    await reconnect();
+    expect(FakeWebSocket.instances).toHaveLength(2);
 
-    FakeEventSource.instances[1]!.onopen?.();
+    socket().open();
     expect(invalidateQueries).toHaveBeenCalledTimes(1);
     expect(invalidateQueries).toHaveBeenCalledWith();
     expect(stream.getStatus()).toBe('live');
@@ -127,31 +182,175 @@ describe('EventStream reconnects', () => {
     setup();
     // Each failure doubles the delay: 1s, 2s, 4s, then 5s from there on.
     for (const delay of [1_000, 2_000, 4_000, 5_000, 5_000]) {
-      const count = FakeEventSource.instances.length;
-      FakeEventSource.instances[count - 1]!.onerror?.();
+      const count = FakeWebSocket.instances.length;
+      socket().drop();
       await vi.advanceTimersByTimeAsync(delay);
-      expect(FakeEventSource.instances).toHaveLength(count + 1);
+      expect(FakeWebSocket.instances).toHaveLength(count + 1);
     }
   });
 
   it.each(['online', 'visibilitychange'])('reconnects at once on %s', async (type) => {
     setup();
-    FakeEventSource.instances[0]!.onerror?.();
+    socket().drop();
     // Let recover() settle into its 1s backoff wait.
     await vi.advanceTimersByTimeAsync(0);
-    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
 
     fired.dispatchEvent(new Event(type));
-    expect(FakeEventSource.instances).toHaveLength(2);
+    expect(FakeWebSocket.instances).toHaveLength(2);
   });
 
   it('stops listening for online and visibility once stopped', async () => {
     const { stream } = setup();
-    FakeEventSource.instances[0]!.onerror?.();
+    socket().drop();
     await vi.advanceTimersByTimeAsync(0);
     stream.stop();
 
     fired.dispatchEvent(new Event('online'));
-    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('stops the stream when getStats answers 401', async () => {
+    const { stream } = setup();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"error":"no session"}', { status: 401 })));
+    socket().drop();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(stream.getStatus()).toBe('reconnecting');
+  });
+
+  it('sends one subscribe for two watches of one run, and one unsubscribe after both release', () => {
+    const { stream } = setup();
+    socket().open();
+    const first = stream.watch({ run_id: 'r1' });
+    const second = stream.watch({ run_id: 'r1' });
+    expect(socket().sentMessages()).toEqual([{ kind: 'subscribe', run_id: 'r1' }]);
+
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    return Promise.all([first.ready, second.ready]).then(() => {
+      first.release();
+      expect(socket().sentMessages()).toHaveLength(1);
+      second.release();
+      expect(socket().sentMessages()).toEqual([
+        { kind: 'subscribe', run_id: 'r1' },
+        { kind: 'unsubscribe', run_id: 'r1' },
+      ]);
+    });
+  });
+
+  it('is reconnecting after open with a watch, and live once the watch is subscribed', async () => {
+    const { stream } = setup();
+    const w = stream.watch({ run_id: 'r1' });
+    socket().open();
+    expect(stream.getStatus()).toBe('reconnecting');
+
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    await w.ready;
+    expect(stream.getStatus()).toBe('live');
+  });
+
+  it('re-sends every live watch on reconnect and stays reconnecting until each is acknowledged', async () => {
+    const { stream } = setup();
+    socket().open();
+    const run = stream.watch({ run_id: 'r1' });
+    const chat = stream.watch({ conversation_id: 'c1' });
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    socket().receive({ kind: 'subscribed', conversation_id: 'c1' });
+    await Promise.all([run.ready, chat.ready]);
+    expect(stream.getStatus()).toBe('live');
+
+    socket().drop();
+    expect(stream.getStatus()).toBe('reconnecting');
+    await reconnect();
+    socket().open();
+    expect(socket().sentMessages()).toEqual([
+      { kind: 'subscribe', run_id: 'r1' },
+      { kind: 'subscribe', conversation_id: 'c1' },
+    ]);
+    expect(stream.getStatus()).toBe('reconnecting');
+
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    expect(stream.getStatus()).toBe('reconnecting');
+    socket().receive({ kind: 'subscribed', conversation_id: 'c1' });
+    expect(stream.getStatus()).toBe('live');
+  });
+
+  it('lets go of a watch before it is acknowledged, and is live without waiting for it', () => {
+    const { stream } = setup();
+    socket().open();
+    const w = stream.watch({ run_id: 'r1' });
+    expect(stream.getStatus()).toBe('reconnecting');
+
+    w.release();
+    expect(stream.getStatus()).toBe('live');
+    expect(socket().sentMessages()).toEqual([
+      { kind: 'subscribe', run_id: 'r1' },
+      { kind: 'unsubscribe', run_id: 'r1' },
+    ]);
+
+    // A late acknowledgement for the released watch changes nothing and throws nothing.
+    expect(() => socket().receive({ kind: 'subscribed', run_id: 'r1' })).not.toThrow();
+    expect(stream.getStatus()).toBe('live');
+  });
+
+  it('does not let a late subscribed for an earlier watch acknowledge a new one on the same run', () => {
+    const { stream } = setup();
+    socket().open();
+    const earlier = stream.watch({ run_id: 'r1' });
+    earlier.release();
+    const later = stream.watch({ run_id: 'r1' });
+    expect(stream.getStatus()).toBe('reconnecting');
+
+    // The server answers in order: the first subscribe (for the earlier watch), then the second.
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    expect(stream.getStatus()).toBe('reconnecting');
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    expect(stream.getStatus()).toBe('live');
+    return expect(later.ready).resolves.toBeUndefined();
+  });
+
+  it('does not count a watch as confirmed on a new socket after stop and start', async () => {
+    const { stream, client } = setup();
+    socket().open();
+    const w = stream.watch({ run_id: 'r1' });
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    await w.ready;
+    expect(stream.getStatus()).toBe('live');
+
+    stream.stop();
+    stream.start(client);
+    socket().open();
+    expect(socket().sentMessages()).toEqual([{ kind: 'subscribe', run_id: 'r1' }]);
+    expect(stream.getStatus()).toBe('reconnecting');
+  });
+
+  it('sends subscribe on the next open for a watch created while disconnected', () => {
+    const { stream } = setup();
+    const w = stream.watch({ run_id: 'r1' });
+    expect(socket().sent).toEqual([]);
+
+    socket().open();
+    expect(socket().sentMessages()).toEqual([{ kind: 'subscribe', run_id: 'r1' }]);
+    expect(stream.getStatus()).toBe('reconnecting');
+
+    socket().receive({ kind: 'subscribed', run_id: 'r1' });
+    return expect(w.ready).resolves.toBeUndefined();
+  });
+
+  it('passes event frames to subscribe() listeners and ignores error frames', () => {
+    const { stream } = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const listener = vi.fn();
+    stream.subscribe(listener);
+    socket().open();
+
+    const event = ev('run.log', { id: 0, run_id: 'r1', data: { seq: 1 } });
+    socket().receive({ kind: 'event', event });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(event);
+
+    socket().receive({ kind: 'error', message: 'bad subscribe' });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
   });
 });

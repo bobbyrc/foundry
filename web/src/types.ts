@@ -113,6 +113,19 @@ export interface OnettEvent<T = unknown> {
   data?: T;
 }
 
+/** A frame the server sends on /api/v1/ws. Each is one JSON text message. */
+export type WsServerMessage =
+  | { kind: 'event'; event: OnettEvent }
+  | { kind: 'subscribed' | 'unsubscribed'; run_id?: string; conversation_id?: string }
+  | { kind: 'error'; message: string };
+
+/** A frame the client sends on /api/v1/ws. It names exactly one ID. */
+export interface WsClientMessage {
+  kind: 'subscribe' | 'unsubscribe';
+  run_id?: string;
+  conversation_id?: string;
+}
+
 export interface ChatDeltaData {
   conversation_id: string;
   text: string;
