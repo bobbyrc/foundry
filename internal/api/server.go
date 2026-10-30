@@ -106,7 +106,7 @@ func (s *server) requestLog(next http.Handler) http.Handler {
 			status = http.StatusOK
 		}
 		level := slog.LevelInfo
-		if r.URL.Path == "/api/v1/events" || r.URL.Path == "/api/v1/health" {
+		if r.URL.Path == "/api/v1/events" || r.URL.Path == "/api/v1/ws" || r.URL.Path == "/api/v1/health" {
 			level = slog.LevelDebug
 		}
 		s.log.Log(r.Context(), level, "http request",

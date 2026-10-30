@@ -71,6 +71,7 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `GET /config/document` | | `{"path","version","document","schema"}` (owner) |
 | `PATCH /config/document` | `{"version","changes":[{"op":"set"\|"delete","path":[...],"value"}]}` | `ConfigSaved` (owner); keeps comments |
 | `GET /events` | `?after=<id>&token=` | SSE stream (below) |
+| `GET /ws` | `?after=<id>` | WebSocket stream for the web UI (below) |
 | `GET /events/history` | `?after=&project=&task_id=&limit=` (default 500) | `[]Event` |
 | `GET /stats` | | `Stats` |
 | `GET /control` | | `{"paused":bool}` |
@@ -189,3 +190,51 @@ JSON data has `"id":0`, so clients must not use it as a resume cursor.
 The server sends `: connected` as soon as a stream opens and `: ping` every 15s. Clients must
 ignore event types they do not know and reconnect with the last `id` they saw. Event types are
 the `Ev*` constants in `internal/domain/domain.go`.
+
+## WebSocket stream
+
+`GET /api/v1/ws?after=<id>` is a WebSocket, a connection that stays open in both directions. The
+web UI uses it; the CLI keeps using `GET /events`. It carries the same events, and `after` replays
+them the same way. The difference is that the client can subscribe, so it gets `run.log` and
+`chat.delta` only for the runs and conversations it shows.
+
+Each frame is one JSON text message with a `kind` field.
+
+Server to client:
+
+| kind | fields | meaning |
+|---|---|---|
+| `event` | `event`: one `Event`, as `GET /events` sends it in `data:` | one event |
+| `subscribed` | `run_id` or `conversation_id` | the subscription is active; events for it follow |
+| `unsubscribed` | `run_id` or `conversation_id` | the subscription is gone |
+| `error` | `message` | a client message was rejected; the socket stays open |
+
+Client to server:
+
+| kind | fields | meaning |
+|---|---|---|
+| `subscribe` | exactly one of `run_id`, `conversation_id` | receive `run.log` for that run, or `chat.delta` for that conversation |
+| `unsubscribe` | exactly one of `run_id`, `conversation_id` | stop |
+
+Rules:
+
+- `run.log` goes only to a socket subscribed to its run, and `chat.delta` only to one subscribed to
+  its conversation. Every other event goes to every socket, as on `GET /events`.
+- The server sends `subscribed` only once the subscription is in effect. A client that waits for
+  it and then loads the stored log misses no line. It may see a line twice, so it should drop
+  repeats by sequence number.
+- A client message that is not JSON, has an unknown `kind` or field, or has both or neither ID
+  gets an `error` and changes nothing. A binary frame gets an `error` too.
+- A socket can hold 64 subscriptions. A 65th gets an `error`.
+- A client message over 4096 bytes closes the socket, and so does a write to the client that takes
+  longer than 10 seconds. A client that falls too far behind is closed and should reconnect with
+  `after` set to the last `id` it saw.
+- The server sends a WebSocket ping every 15 seconds. The ping also tells the server when a client
+  has gone.
+- Sockets and `GET /events` streams share one limit of 32. When it is full, the upgrade gets 503
+  with `Retry-After: 5`.
+- The Origin header, when present, must name this server's host and port, or the upgrade gets 403.
+  A page on another site cannot open the socket with the user's cookie. Clients with no Origin
+  (the CLI, scripts) are accepted.
+- Credentials are the bearer header or the session cookie. `?token=` is not accepted on this route.
+- A signed-out or demoted user's socket closes within one ping interval.

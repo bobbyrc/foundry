@@ -4,6 +4,7 @@ go 1.27.1
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.10.4 // indirect
+	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/go-chi/chi/v5 v5.5.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

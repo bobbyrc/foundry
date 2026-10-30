@@ -32,7 +32,7 @@ tags:
     description: Accounts and roles. Owner sessions only.
   - name: health
   - name: events
-    description: Server-Sent Event stream and stored event history.
+    description: Server-Sent Event stream for the CLI, the WebSocket stream for the web UI, and stored event history.
   - name: stats
   - name: control
     description: The global pause switch.
@@ -127,6 +127,54 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /ws:
+    get:
+      operationId: streamWebSocket
+      tags: [events]
+      summary: Open the WebSocket event stream used by the web UI.
+      description: |
+        Upgrades the connection to a WebSocket. It carries the events that `/events` carries, with
+        the same `after` replay, plus subscriptions: `run.log` is sent only to a socket subscribed to
+        its run, and `chat.delta` only to one subscribed to its conversation.
+
+        Each frame is one JSON text message with a `kind` field.
+
+        - Server to client: `event` (with `event`, one `Event`), `subscribed` and `unsubscribed`
+          (with `run_id` or `conversation_id`), and `error` (with `message`; the socket stays open).
+        - Client to server: `subscribe` and `unsubscribe`, each with exactly one of `run_id` or
+          `conversation_id`. A message that is not valid, or has an unknown field, gets an `error`.
+
+        A client message over 4096 bytes closes the socket, and so does a write that takes more
+        than 10 seconds. A socket may hold 64 subscriptions. The server sends a WebSocket ping every
+        15 seconds. The socket shares the stream limit with `/events`.
+
+        The Origin header, when present, must name this server's host and port, or the upgrade is
+        refused with 403. Clients that send no Origin (the CLI, scripts) are accepted. The `?token=`
+        query parameter is not accepted here; use the bearer header or the session cookie.
+      security:
+        - bearer: []
+        - session: []
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Replay stored events with an ID greater than this. Absent means live only.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+      responses:
+        '101':
+          description: Switching Protocols. The connection is now a WebSocket.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The Origin header names another host or port.
+        '503':
+          description: The stream limit is reached. Retry after the `Retry-After` header's seconds.
 
   /events/history:
     get:
