@@ -253,6 +253,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.blockTask(bg, t.ID, "could not start harness: "+err.Error())
 		return
 	}
+	ar.setSession(sess)
 	e.appendRunLog(bg, run.ID, domain.LogPrompt, prompt)
 	if r, err := e.updateRun(bg, run.ID, func(r *domain.Run) error {
 		r.Status = domain.RunRunning

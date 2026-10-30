@@ -106,6 +106,7 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 		e.failChatRun(ctx, run, err)
 		return "I couldn't start: " + err.Error(), run.ID, ""
 	}
+	ar.setSession(sess)
 	e.appendRunLog(ctx, run.ID, domain.LogPrompt, text)
 
 	res, status, reason := e.supervise(runCtx, run, sess, ar, func(ev harness.Event) {

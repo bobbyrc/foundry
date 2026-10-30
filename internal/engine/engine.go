@@ -109,6 +109,10 @@ type activeRun struct {
 	// reason is set before cancel to say why (shown in the run's error and the task's
 	// blocked reason): "cancelled by user", "stalled: no output for 15m", ...
 	reason atomic.Value // string
+
+	// sess is the live harness session, set once Start succeeds; guarded by sessMu.
+	sessMu sync.Mutex
+	sess   harness.Session
 }
 
 // New validates deps and returns an engine. It does not start anything.
