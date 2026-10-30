@@ -20,7 +20,12 @@ export type Entry =
 const ARG_KEYS = ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description'];
 
 function countLines(s: unknown): number {
-  return typeof s === 'string' && s !== '' ? s.split('\n').length : 0;
+  if (typeof s !== 'string' || s === '') return 0;
+  return s.replace(/\n$/, '').split('\n').length;
+}
+
+function argText(v: unknown): string {
+  return typeof v === 'string' ? v : JSON.stringify(v);
 }
 
 /** Reads a tool_use line, which is `Name: <compact JSON input>` and may be truncated. */
@@ -38,7 +43,7 @@ export function parseTool(text: string): ToolSummary {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) return { name, arg: raw };
   const obj = input as Record<string, unknown>;
   const key = ARG_KEYS.find((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== '');
-  const tool: ToolSummary = { name, arg: key ? String(obj[key]) : '' };
+  const tool: ToolSummary = { name, arg: key ? argText(obj[key]) : '' };
   if (name === 'Edit') {
     tool.added = countLines(obj.new_string);
     tool.removed = countLines(obj.old_string);
@@ -77,7 +82,7 @@ function linesToEntries(lines: LogLine[], skipPrompt: boolean, fallbackPrompt?: 
       }
       case 'tool_result': {
         let call = l.tool_id ? byId.get(l.tool_id) : undefined;
-        if (!call || call.result !== undefined) call = open[open.length - 1];
+        if (!call || call.result !== undefined) call = open[0]; // oldest first: parallel calls finish in call order
         if (!call) {
           // A result with no call before it: show it on its own.
           call = { kind: 'tool', tool: { name: 'Result', arg: '' }, input: '', time: l.time };

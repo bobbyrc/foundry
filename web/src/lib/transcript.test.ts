@@ -19,6 +19,13 @@ describe('parseTool', () => {
     const t = parseTool('Edit: {"file_path":"a.go","old_string":"x\\ny","new_string":"a\\nb\\nc"}');
     expect(t).toEqual({ name: 'Edit', arg: 'a.go', added: 3, removed: 2 });
   });
+  it('does not count a trailing newline as a line', () => {
+    const t = parseTool('Edit: {"file_path":"a.go","old_string":"x\\n","new_string":"a\\nb\\n"}');
+    expect(t).toMatchObject({ added: 2, removed: 1 });
+  });
+  it('stringifies nested argument values', () => {
+    expect(parseTool('Grep: {"pattern":{"re":"x"}}')).toEqual({ name: 'Grep', arg: '{"re":"x"}' });
+  });
   it('falls back on truncated input', () => {
     expect(parseTool('Bash: {"command":"echo hel')).toEqual({ name: 'Bash', arg: '{"command":"echo hel' });
   });
@@ -44,6 +51,15 @@ describe('runEntries', () => {
       line('tool_result', 'two'),
     ]);
     expect(e.map((x) => (x.kind === 'tool' ? x.result : ''))).toEqual(['one', 'two']);
+  });
+  it('pairs parallel calls without ids in call order', () => {
+    const e = runEntries([
+      line('tool_use', 'Bash: {"command":"a"}'),
+      line('tool_use', 'Bash: {"command":"b"}'),
+      line('tool_result', 'r1'),
+      line('tool_result', 'r2'),
+    ]);
+    expect(e.map((x) => (x.kind === 'tool' ? x.result : ''))).toEqual(['r1', 'r2']);
   });
   it('uses the task body when no prompt line exists', () => {
     const e = runEntries([line('text', 'hi')], 'do the thing');

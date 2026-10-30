@@ -1,0 +1,267 @@
+/* Transcript: conversation and terminal layouts (see docs/proposals/agent-conversations-mockup.html). */
+
+.tr-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tr-seg button {
+  border: 0;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tr-seg button.on {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.tr-col {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tr-you {
+  align-self: flex-end;
+  max-width: 72ch;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 9px 13px;
+  overflow-wrap: anywhere;
+}
+
+.tr-you.queued {
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tr-body {
+  white-space: pre-wrap;
+}
+
+.tr-queued-note {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tr-lbl {
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.tr-ai {
+  min-width: 0;
+}
+
+.tr-ai .markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.tr-ai-tool {
+  margin-top: -8px;
+}
+
+.tr-tool {
+  border-left: 2px solid var(--rule);
+  padding: 3px 0 3px 10px;
+  font-size: 13.5px;
+}
+
+.tr-tool-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tr-chev {
+  color: var(--ok);
+  font-family: var(--mono);
+  width: 10px;
+  flex: none;
+}
+
+.tr-name {
+  font-weight: 600;
+  flex: none;
+}
+
+.tr-arg {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tr-diff {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tr-diff .a {
+  color: var(--ok);
+}
+
+.tr-diff .d {
+  color: var(--danger);
+}
+
+.tr-tool pre {
+  margin: 6px 0 2px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  padding: 8px 10px;
+  font: 12px/1.45 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.tr-tool pre.tr-result-error {
+  color: var(--danger);
+}
+
+.tr-note pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12.5px/1.5 var(--mono);
+}
+
+.tr-muted {
+  color: var(--muted);
+}
+
+.tr-stderr {
+  font-style: italic;
+}
+
+.tr-error,
+.tr-denial {
+  color: var(--danger);
+}
+
+.tr-denial {
+  border-left: 2px solid var(--danger);
+  padding-left: 10px;
+}
+
+.tr-denied {
+  display: inline-block;
+  font-family: var(--font-cond);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--danger);
+}
+
+.tr-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.tr-divider::before,
+.tr-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--rule);
+}
+
+/* terminal view */
+.tr-term {
+  font: 12.5px/1.55 var(--mono);
+  max-width: 100%;
+}
+
+.tr-term .tr-divider {
+  font-family: var(--mono);
+  margin: 4px 0;
+}
+
+.tr-ln {
+  display: grid;
+  grid-template-columns: 64px 18px minmax(0, 1fr);
+}
+
+.tr-ts {
+  color: var(--muted);
+}
+
+.tr-tx pre {
+  margin: 0;
+  display: inline;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+
+.tr-tx .tr-queued-note {
+  font-style: italic;
+}
+
+.tr-tx .link-button {
+  display: block;
+  font: inherit;
+}
+
+.k-user {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.k-tool .tr-mk {
+  color: var(--ok);
+}
+
+.k-res {
+  color: var(--muted);
+}
+
+.k-text {
+  color: var(--text);
+}
+
+.k-error,
+.k-denial {
+  color: var(--danger);
+}
+
+@media (max-width: 760px) {
+  .tr-ln {
+    grid-template-columns: 52px 18px minmax(0, 1fr);
+  }
+}
