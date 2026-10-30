@@ -38,9 +38,17 @@ type Controller interface {
 	// ErrInvalid for an unknown project; resuming a project paused in config is ErrConflict.
 	SetProjectPaused(ctx context.Context, project string, paused bool) error
 
-	// SendChat appends a user message and starts the orchestrator's reply, which arrives as
-	// chat.delta events and a final chat.message event. ErrConflict while a reply is running.
+	// SendChat appends a user message. Idle, it starts the orchestrator's reply, which arrives
+	// as chat.delta events and a final chat.message event. While a reply is running the message
+	// goes straight to an agent that takes input, or else is queued for the next turn.
 	SendChat(ctx context.Context, conversationID, text string) (domain.ChatMessage, error)
+	// FlushChat starts a turn from the queued messages now. It does nothing when the queue is
+	// empty or a turn is running.
+	FlushChat(ctx context.Context, conversationID string) error
+	// EditQueuedMessage and CancelQueuedMessage change a message not yet delivered. ErrConflict
+	// once it has been; ErrNotFound for an unknown message.
+	EditQueuedMessage(ctx context.Context, id, text string) (domain.ChatMessage, error)
+	CancelQueuedMessage(ctx context.Context, id string) error
 
 	// AgentPrompt is an agent's instructions: its inline PromptText, else the file or builtin
 	// its Prompt names. BuiltinPrompt is the embedded prompt of one built-in agent.

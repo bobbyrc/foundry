@@ -220,6 +220,13 @@ conversation). It runs with the `onett` CLI on its PATH and `ONETT_API`/`ONETT_T
 its environment, so it delegates by running `onett task create …`, inspects with `onett
 task list`, `onett run logs`, and so on. Its answer streams back to the UI over its WebSocket.
 
+The owner can keep typing while the orchestrator works. If its harness takes input mid-run, the
+message goes straight to the live agent. Otherwise it is queued (`Queued` on the message) and
+sent as the next turn's prompt, joined with any other queued messages, but only after a turn that
+succeeded. A turn that was cancelled, denied, stalled, timed out or failed leaves the queue
+alone, as does any other terminal outcome (invariant 4); only an explicit owner send or flush
+starts the next turn. A queued message can be edited or cancelled until a turn takes it.
+
 ## Code layout
 
 ```text

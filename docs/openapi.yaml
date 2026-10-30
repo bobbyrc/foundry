@@ -941,11 +941,15 @@ paths:
     post:
       operationId: sendMessage
       tags: [conversations]
-      summary: Send a message and start the orchestrator's reply.
+      summary: Send a message to the orchestrator.
       description: |
-        The reply is not in the response. It arrives on the event stream as `chat.delta` events
-        (live, text chunks) and a final `chat.message` event. Returns 409 while a reply to an
-        earlier message is still running.
+        When the orchestrator is idle this starts its reply, which is not in the response: it
+        arrives on the event stream as `chat.delta` events (live, text chunks) and a final
+        `chat.message` event. While a reply is running the message goes straight to the agent if
+        its harness takes input (the stored message then has `run_id`), and otherwise is queued
+        (`queued: true`) and sent with the next turn. A queued message is sent after a turn that
+        succeeded, or when the owner sends again or flushes; never after a turn that was
+        cancelled, denied, stalled, timed out or failed.
       parameters:
         - $ref: '#/components/parameters/ConversationId'
       requestBody:
@@ -963,6 +967,84 @@ paths:
                 $ref: '#/components/schemas/ChatMessage'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /conversations/{id}/flush:
+    post:
+      operationId: flushConversation
+      tags: [conversations]
+      summary: Send the queued messages now.
+      description: |
+        Starts an orchestrator turn from the queued messages. Does nothing when the queue is
+        empty or a turn is already running.
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '202':
+          description: Accepted. The reply arrives on the event stream.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /messages/{id}:
+    patch:
+      operationId: editMessage
+      tags: [conversations]
+      summary: Edit a queued message.
+      description: Only a message still waiting in the queue can be edited; once delivered it returns 409.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: The updated message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: cancelMessage
+      tags: [conversations]
+      summary: Cancel a queued message.
+      description: Only a message still waiting in the queue can be cancelled; once delivered it returns 409.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cancelled.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -2103,6 +2185,9 @@ components:
         busy:
           type: boolean
           description: True while the orchestrator is replying.
+        active_run_id:
+          type: string
+          description: The orchestrator run in flight, while busy.
         created_at:
           type: string
           format: date-time
@@ -2125,6 +2210,10 @@ components:
           type: string
         run_id:
           type: string
+          description: The run the message was delivered in (set once it has been).
+        queued:
+          type: boolean
+          description: True while the message waits for the agent's current run to finish.
         created_at:
           type: string
           format: date-time

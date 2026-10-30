@@ -100,7 +100,10 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `GET /conversations` | | `[]Conversation` |
 | `POST /conversations` | `{"title":"…","project":"…"}` | `Conversation` (201) |
 | `GET /conversations/{id}` | | `{"conversation":Conversation,"messages":[]ChatMessage}` |
-| `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202); 409 while busy |
+| `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202). Sent while the orchestrator works, it reaches the agent at once if the harness takes input (`run_id` set), else is queued (`queued: true`) |
+| `POST /conversations/{id}/flush` | | 202; sends the queued messages now (no-op when empty or busy) |
+| `PATCH /messages/{id}` | `{"text":"…"}` | `ChatMessage`; 409 once delivered |
+| `DELETE /messages/{id}` | | 204; 409 once delivered |
 
 Which role may call each route: every `GET` needs `viewer` or better (the token included). Every
 `POST` that acts on work (tasks, approvals, pause, loops, chat, `config/reload`, projects) needs

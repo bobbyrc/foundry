@@ -63,6 +63,9 @@ func (s *server) apiRoutes(r chi.Router) {
 	s.operate(r, http.MethodPost, "/conversations", s.createConversation)
 	s.read(r, "/conversations/{id}", s.getConversation)
 	s.operate(r, http.MethodPost, "/conversations/{id}/messages", s.sendMessage)
+	s.operate(r, http.MethodPost, "/conversations/{id}/flush", s.flushConversation)
+	s.operate(r, http.MethodPatch, "/messages/{id}", s.editMessage)
+	s.operate(r, http.MethodDelete, "/messages/{id}", s.cancelMessage)
 }
 
 // read, operate and administer mount a handler under the action it needs. Every route in

@@ -661,6 +661,38 @@ func (s *server) sendMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, m)
 }
 
+func (s *server) flushConversation(w http.ResponseWriter, r *http.Request) {
+	if err := s.opts.Controller.FlushChat(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *server) editMessage(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Text string `json:"text"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	m, err := s.opts.Controller.EditQueuedMessage(r.Context(), chi.URLParam(r, "id"), in.Text)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+func (s *server) cancelMessage(w http.ResponseWriter, r *http.Request) {
+	if err := s.opts.Controller.CancelQueuedMessage(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- events history ---
 
 func (s *server) eventHistory(w http.ResponseWriter, r *http.Request) {

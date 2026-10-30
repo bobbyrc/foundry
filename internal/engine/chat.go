@@ -13,51 +13,76 @@ import (
 	"github.com/bobbyrc/onett/internal/config"
 	"github.com/bobbyrc/onett/internal/domain"
 	"github.com/bobbyrc/onett/internal/harness"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
+// chatTurnResult is what one orchestrator turn produced.
+type chatTurnResult struct {
+	Reply     string
+	RunID     string // "" when no run started
+	SessionID string // the harness session to resume next turn, "" if unknown
+	Status    domain.RunStatus
+}
+
 // chatReply runs one orchestrator turn and stores its reply. The caller has already marked the
-// conversation busy; this always clears the flag, even when the turn could not start.
-func (e *Engine) chatReply(ctx context.Context, conv domain.Conversation, text string) {
-	reply, runID, sessionID := e.chatTurn(ctx, conv, text)
+// conversation busy; this always clears the flag, even when the turn could not start. text is
+// the turn's prompt and claimed the owner messages riding in it. When the turn succeeded and
+// messages were queued meanwhile, the next turn starts with them; after any other outcome they
+// stay queued until the owner sends or flushes (a denial or a stall is terminal).
+func (e *Engine) chatReply(ctx context.Context, conv domain.Conversation, text string, claimed []string) {
+	res := e.chatTurn(ctx, conv, text, claimed)
+	reply := res.Reply
 	if reply == "" {
 		reply = "_(no reply)_"
 	}
 	// The turn may have timed out; the reply and the busy flag are still written.
 	fin := context.WithoutCancel(ctx)
 	msg, err := e.d.Store.AppendChatMessage(fin, domain.ChatMessage{
-		ConversationID: conv.ID, Role: "assistant", Text: reply, RunID: runID,
+		ConversationID: conv.ID, Role: "assistant", Text: reply, RunID: res.RunID,
 	})
 	if err != nil {
 		e.d.Logger.Error("chat: save reply", "conversation", conv.ID, "err", err)
 	} else {
-		e.d.Bus.Emit(fin, domain.EvChatMessage, conv.Project, "", runID, "orchestrator replied", msg)
+		e.d.Bus.Emit(fin, domain.EvChatMessage, conv.Project, "", res.RunID, "orchestrator replied", msg)
 	}
 	if _, err := e.d.Store.UpdateConversation(fin, conv.ID, func(c *domain.Conversation) error {
-		if sessionID != "" {
-			c.SessionID = sessionID
+		if res.SessionID != "" {
+			c.SessionID = res.SessionID
 		}
 		c.Busy = false
+		c.ActiveRunID = ""
 		return nil
 	}); err != nil {
 		e.d.Logger.Error("chat: release conversation", "conversation", conv.ID, "err", err)
+		return
+	}
+	// A message queued while this turn ended may have been stored after the queue was last
+	// looked at; the busy flag is clear now, so this check cannot miss it.
+	if res.Status == domain.RunSucceeded && ctx.Err() == nil {
+		if err := e.FlushChat(fin, conv.ID); err != nil && !errors.Is(err, errStopped) {
+			e.d.Logger.Error("chat: send queued messages", "conversation", conv.ID, "err", err)
+		}
 	}
 }
 
-// chatTurn runs the orchestrator harness for one message. It returns the reply text, the run
-// ID ("" when no run started) and the harness session ID to resume next turn ("" if unknown).
-func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text string) (string, string, string) {
+// chatTurn runs the orchestrator harness for one prompt. claimed are the messages in it; once
+// the run exists they are stamped with its ID.
+func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text string, claimed []string) chatTurnResult {
+	fail := func(err error) chatTurnResult {
+		return chatTurnResult{Reply: "I can't run: " + err.Error()}
+	}
 	cfg := e.Config()
 	h, agent, err := e.harnessFor(conv.Project, "orchestrator")
 	if err != nil {
-		return "I can't run: " + err.Error(), "", ""
+		return fail(err)
 	}
 	dir := filepath.Join(cfg.Server.DataDir, "chat", conv.ID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "I can't run: " + err.Error(), "", ""
+		return fail(err)
 	}
 	base, err := e.AgentPrompt(agent)
 	if err != nil {
-		return "I can't run: " + err.Error(), "", ""
+		return fail(err)
 	}
 
 	// The run row is bookkeeping for a reply that is already underway, so it is written even when
@@ -67,9 +92,12 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 		Status: domain.RunStarting, Workdir: dir,
 	})
 	if err != nil {
-		return "I can't run: " + err.Error(), "", ""
+		return fail(err)
 	}
 	e.d.Bus.Emit(ctx, domain.EvRunUpdated, conv.Project, "", run.ID, "orchestrator chat run starting", run)
+	// From here the turn is live: later owner messages go to the agent or the queue, and the
+	// messages in this prompt name the run.
+	e.markTurnStarted(context.WithoutCancel(ctx), conv, run.ID, claimed)
 
 	runCtx, cancel := context.WithTimeout(ctx, cfg.Limits.RunTimeout.Duration)
 	defer cancel()
@@ -104,7 +132,7 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 	})
 	if err != nil {
 		e.failChatRun(ctx, run, err)
-		return "I couldn't start: " + err.Error(), run.ID, ""
+		return chatTurnResult{Reply: "I couldn't start: " + err.Error(), RunID: run.ID, Status: domain.RunFailed}
 	}
 	ar.setSession(sess)
 	e.appendRunLog(ctx, run.ID, domain.LogPrompt, text)
@@ -136,7 +164,32 @@ func (e *Engine) chatTurn(ctx context.Context, conv domain.Conversation, text st
 		}
 		reply += note
 	}
-	return reply, run.ID, res.SessionID
+	return chatTurnResult{Reply: reply, RunID: run.ID, SessionID: res.SessionID, Status: status}
+}
+
+// markTurnStarted records the turn's run on the conversation and on the messages it carries.
+func (e *Engine) markTurnStarted(ctx context.Context, conv domain.Conversation, runID string, claimed []string) {
+	if _, err := e.d.Store.UpdateConversation(ctx, conv.ID, func(c *domain.Conversation) error {
+		c.ActiveRunID = runID
+		return nil
+	}); err != nil {
+		e.d.Logger.Error("chat: record active run", "conversation", conv.ID, "err", err)
+	}
+	for _, id := range claimed {
+		m, err := e.d.Store.UpdateChatMessage(ctx, id, func(m *domain.ChatMessage) error {
+			m.Queued = false
+			m.RunID = runID
+			return nil
+		})
+		if err != nil {
+			// A message that is gone has nothing to stamp.
+			if !errors.Is(err, store.ErrNotFound) {
+				e.d.Logger.Error("chat: stamp message", "message", id, "err", err)
+			}
+			continue
+		}
+		e.d.Bus.Emit(ctx, domain.EvChatMessage, conv.Project, "", runID, "message reached the orchestrator", m)
+	}
 }
 
 // failChatRun marks a chat run that never started as failed, so it does not stay "starting".

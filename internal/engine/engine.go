@@ -264,6 +264,7 @@ func (e *Engine) recover(ctx context.Context) error {
 		if c.Busy {
 			if _, err := e.d.Store.UpdateConversation(ctx, c.ID, func(c *domain.Conversation) error {
 				c.Busy = false
+				c.ActiveRunID = ""
 				return nil
 			}); err != nil {
 				return err
