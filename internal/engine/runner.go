@@ -257,7 +257,8 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		texts, _ := messageTexts(claimed)
 		if prev, ok := e.resumeSession(bg, root); ok {
 			prompt = ownerPrompt(texts) + "\n\n" + mergeConflictSection(p, conflicts)
-			prompt, resumeID = strings.TrimRight(prompt, "\n"), prev.SessionID
+			prompt = strings.TrimRight(prompt, "\n") + "\n\n" + resumeReportReminder
+			resumeID = prev.SessionID
 		} else {
 			prompt += "\n\n" + ownerPrompt(texts)
 		}
