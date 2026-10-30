@@ -11,7 +11,6 @@ import (
 
 	"github.com/bobbyrc/onett/internal/auth"
 	"github.com/bobbyrc/onett/internal/domain"
-	"github.com/bobbyrc/onett/internal/store"
 )
 
 // pingInterval is how often a ": ping" comment keeps idle connections open. It is a variable so
@@ -40,14 +39,13 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 		writeErrorMsg(w, http.StatusInternalServerError, "streaming unsupported")
 		return
 	}
-	select {
-	case s.streams <- struct{}{}:
-		defer func() { <-s.streams }()
-	default:
+	release, ok := s.tryAcquireStream()
+	if !ok {
 		w.Header().Set("Retry-After", "5")
 		writeErrorMsg(w, http.StatusServiceUnavailable, "too many event streams")
 		return
 	}
+	defer release()
 	ctx := r.Context()
 	p, ok := principalFrom(ctx)
 	if !ok {
@@ -76,63 +74,31 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	// last is the highest event ID sent so far on this stream.
-	var last int64
-	if r.URL.Query().Get("after") != "" {
-		cursor := after
-		for {
-			page, err := s.opts.Store.ListEvents(ctx, store.EventFilter{AfterID: cursor, FromStart: true, Limit: replayPage})
-			if err != nil {
-				s.log.Error("api: replay events", "err", err)
-				return
-			}
-			for _, e := range page {
-				if err := writeEvent(w, s.log, e); err != nil {
-					return
-				}
-				last = e.ID
-			}
-			flusher.Flush()
-			if len(page) < replayPage {
-				break
-			}
-			cursor = page[len(page)-1].ID
-		}
-	}
+	sink := sseSink{w: w, f: flusher, log: s.log}
+	s.streamEvents(ctx, p, ch, after, r.URL.Query().Get("after") != "", sink,
+		func(domain.Event) bool { return true })
+}
 
-	ticker := time.NewTicker(pingInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case e, open := <-ch:
-			if !open {
-				// The bus dropped this subscriber for falling behind; the client reconnects.
-				return
-			}
-			if e.ID != 0 && e.ID <= last {
-				continue
-			}
-			if err := writeEvent(w, s.log, e); err != nil {
-				return
-			}
-			flusher.Flush()
-			if e.ID != 0 {
-				last = e.ID
-			}
-		case <-ticker.C:
-			// A stream outlives the request that opened it, so the credential is checked again
-			// on every ping. A signed-out or demoted user loses the stream within one interval.
-			if !s.stillAllowed(ctx, p) {
-				return
-			}
-			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
-				return
-			}
-			flusher.Flush()
-		}
+// sseSink is the eventSink for GET /events: it writes SSE messages to the response and flushes
+// them so the client sees each one at once.
+type sseSink struct {
+	w   io.Writer
+	f   http.Flusher
+	log *slog.Logger
+}
+
+func (k sseSink) send(e domain.Event) error { return writeEvent(k.w, k.log, e) }
+
+func (k sseSink) flush() error {
+	k.f.Flush()
+	return nil
+}
+
+func (k sseSink) ping() error {
+	if _, err := io.WriteString(k.w, ": ping\n\n"); err != nil {
+		return err
 	}
+	return k.flush()
 }
 
 // stillAllowed reports whether the principal behind an open stream may still read. The API token
