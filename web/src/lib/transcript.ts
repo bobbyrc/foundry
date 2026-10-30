@@ -9,13 +9,25 @@ export interface ToolSummary {
   removed?: number;
 }
 
-export type Entry =
-  | { kind: 'owner'; text: string; time: string; queued?: boolean; messageId?: string }
-  | { kind: 'prompt'; text: string; time: string; label: string }
-  | { kind: 'text'; text: string; time: string }
-  | { kind: 'tool'; tool: ToolSummary; input: string; result?: string; resultError?: boolean; time: string }
-  | { kind: 'denial' | 'error' | 'system' | 'stderr'; text: string; time: string }
-  | { kind: 'divider'; text: string; time: string };
+/**
+ * Every entry has a stable `id` (React key) and, when it came from a run's log, the `runId`.
+ * `afterRun` in the Transcript uses `runId` to put a chip after the last entry of a run.
+ */
+interface EntryBase {
+  id: string;
+  runId?: string;
+  time: string;
+}
+
+export type Entry = EntryBase &
+  (
+    | { kind: 'owner'; text: string; queued?: boolean; messageId?: string }
+    | { kind: 'prompt'; text: string; label: string }
+    | { kind: 'text'; text: string }
+    | { kind: 'tool'; tool: ToolSummary; input: string; result?: string; resultError?: boolean }
+    | { kind: 'denial' | 'error' | 'system' | 'stderr'; text: string }
+    | { kind: 'divider'; text: string }
+  );
 
 const ARG_KEYS = ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description'];
 
@@ -59,22 +71,30 @@ function linesToEntries(lines: LogLine[], skipPrompt: boolean, fallbackPrompt?: 
   const open: Extract<Entry, { kind: 'tool' }>[] = []; // calls still waiting for a result
 
   if (!sorted.some((l) => l.kind === 'prompt') && !skipPrompt && fallbackPrompt) {
-    out.push({ kind: 'prompt', text: fallbackPrompt, time: sorted[0].time, label: 'Task (prompt not recorded)' });
+    out.push({
+      id: `${sorted[0].run_id}:prompt`,
+      runId: sorted[0].run_id,
+      kind: 'prompt',
+      text: fallbackPrompt,
+      time: sorted[0].time,
+      label: 'Task (prompt not recorded)',
+    });
   }
 
   for (const l of sorted) {
+    const at = { id: `${l.run_id}:${l.seq}`, runId: l.run_id, time: l.time };
     switch (l.kind) {
       case 'prompt':
-        if (!skipPrompt) out.push({ kind: 'prompt', text: l.text, time: l.time, label: 'Prompt' });
+        if (!skipPrompt) out.push({ ...at, kind: 'prompt', text: l.text, label: 'Prompt' });
         break;
       case 'owner':
-        out.push({ kind: 'owner', text: l.text, time: l.time });
+        out.push({ ...at, kind: 'owner', text: l.text });
         break;
       case 'text':
-        out.push({ kind: 'text', text: l.text, time: l.time });
+        out.push({ ...at, kind: 'text', text: l.text });
         break;
       case 'tool_use': {
-        const call: Extract<Entry, { kind: 'tool' }> = { kind: 'tool', tool: parseTool(l.text), input: l.text, time: l.time };
+        const call: Extract<Entry, { kind: 'tool' }> = { ...at, kind: 'tool', tool: parseTool(l.text), input: l.text };
         out.push(call);
         open.push(call);
         if (l.tool_id) byId.set(l.tool_id, call);
@@ -85,7 +105,7 @@ function linesToEntries(lines: LogLine[], skipPrompt: boolean, fallbackPrompt?: 
         if (!call || call.result !== undefined) call = open[0]; // oldest first: parallel calls finish in call order
         if (!call) {
           // A result with no call before it: show it on its own.
-          call = { kind: 'tool', tool: { name: 'Result', arg: '' }, input: '', time: l.time };
+          call = { ...at, kind: 'tool', tool: { name: 'Result', arg: '' }, input: '' };
           out.push(call);
         } else {
           open.splice(open.indexOf(call), 1);
@@ -95,7 +115,7 @@ function linesToEntries(lines: LogLine[], skipPrompt: boolean, fallbackPrompt?: 
         break;
       }
       default:
-        out.push({ kind: l.kind, text: l.text, time: l.time });
+        out.push({ ...at, kind: l.kind, text: l.text });
     }
   }
   return out;
@@ -109,24 +129,48 @@ export function runEntries(lines: LogLine[], fallbackPrompt?: string): Entry[] {
 function queuedEntries(messages: ChatMessage[]): Entry[] {
   return messages
     .filter((m) => m.queued && m.role === 'user')
-    .map((m) => ({ kind: 'owner', text: m.text, time: m.created_at, queued: true, messageId: m.id }));
+    .map((m) => ({ id: `m:${m.id}`, kind: 'owner', text: m.text, time: m.created_at, queued: true, messageId: m.id }));
+}
+
+/**
+ * Cuts a tool result to `max` lines for a preview. A trailing newline ends the last line rather
+ * than starting another, so "a\nb\n" is two lines. `all` shows every line but still reports
+ * whether the preview would have clipped.
+ */
+export function clipLines(result: string, max: number, all = false): { lines: string[]; clipped: boolean } {
+  const lines = result.replace(/\n$/, '').split('\n');
+  const clipped = lines.length > max;
+  return { lines: clipped && !all ? lines.slice(0, max) : lines, clipped };
 }
 
 /** An orchestrator conversation: each message, then the log of the run it started. */
 export function orchestratorEntries(messages: ChatMessage[], logsByRun: Record<string, LogLine[]>): Entry[] {
   const out: Entry[] = [];
+  // Runs whose log is already shown. A message delivered while the run was live names that same
+  // run, so its log must not be shown again under the message.
+  const shown = new Set<string>();
   for (const m of messages) {
     if (m.queued) continue;
     const logs = m.run_id ? logsByRun[m.run_id] : undefined;
     const hasLogs = !!logs && logs.length > 0;
     if (m.role === 'user') {
-      out.push({ kind: 'owner', text: m.text, time: m.created_at, messageId: m.id });
-      if (hasLogs) out.push(...linesToEntries(logs, true));
+      if (m.run_id && shown.has(m.run_id)) {
+        // The log carries a mid-run message as an owner line. One that rode the same turn's prompt
+        // has no such line, so it still needs its own entry.
+        if (logs?.some((l) => l.kind === 'owner' && l.text === m.text)) continue;
+        out.push({ id: `m:${m.id}`, kind: 'owner', text: m.text, time: m.created_at, messageId: m.id });
+        continue;
+      }
+      out.push({ id: `m:${m.id}`, kind: 'owner', text: m.text, time: m.created_at, messageId: m.id });
+      if (m.run_id && hasLogs) {
+        shown.add(m.run_id);
+        out.push(...linesToEntries(logs, true));
+      }
     } else if (m.role === 'assistant') {
       // The reply is already the last text line of the run's log when the log is loaded.
-      if (!hasLogs) out.push({ kind: 'text', text: m.text, time: m.created_at });
+      if (!hasLogs) out.push({ id: `m:${m.id}`, runId: m.run_id, kind: 'text', text: m.text, time: m.created_at });
     } else {
-      out.push({ kind: 'system', text: m.text, time: m.created_at });
+      out.push({ id: `m:${m.id}`, kind: 'system', text: m.text, time: m.created_at });
     }
   }
   out.push(...queuedEntries(messages));
@@ -139,7 +183,7 @@ export function taskEntries(conv: TaskConversation, logsByRun: Record<string, Lo
   conv.runs.forEach((run, i) => {
     const prev = conv.runs[i - 1];
     if (prev && run.session_id && run.session_id !== prev.session_id) {
-      out.push({ kind: 'divider', text: 'New session · retried by owner', time: run.started_at });
+      out.push({ id: `div:${run.id}`, kind: 'divider', text: 'New session · retried by owner', time: run.started_at });
     }
     out.push(...linesToEntries(logsByRun[run.id] ?? [], false, conv.task.body));
   });

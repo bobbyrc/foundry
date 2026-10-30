@@ -60,6 +60,7 @@ export function App() {
         <Route path="/" element={<Overview />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/chat" element={<Chat />} />
+        <Route path="/chat/task/:taskId" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />

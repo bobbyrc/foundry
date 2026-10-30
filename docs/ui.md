@@ -148,12 +148,15 @@ and at once when the tab is shown again or the network returns. The `onett` CLI 
 
 Events invalidate react-query keys: `task.*` → tasks, task detail, stats; `run.updated` → runs,
 run detail; `approval.*` → approvals, stats; `deploy.updated` → deployments; `signal.new` →
-signals; `friction.reported`/`issue.filed` → friction; `chat.message` → that conversation.
+signals; `friction.reported`/`issue.filed` → friction; `chat.message` → that conversation, every
+task agent's conversation and the agents list; `conversation.updated` (a close or reopen) → that
+task agent's conversation and the agents list. `run.updated` also refreshes the conversations,
+the agents list and that run's cached log.
 
 `run.log` goes only to tabs subscribed to that run, and `chat.delta` only to tabs subscribed to
 that conversation; every other event goes to every tab. A page subscribes with `watch()` in
 `web/src/events.ts`. The log viewer watches its run and, once the server confirms, fetches the
-lines it missed. The chat thread watches its conversation. After a reconnect the live indicator
+lines it missed. The chat thread watches the run that is live in it the same way. After a reconnect the live indicator
 shows "live" only once the server has confirmed every subscription the page holds. A watch added
 on a connection that is already open does not change the indicator. Lists also refetch every 30s
 as a fallback.
@@ -201,23 +204,46 @@ is the loops: "Loops: 5 on, 2 off", where "Loops" links to `/loops`. If any loop
 failed, its name follows in red ("pr_shepherd failing"), and the error shows as a tooltip. The
 sidebar gets **Projects** between Overview and Chat.
 
-**Chat** (`/chat`, `/chat/:id`) — with no conversation open, a centred block 640px wide
-sits 8vh from the top: the heading "Talk to the orchestrator", a muted line on what it can and
-cannot do, the composer, and three example prompts as chips ("What's running right now?",
-"Fix the flaky test in …", "Triage open issues in …"). Sending creates a conversation and opens
-it with the message already sent. Once conversations exist, a 260px list sits on the left under
-a "Conversations" heading: rows with a rule between them, the title (one line, ellipsed) and
-RelTime under it, the open one on a panel in bold. The right side keeps the same start block.
-An open conversation: user messages are right-aligned panel sheets with a 1px border (72ch
-max); assistant messages are unboxed, 72ch max, under a small "orchestrator" label, rendered
-Markdown. While the orchestrator replies, `chat.delta` text streams into a provisional message
-with a blinking caret, and a line with a blinking green square, "Orchestrator is working · view
-run", links to its run. The composer is a sheet pinned to the bottom of the thread: an
-auto-growing field with no border of its own, and "Send" at its bottom right. The hint "Enter to
-send · Shift+Enter for a new line" sits at its bottom left. Enter sends. The field is disabled
-while the orchestrator replies. Under 760px the layout is one column: with a conversation open,
-the list becomes a row of chips above the thread; with none open, the full list shows first.
-Viewers read the thread and see a muted line in place of the composer.
+**Chat** (`/chat`, `/chat/:id`, `/chat/task/:taskId`) — talk to the orchestrator or to any task
+agent, and read what an agent did as it works. With no conversation open, a centred block 640px
+wide sits 8vh from the top: the heading "Talk to the orchestrator", a muted line on what it can and
+cannot do, the composer, and three example prompts as chips. Sending creates a conversation and
+opens it with the message already sent.
+
+The 260px sidebar has a "+ New conversation" button (always the orchestrator; operators only), an
+**Orchestrator** section of conversations (title, RelTime), then a quieter **Agents** section from
+`GET /agent-conversations`. Each task with an agent shows its title, and under it a row with a lamp,
+the role and a text label: a blinking green lamp and "working" while a run is live; a dim lamp and
+"closed" for a closed conversation; a red lamp and "blocked" for a blocked task; a dim lamp and
+the task's status otherwise. Under 760px the sidebar is a row of chips above the thread.
+
+The header names who you are talking to ("Orchestrator", or the role such as "Implementer"), with
+harness · model (from the latest run) and the conversation title, or for a task agent its task as
+a link, its branch and status. On the right sit Close (task agents, operators, while open) and the
+**Conversation / Terminal** switch; the choice is remembered in the browser. The transcript is the
+same one the stored run logs give: owner messages as right-aligned sheets, agent prose as Markdown
+under the agent's name, each tool call as one row (name, main argument, `+n −m` for edits) that
+opens to its input and result, and a red DENIED row for a refused call. Terminal view shows one
+line per entry with a time gutter, `›` for owner and prompt, `●` for prose and tool calls and `⎿` for
+results clipped to three lines with "show more". A task agent's view shows each run in order, with a
+divider where a retry started a new session; a run with no recorded prompt starts with the task body
+labelled "Task (prompt not recorded)". Lines of the live run arrive as `run.log` events, so tool
+rows appear as they happen. When an orchestrator turn created tasks, a chip under that turn shows
+each task's lamp, title and status, with "open agent" (`/chat/task/:id`) and "task" links.
+
+While a run is live a line shows "Working · 3m 41s · output 2s ago" with a link to the run and a
+**Stop** button (Esc in the field does the same); both cancel the live run. The composer stays
+enabled: a message sent to the orchestrator mid-run reaches it at once, and a message for a task
+agent is queued. Queued messages show at the end in a dashed box, "Queued · sends when the agent
+finishes this run", with edit and cancel (no longer possible once delivered). When messages are
+queued and no run is live, for example after a failed run, **Send now** starts the follow-up.
+
+A task agent's view adds a yellow note above the box, "You're talking directly to this task's
+agent. For anything beyond this task, ask the orchestrator." (the last words link to `/chat`).
+Close asks for a reason. A closed conversation replaces the composer with "Closed by <who>:
+<reason>", shown as plain text, and a **Reopen** button for operators and owners. When the server
+refuses a message (a 409) the composer shows its reason. Viewers read the thread and see a muted
+line, "Viewers can read conversations but not send messages.", in place of the composer.
 
 **Tasks** (`/tasks`) — filter bar: project select, status chips (multi-select; default
 "active" = queued, running, review, awaiting_approval, merged, deploying, blocked), kind
@@ -228,7 +254,7 @@ columns: status, title (with kind tag and source muted under it), project, role,
 
 **Task detail** (`/tasks/:id`) — a header row with the title, StatusPill and the Cancel and Retry
 actions (role-gated as before). Under it, one muted line: kind · project · role · from source, then
-the IdChip. Below that is the task's line: seven lamps (Queued, Running, Review, Approval, Merged,
+the IdChip and, once the task has run, an "Open conversation" link to `/chat/task/:id`. Below that is the task's line: seven lamps (Queued, Running, Review, Approval, Merged,
 Deploying, Done) joined by a rule. Passed stations show the done lamp; the current one lights in
 its tone (running blinks); a stop is red and its label reads Blocked, Failed or Cancelled; skipped
 stations are hollow; stations not yet reached are dim. From 960px the page has two columns: the
@@ -243,7 +269,7 @@ compact row each: decision, title, time and note).
 
 **Run detail** (`/runs/:id`) — header: "role · project" with the StatusPill, and Cancel run on
 the right while the run is active (operators only). Under it, muted: harness · model, then the
-task title as a link. Then the time strip, the run's bar on its own axis: the same bar as the
+task title as a link and "Open conversation" (`/chat/task/:taskId`). Then the time strip, the run's bar on its own axis: the same bar as the
 Overview's live runs, drawn to the run's elapsed time, green up to the last output and yellow
 after 5 minutes without output. The axis ticks sit above it, and at the right of the ticks the
 elapsed time with "output 4s ago" or "quiet for 7m". A finished run is one solid bar and no

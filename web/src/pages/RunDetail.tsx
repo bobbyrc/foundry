@@ -51,6 +51,8 @@ export function RunDetail() {
               <>
                 {' · '}
                 <Link to={`/tasks/${r.task_id}`}>{task.data?.task.title ?? shortId(r.task_id)}</Link>
+                {' · '}
+                <Link to={`/chat/task/${r.task_id}`}>Open conversation</Link>
               </>
             ) : null}
           </p>

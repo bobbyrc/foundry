@@ -331,8 +331,9 @@ export function keysFor(ev: OnettEvent): QueryKey[] {
     if (taskId) add(keys.task(taskId));
   } else if (ev.type === 'run.updated') {
     add(keys.runsAll, keys.stats);
-    if (runId) add(keys.run(runId));
+    if (runId) add(keys.run(runId), keys.runLogs(runId));
     if (taskId) add(keys.task(taskId));
+    add(keys.conversationsAll, keys.taskConversationsAll, keys.agentConversations);
   } else if (ev.type.startsWith('approval.')) {
     add(keys.approvalsAll, keys.stats);
     if (taskId) add(keys.task(taskId));
@@ -346,6 +347,12 @@ export function keysFor(ev: OnettEvent): QueryKey[] {
     add(keys.conversationsAll);
     const data = ev.data as { conversation_id?: unknown } | undefined;
     if (typeof data?.conversation_id === 'string') add(keys.conversation(data.conversation_id));
+    // A task agent's messages live in the same table, and the event does not say which task owns them.
+    add(keys.taskConversationsAll, keys.agentConversations);
+  } else if (ev.type === 'conversation.updated') {
+    const data = ev.data as { task_id?: unknown } | undefined;
+    if (typeof data?.task_id === 'string') add(keys.taskConversation(data.task_id));
+    add(keys.agentConversations);
   } else if (ev.type === 'pr.opened' || ev.type === 'pr.merged') {
     add(keys.tasksAll);
     if (taskId) add(keys.task(taskId));

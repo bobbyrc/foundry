@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { cx, formatClock } from '../lib/format';
 import { parseTime } from '../lib/time';
-import type { Entry } from '../lib/transcript';
+import { clipLines, type Entry } from '../lib/transcript';
 import type { TranscriptView } from '../lib/transcriptView';
 import { Markdown } from './Markdown';
 import './Transcript.css';
@@ -39,29 +39,70 @@ export function ViewToggle({ view, onChange }: { view: TranscriptView; onChange(
   );
 }
 
+export interface TranscriptProps {
+  entries: Entry[];
+  view: TranscriptView;
+  /** Who the agent prose belongs to: "Orchestrator", or a task agent's role such as "Implementer". */
+  agentLabel: string;
+  /** Rendered after the last entry of each run, for example a chip for tasks that run created. */
+  afterRun?: (runId: string) => ReactNode;
+  /** Rendered in the note of a queued owner message, for Edit and Cancel. */
+  queuedActions?: (messageId: string) => ReactNode;
+}
+
 /** A run of agent entries, or an owner's turn, laid out as a conversation or as terminal lines. */
-export function Transcript({ entries, view }: { entries: Entry[]; view: TranscriptView }) {
-  return view === 'terminal' ? <TerminalView entries={entries} /> : <ConversationView entries={entries} />;
+export function Transcript(props: TranscriptProps) {
+  return props.view === 'terminal' ? <TerminalView {...props} /> : <ConversationView {...props} />;
 }
 
 const isAgentKind = (e: Entry) => e.kind === 'text' || e.kind === 'tool';
 
-function ConversationView({ entries }: { entries: Entry[] }) {
+/** The slot after an entry that ends a run's stretch of entries. */
+function runEnd(entries: Entry[], i: number, afterRun: TranscriptProps['afterRun']): ReactNode {
+  const runId = entries[i].runId;
+  if (!afterRun || !runId || entries[i + 1]?.runId === runId) return null;
+  return afterRun(runId);
+}
+
+function ConversationView({ entries, agentLabel, afterRun, queuedActions }: TranscriptProps) {
   return (
     <div className="tr-col">
       {entries.map((e, i) => (
-        <ConversationEntry key={i} entry={e} labelled={isAgentKind(e) && !(i > 0 && isAgentKind(entries[i - 1]))} />
+        <Fragment key={e.id}>
+          <ConversationEntry
+            entry={e}
+            agentLabel={agentLabel}
+            queuedActions={queuedActions}
+            labelled={isAgentKind(e) && !(i > 0 && isAgentKind(entries[i - 1]))}
+          />
+          {runEnd(entries, i, afterRun)}
+        </Fragment>
       ))}
     </div>
   );
 }
 
-function ConversationEntry({ entry: e, labelled }: { entry: Entry; labelled: boolean }) {
+function ConversationEntry({
+  entry: e,
+  labelled,
+  agentLabel,
+  queuedActions,
+}: {
+  entry: Entry;
+  labelled: boolean;
+  agentLabel: string;
+  queuedActions: TranscriptProps['queuedActions'];
+}) {
   switch (e.kind) {
     case 'owner':
       return (
         <div className={cx('tr-you', e.queued && 'queued')}>
-          {e.queued ? <span className="tr-queued-note">{QUEUED_NOTE}</span> : null}
+          {e.queued ? (
+            <span className="tr-queued-note">
+              {QUEUED_NOTE}
+              {e.messageId && queuedActions ? queuedActions(e.messageId) : null}
+            </span>
+          ) : null}
           <span className="tr-body">{e.text}</span>
         </div>
       );
@@ -75,14 +116,14 @@ function ConversationEntry({ entry: e, labelled }: { entry: Entry; labelled: boo
     case 'text':
       return (
         <div className="tr-ai">
-          {labelled ? <div className="tr-lbl">Agent</div> : null}
+          {labelled ? <div className="tr-lbl">{agentLabel}</div> : null}
           <Markdown text={e.text} />
         </div>
       );
     case 'tool':
       return (
         <div className="tr-ai tr-ai-tool">
-          {labelled ? <div className="tr-lbl">Agent</div> : null}
+          {labelled ? <div className="tr-lbl">{agentLabel}</div> : null}
           <ToolRow entry={e} />
         </div>
       );
@@ -152,11 +193,14 @@ function ToolRow({ entry }: { entry: ToolEntry }) {
   );
 }
 
-function TerminalView({ entries }: { entries: Entry[] }) {
+function TerminalView({ entries, afterRun, queuedActions }: TranscriptProps) {
   return (
     <div className="tr-term">
       {entries.map((e, i) => (
-        <TerminalEntry key={i} entry={e} />
+        <Fragment key={e.id}>
+          <TerminalEntry entry={e} queuedActions={queuedActions} />
+          {runEnd(entries, i, afterRun)}
+        </Fragment>
       ))}
     </div>
   );
@@ -174,12 +218,17 @@ function TermLine({ time, marker, className, children }: { time?: string; marker
   );
 }
 
-function TerminalEntry({ entry: e }: { entry: Entry }) {
+function TerminalEntry({ entry: e, queuedActions }: { entry: Entry; queuedActions: TranscriptProps['queuedActions'] }) {
   switch (e.kind) {
     case 'owner':
       return (
         <TermLine time={e.time} marker="›" className="k-user">
-          {e.queued ? <div className="tr-queued-note">{QUEUED_NOTE}</div> : null}
+          {e.queued ? (
+            <div className="tr-queued-note">
+              {QUEUED_NOTE}
+              {e.messageId && queuedActions ? queuedActions(e.messageId) : null}
+            </div>
+          ) : null}
           <pre>{e.text}</pre>
         </TermLine>
       );
@@ -229,9 +278,8 @@ function TerminalEntry({ entry: e }: { entry: Entry }) {
 function TerminalTool({ entry }: { entry: ToolEntry }) {
   const [all, setAll] = useState(false);
   const { tool } = entry;
-  const resultLines = entry.result === undefined ? [] : entry.result.split('\n');
-  const clipped = resultLines.length > RESULT_PREVIEW_LINES;
-  const shown = clipped && !all ? resultLines.slice(0, RESULT_PREVIEW_LINES) : resultLines;
+  const { lines: shown, clipped } =
+    entry.result === undefined ? { lines: [], clipped: false } : clipLines(entry.result, RESULT_PREVIEW_LINES, all);
   const diff = tool.added !== undefined || tool.removed !== undefined ? `  +${tool.added ?? 0} −${tool.removed ?? 0}` : '';
   return (
     <>

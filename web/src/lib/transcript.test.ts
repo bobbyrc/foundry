@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, LogKind, LogLine, Run, Task, TaskConversation } from '../types';
-import { orchestratorEntries, parseTool, runEntries, taskEntries } from './transcript';
+import { clipLines, orchestratorEntries, parseTool, runEntries, taskEntries } from './transcript';
 
 let seq = 0;
 function line(kind: LogKind, text: string, tool_id?: string, run_id = 'r1'): LogLine {
@@ -132,5 +132,63 @@ describe('taskEntries', () => {
     );
     expect(e.map((x) => x.kind)).toEqual(['prompt', 'text', 'owner']);
     expect(e[2]).toMatchObject({ text: 'wait', queued: true, messageId: 'q' });
+  });
+});
+
+describe('entry identity', () => {
+  it('carries the run id and a stable key built from run and seq', () => {
+    const a = line('text', 'one', undefined, 'rA');
+    const b = line('tool_use', 'Bash: {"command":"ls"}', 'T', 'rA');
+    const e = runEntries([a, b]);
+    expect(e.map((x) => x.runId)).toEqual(['rA', 'rA']);
+    expect(e.map((x) => x.id)).toEqual([`rA:${a.seq}`, `rA:${b.seq}`]);
+  });
+  it('keys messages by message id and every entry uniquely', () => {
+    const e = orchestratorEntries(
+      [msg({ id: 'm1', role: 'user', text: 'hi', run_id: 'r1' }), msg({ id: 'q', role: 'user', text: 'later', queued: true })],
+      { r1: [line('text', 'a', undefined, 'r1'), line('text', 'b', undefined, 'r1')] },
+    );
+    expect(e[0]).toMatchObject({ id: 'm:m1' });
+    expect(e[e.length - 1]).toMatchObject({ id: 'm:q' });
+    expect(new Set(e.map((x) => x.id)).size).toBe(e.length);
+  });
+  it('tags the fallback assistant text with its run', () => {
+    const e = orchestratorEntries(
+      [msg({ id: 'm1', role: 'user', text: 'hi', run_id: 'r1' }), msg({ id: 'm2', role: 'assistant', text: 'yo', run_id: 'r1' })],
+      {},
+    );
+    expect(e[1]).toMatchObject({ kind: 'text', runId: 'r1' });
+  });
+});
+
+describe('a message delivered mid-run', () => {
+  it('shows the run log once, and the message through the log line that carries it', () => {
+    const logs = {
+      r1: [line('prompt', 'first', undefined, 'r1'), line('text', 'working', undefined, 'r1'), line('owner', 'also this', undefined, 'r1')],
+    };
+    const e = orchestratorEntries(
+      [msg({ id: 'm1', role: 'user', text: 'first', run_id: 'r1' }), msg({ id: 'm2', role: 'user', text: 'also this', run_id: 'r1' })],
+      logs,
+    );
+    expect(e.map((x) => x.kind)).toEqual(['owner', 'text', 'owner']);
+    expect(e.filter((x) => x.kind === 'owner').map((x) => x.kind === 'owner' && x.text)).toEqual(['first', 'also this']);
+  });
+  it('keeps a second message that rode the same turn but has no log line', () => {
+    const e = orchestratorEntries(
+      [msg({ id: 'm1', role: 'user', text: 'one', run_id: 'r1' }), msg({ id: 'm2', role: 'user', text: 'two', run_id: 'r1' })],
+      { r1: [line('prompt', 'one\n\ntwo', undefined, 'r1'), line('text', 'ok', undefined, 'r1')] },
+    );
+    expect(e.map((x) => x.kind)).toEqual(['owner', 'text', 'owner']);
+    expect(e[2]).toMatchObject({ text: 'two' });
+  });
+});
+
+describe('clipLines', () => {
+  it('does not count a trailing newline as a line', () => {
+    expect(clipLines('a\nb\nc\n', 3)).toEqual({ lines: ['a', 'b', 'c'], clipped: false });
+  });
+  it('clips to the preview length', () => {
+    expect(clipLines('a\nb\nc\nd\n', 3)).toEqual({ lines: ['a', 'b', 'c'], clipped: true });
+    expect(clipLines('a\nb\nc\nd', 3, true)).toEqual({ lines: ['a', 'b', 'c', 'd'], clipped: true });
   });
 });
