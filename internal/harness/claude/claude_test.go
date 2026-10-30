@@ -25,7 +25,7 @@ func indexOf(args []string, want string) int {
 func TestBuildArgsDefaults(t *testing.T) {
 	args := buildArgs(harness.Config{}, harness.Spec{Prompt: "hi"})
 	assert.Equal(t, []string{
-		"claude", "-p", "--output-format", "stream-json", "--verbose",
+		"claude", "-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose",
 		"--permission-mode", "auto",
 	}, args)
 }
@@ -40,7 +40,7 @@ func TestBuildArgsOptionalFlags(t *testing.T) {
 	}
 	args := buildArgs(cfg, spec)
 	assert.Equal(t, []string{
-		"/opt/claude", "-p", "--output-format", "stream-json", "--verbose",
+		"/opt/claude", "-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose",
 		"--append-system-prompt", "be terse",
 		"--model", "haiku",
 		"--resume", "sess-1",
@@ -245,7 +245,7 @@ func TestStartRunsCommandWithPromptOnStdin(t *testing.T) {
 
 	assert.True(t, sawText)
 	assert.Equal(t, "OK", res.FinalText)
-	assert.Contains(t, stderr, "stdin=Reply with exactly: OK")
+	assert.Contains(t, stderr, `stdin={"type":"user","message":{"role":"user","content":"Reply with exactly: OK"}}`)
 	assert.Contains(t, stderr, "arg=--append-system-prompt")
 	assert.Contains(t, stderr, "arg=be brief")
 	assert.Contains(t, stderr, "arg=--model")
@@ -258,7 +258,7 @@ func TestStartPassesEnvAndWorkdir(t *testing.T) {
 	resolved, err := filepath.EvalSymlinks(dir)
 	require.NoError(t, err)
 	script := filepath.Join(dir, "env.sh")
-	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\ncat >/dev/null\necho \"env=$FROM_CFG/$FROM_SPEC\"\npwd -P\n"), 0o755))
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nread -r _\necho \"env=$FROM_CFG/$FROM_SPEC\"\npwd -P\n"), 0o755))
 
 	r := &runner{cfg: harness.Config{
 		Command: []string{"sh", script},

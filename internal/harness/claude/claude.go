@@ -1,9 +1,10 @@
-// Package claude runs Claude Code non-interactively (claude -p --output-format stream-json) as a
+// Package claude runs Claude Code non-interactively (claude -p with stream-json input and output) as a
 // onett harness of type "claude-code".
 package claude
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/bobbyrc/onett/internal/harness"
@@ -26,17 +27,65 @@ type runner struct {
 	cfg harness.Config
 }
 
-// Start runs one Claude Code session. The prompt is written to stdin.
+// session is a running Claude Code process that takes more user messages on stdin.
+type session struct {
+	*harness.Proc
+}
+
+var _ harness.Steerable = (*session)(nil)
+
+// Send writes one user message in stream-json input form. Claude reads it at its next step
+// (inside the current turn). The harness closes stdin on every result line, so a Send after
+// that returns harness.ErrInputClosed.
+func (s *session) Send(text string) error {
+	line, err := userLine(text)
+	if err != nil {
+		return err
+	}
+	return s.WriteStdin(line)
+}
+
+// userLine encodes text as one stream-json input line.
+func userLine(text string) ([]byte, error) {
+	type msg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	b, err := json.Marshal(struct {
+		Type    string `json:"type"`
+		Message msg    `json:"message"`
+	}{"user", msg{"user", text}})
+	if err != nil {
+		return nil, err
+	}
+	return append(b, '\n'), nil
+}
+
+// Start runs one Claude Code session. The prompt goes to stdin as the first stream-json input
+// line, and stdin stays open until the first result line so Send can add messages.
 func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session, error) {
 	ps := newParser(spec.Model)
+	first, err := userLine(spec.Prompt)
+	if err != nil {
+		return nil, err
+	}
 	var proc *harness.Proc
+	// ready is closed once proc is assigned; the parser goroutine can start before that.
+	ready := make(chan struct{})
+	defer close(ready)
+	ps.onResult = func() {
+		// Claude waits for more input after each result and exits only when stdin closes.
+		<-ready
+		proc.CloseStdin()
+	}
 	p, err := harness.StartProcess(ctx, harness.ProcSpec{
-		Command:    buildArgs(r.cfg, spec),
-		Dir:        spec.Workdir,
-		Env:        mergeEnv(r.cfg.Env, spec.Env),
-		InheritEnv: r.cfg.InheritEnv,
-		Stdin:      spec.Prompt,
-		ParseLine:  ps.parseLine,
+		Command:       buildArgs(r.cfg, spec),
+		Dir:           spec.Workdir,
+		Env:           mergeEnv(r.cfg.Env, spec.Env),
+		InheritEnv:    r.cfg.InheritEnv,
+		Stdin:         string(first),
+		KeepStdinOpen: true,
+		ParseLine:     ps.parseLine,
 		// proc is assigned before StartProcess returns, and OnExit only runs from Wait.
 		OnExit: func(exitCode int, _ error) (harness.Result, error) {
 			var tail []string
@@ -50,7 +99,7 @@ func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session,
 		return nil, err
 	}
 	proc = p
-	return p, nil
+	return &session{Proc: p}, nil
 }
 
 // buildArgs returns the full command line: the binary, the fixed flags, the config and profile
@@ -60,7 +109,7 @@ func buildArgs(cfg harness.Config, spec harness.Spec) []string {
 	if len(cfg.Command) > 0 {
 		args = append([]string(nil), cfg.Command...)
 	}
-	args = append(args, "-p", "--output-format", "stream-json", "--verbose")
+	args = append(args, "-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose")
 	if spec.Instructions != "" {
 		args = append(args, "--append-system-prompt", spec.Instructions)
 	}

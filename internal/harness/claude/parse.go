@@ -66,7 +66,13 @@ type parser struct {
 	announced bool   // whether sessionID has been attached to an emitted event
 	lastText  string // last assistant text block
 	denials   []string
-	final     *streamLine // the result line, once seen
+	final     *streamLine // the last result line seen
+	// inputTokens and outputTokens sum the per-turn usage of every result line: with stream-json
+	// input one process can answer several turns, and each result reports only its own turn.
+	inputTokens  int64
+	outputTokens int64
+	// onResult, if set, runs after each result line is parsed.
+	onResult func()
 }
 
 func newParser(model string) *parser {
@@ -171,6 +177,13 @@ func toolResultEvents(raw json.RawMessage) []harness.Event {
 func (p *parser) resultEvents(sl streamLine) []harness.Event {
 	final := sl
 	p.final = &final
+	if sl.Usage != nil {
+		p.inputTokens += sl.Usage.InputTokens + sl.Usage.CacheCreationInputTokens + sl.Usage.CacheReadInputTokens
+		p.outputTokens += sl.Usage.OutputTokens
+	}
+	if p.onResult != nil {
+		defer p.onResult()
+	}
 	var events []harness.Event
 	for _, d := range sl.PermissionDenials {
 		name := d.ToolName
@@ -199,10 +212,8 @@ func (p *parser) result(exitCode int, stderrTail []string) harness.Result {
 	if f := p.final; f != nil {
 		res.IsError = f.IsError
 		res.CostUSD = f.TotalCostUSD
-		if f.Usage != nil {
-			res.InputTokens = f.Usage.InputTokens + f.Usage.CacheCreationInputTokens + f.Usage.CacheReadInputTokens
-			res.OutputTokens = f.Usage.OutputTokens
-		}
+		res.InputTokens = p.inputTokens
+		res.OutputTokens = p.outputTokens
 		if f.Result != "" {
 			res.FinalText = f.Result
 		}

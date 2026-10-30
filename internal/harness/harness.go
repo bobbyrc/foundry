@@ -4,6 +4,7 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -64,6 +65,16 @@ type Session interface {
 	Wait() (Result, error)
 	// Cancel terminates the process (SIGTERM, then SIGKILL after a grace period).
 	Cancel()
+}
+
+// ErrInputClosed is returned by Steerable.Send once the session has stopped taking input.
+var ErrInputClosed = errors.New("harness: session input is closed")
+
+// Steerable is a Session that accepts more user input while it runs.
+type Steerable interface {
+	// Send writes one user message to the running agent. It returns ErrInputClosed once the
+	// session has stopped taking input; the caller then queues the message instead.
+	Send(text string) error
 }
 
 // Harness starts sessions of one agent CLI.
