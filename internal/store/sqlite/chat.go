@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -141,4 +142,29 @@ func (s *Store) DeleteChatMessage(ctx context.Context, id string) error {
 		return fmt.Errorf("chat message %s: %w", id, store.ErrNotFound)
 	}
 	return nil
+}
+
+// DeleteChatMessageIf deletes the message with id only when check, run on the stored row inside
+// the same transaction, returns nil. It returns the deleted message, check's error, or
+// ErrNotFound. The check and the delete cannot be separated by another writer.
+func (s *Store) DeleteChatMessageIf(ctx context.Context, id string, check func(domain.ChatMessage) error) (domain.ChatMessage, error) {
+	var out domain.ChatMessage
+	err := withTx(ctx, s.db, func(tx *sql.Tx) error {
+		m, err := chatMessages.get(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err := check(m); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM chat_messages WHERE id = ?`, id); err != nil {
+			return fmt.Errorf("delete chat message %s: %w", id, err)
+		}
+		out = m
+		return nil
+	})
+	if err != nil {
+		return domain.ChatMessage{}, err
+	}
+	return out, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -403,18 +404,19 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 		e.releaseConversation(ctx, conv.ID)
 		return domain.ChatMessage{}, err
 	}
+	_, queuedIDs := messageTexts(queued)
 	msg, err := e.storeOwnerMessage(ctx, conv, domain.ChatMessage{
 		ConversationID: conv.ID, Role: "user", Text: text,
 	})
 	if err != nil {
-		e.restoreQueued(ctx, queued)
+		e.restoreQueued(ctx, queuedIDs)
 		e.releaseConversation(ctx, conv.ID)
 		return domain.ChatMessage{}, err
 	}
 	texts, ids := messageTexts(queued)
 	texts, ids = append(texts, text), append(ids, msg.ID)
 	if err := e.startTurn(ctx, conv, texts, ids); err != nil {
-		e.restoreQueued(ctx, queued)
+		e.restoreQueued(ctx, queuedIDs)
 		return domain.ChatMessage{}, err
 	}
 	return msg, nil
@@ -424,9 +426,6 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 func (e *Engine) storeOwnerMessage(ctx context.Context, conv domain.Conversation, m domain.ChatMessage) (domain.ChatMessage, error) {
 	msg, err := e.d.Store.AppendChatMessage(ctx, m)
 	if err != nil {
-		if m.RunID == "" && !m.Queued {
-			e.releaseConversation(ctx, conv.ID)
-		}
 		return domain.ChatMessage{}, err
 	}
 	e.d.Bus.Emit(ctx, domain.EvChatMessage, conv.Project, "", msg.RunID, "message from owner", msg)
@@ -453,7 +452,8 @@ func (e *Engine) claimQueued(ctx context.Context, conversationID string) ([]doma
 			continue // cancelled meanwhile
 		}
 		if err != nil {
-			e.restoreQueued(ctx, claimed)
+			_, ids := messageTexts(claimed)
+			e.restoreQueued(ctx, ids)
 			return nil, err
 		}
 		claimed = append(claimed, got)
@@ -462,14 +462,20 @@ func (e *Engine) claimQueued(ctx context.Context, conversationID string) ([]doma
 }
 
 // restoreQueued puts claimed messages back in the queue after their turn could not start.
-func (e *Engine) restoreQueued(ctx context.Context, msgs []domain.ChatMessage) {
-	for _, m := range msgs {
-		if _, err := e.d.Store.UpdateChatMessage(context.WithoutCancel(ctx), m.ID, func(m *domain.ChatMessage) error {
+func (e *Engine) restoreQueued(ctx context.Context, ids []string) {
+	for _, id := range ids {
+		m, err := e.d.Store.UpdateChatMessage(context.WithoutCancel(ctx), id, func(m *domain.ChatMessage) error {
 			m.Queued = true
 			return nil
-		}); err != nil && !errors.Is(err, store.ErrNotFound) {
-			e.d.Logger.Error("chat: requeue message", "message", m.ID, "err", err)
+		})
+		if errors.Is(err, store.ErrNotFound) {
+			continue
 		}
+		if err != nil {
+			e.d.Logger.Error("chat: requeue message", "message", id, "err", err)
+			continue
+		}
+		e.emitMessage(ctx, m)
 	}
 }
 
@@ -511,6 +517,15 @@ func (e *Engine) FlushChat(ctx context.Context, conversationID string) error {
 	if cur.Busy {
 		return nil
 	}
+	// Look before taking the busy flag: a send that queues meanwhile then sees an idle
+	// conversation and flushes itself.
+	waiting, err := e.d.Store.ListChatMessages(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(waiting, func(m domain.ChatMessage) bool { return m.Queued }) {
+		return nil
+	}
 	won := false
 	conv, err := e.d.Store.UpdateConversation(ctx, conversationID, func(c *domain.Conversation) error {
 		if !c.Busy {
@@ -535,7 +550,7 @@ func (e *Engine) FlushChat(ctx context.Context, conversationID string) error {
 	}
 	texts, ids := messageTexts(queued)
 	if err := e.startTurn(ctx, conv, texts, ids); err != nil {
-		e.restoreQueued(ctx, queued)
+		e.restoreQueued(ctx, ids)
 		return err
 	}
 	return nil
@@ -565,17 +580,14 @@ func (e *Engine) EditQueuedMessage(ctx context.Context, id, text string) (domain
 // CancelQueuedMessage removes a message that has not been delivered yet. api.ErrConflict once
 // it has.
 func (e *Engine) CancelQueuedMessage(ctx context.Context, id string) error {
-	var msg domain.ChatMessage
-	if _, err := e.d.Store.UpdateChatMessage(ctx, id, func(m *domain.ChatMessage) error {
+	// The check and the delete are one transaction, so a turn cannot take the message between.
+	msg, err := e.d.Store.DeleteChatMessageIf(ctx, id, func(m domain.ChatMessage) error {
 		if !m.Queued {
 			return fmt.Errorf("%w: the message was already delivered", api.ErrConflict)
 		}
-		msg = *m
 		return nil
-	}); err != nil {
-		return err
-	}
-	if err := e.d.Store.DeleteChatMessage(ctx, id); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	e.emitMessage(ctx, msg)

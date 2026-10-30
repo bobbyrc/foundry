@@ -123,6 +123,9 @@ type Store interface {
 	UpdateChatMessage(ctx context.Context, id string, fn func(*domain.ChatMessage) error) (domain.ChatMessage, error)
 	// DeleteChatMessage removes one message. ErrNotFound when absent.
 	DeleteChatMessage(ctx context.Context, id string) error
+	// DeleteChatMessageIf deletes a message only if check, run on the stored row in the same
+	// transaction, returns nil. It returns the deleted message, check's error, or ErrNotFound.
+	DeleteChatMessageIf(ctx context.Context, id string, check func(domain.ChatMessage) error) (domain.ChatMessage, error)
 
 	// GetLoopState returns a zero LoopState (Name and Project set) when none is stored.
 	GetLoopState(ctx context.Context, name, project string) (domain.LoopState, error)

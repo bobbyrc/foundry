@@ -45,6 +45,11 @@ func (e *Engine) chatReply(ctx context.Context, conv domain.Conversation, text s
 	} else {
 		e.d.Bus.Emit(fin, domain.EvChatMessage, conv.Project, "", res.RunID, "orchestrator replied", msg)
 	}
+	if res.RunID == "" {
+		// The turn never got a run, so the messages in it were not sent. They wait in the queue
+		// for the owner's next send or flush.
+		e.restoreQueued(fin, claimed)
+	}
 	if _, err := e.d.Store.UpdateConversation(fin, conv.ID, func(c *domain.Conversation) error {
 		if res.SessionID != "" {
 			c.SessionID = res.SessionID

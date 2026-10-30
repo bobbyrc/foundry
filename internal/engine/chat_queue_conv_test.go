@@ -130,9 +130,9 @@ func TestChatMessageWhileBusyIsQueuedForNonSteerableTurn(t *testing.T) {
 	assert.NotEmpty(t, nextRun)
 }
 
-func TestQueuedChatSentAfterSuccessfulTurn(t *testing.T) {
-	// The queue is held (not sent) when the turn ends badly; a success sends it. This test covers
-	// the success path with a flush from idle.
+func TestFlushChatSendsQueuedMessages(t *testing.T) {
+	// FlushChat from idle sends the queue as one turn and stamps the messages with its run; an
+	// empty queue is a no-op.
 	ctx := context.Background()
 	prompts := make(chan string, 4)
 	h := hfake.New(func(ctx context.Context, spec harness.Spec, _ func(harness.Event)) (harness.Result, error) {
@@ -264,4 +264,135 @@ func TestEditQueuedMessageAfterDeliveryConflicts(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, delivered.ID, msgs[0].ID)
+}
+
+func TestQueuedChatSentAfterSuccessfulTurn(t *testing.T) {
+	ctx := context.Background()
+	release := make(chan struct{})
+	prompts := make(chan string, 4)
+	h := hfake.New(func(ctx context.Context, spec harness.Spec, _ func(harness.Event)) (harness.Result, error) {
+		prompts <- spec.Prompt
+		if spec.Prompt == "go" {
+			<-release
+		}
+		return harness.Result{SessionID: "s", FinalText: "ok"}, nil
+	})
+	r, e, convID := cqRig(t, h)
+
+	_, err := e.SendChat(ctx, convID, "go")
+	require.NoError(t, err)
+	assert.Equal(t, "go", <-prompts)
+	runID := ctActiveRunID(t, e)
+	cqWaitSession(t, e, runID)
+	queued, err := e.SendChat(ctx, convID, "later")
+	require.NoError(t, err)
+	require.True(t, queued.Queued)
+
+	close(release)
+	assert.Equal(t, "later", <-prompts, "the success is followed by a turn with the queue")
+	ctWaitIdle(t, r, convID)
+	msgs, err := r.st.ListChatMessages(ctx, convID)
+	require.NoError(t, err)
+	for _, m := range msgs {
+		if m.ID == queued.ID {
+			assert.False(t, m.Queued)
+			assert.NotEmpty(t, m.RunID)
+			assert.NotEqual(t, runID, m.RunID)
+		}
+	}
+}
+
+func TestQueuedChatHeldAfterFailedTurn(t *testing.T) {
+	ctx := context.Background()
+	release := make(chan struct{})
+	var mu sync.Mutex
+	n := 0
+	h := hfake.New(func(ctx context.Context, spec harness.Spec, _ func(harness.Event)) (harness.Result, error) {
+		mu.Lock()
+		n++
+		mu.Unlock()
+		<-release
+		return harness.Result{}, errors.New("boom")
+	})
+	r, e, convID := cqRig(t, h)
+
+	_, err := e.SendChat(ctx, convID, "go")
+	require.NoError(t, err)
+	cqWaitSession(t, e, ctActiveRunID(t, e))
+	queued, err := e.SendChat(ctx, convID, "wait for me")
+	require.NoError(t, err)
+	require.True(t, queued.Queued)
+
+	close(release)
+	ctWaitIdle(t, r, convID)
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	assert.Equal(t, 1, n, "a failed turn does not send the queue")
+	mu.Unlock()
+	msgs, err := r.st.ListChatMessages(ctx, convID)
+	require.NoError(t, err)
+	found := false
+	for _, m := range msgs {
+		if m.ID == queued.ID {
+			found = true
+			assert.True(t, m.Queued)
+		}
+	}
+	assert.True(t, found)
+}
+
+func TestCancelQueuedMessageAfterClaimConflicts(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	conv, err := r.st.CreateConversation(ctx, domain.Conversation{Project: "demo"})
+	require.NoError(t, err)
+	m, err := r.st.AppendChatMessage(ctx, domain.ChatMessage{
+		ConversationID: conv.ID, Role: "user", Text: "sent", Queued: true,
+	})
+	require.NoError(t, err)
+
+	claimed, err := e.claimQueued(ctx, conv.ID)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+
+	err = e.CancelQueuedMessage(ctx, m.ID)
+	assert.True(t, errors.Is(err, api.ErrConflict), "cancel after a turn took it: %v", err)
+	msgs, err := r.st.ListChatMessages(ctx, conv.ID)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 1, "the taken message is not deleted")
+}
+
+func TestClaimedMessagesRestoredWhenTurnCannotStart(t *testing.T) {
+	ctx := context.Background()
+	r := ctNewRig(t)
+	e := r.engine(nil)
+	e.d.HarnessFor = func(string, config.Harness) (harness.Harness, error) {
+		return nil, errors.New("no such harness")
+	}
+	conv, err := r.st.CreateConversation(ctx, domain.Conversation{Project: "demo"})
+	require.NoError(t, err)
+	old, err := r.st.AppendChatMessage(ctx, domain.ChatMessage{
+		ConversationID: conv.ID, Role: "user", Text: "old", Queued: true,
+	})
+	require.NoError(t, err)
+
+	fresh, err := e.SendChat(ctx, conv.ID, "new")
+	require.NoError(t, err)
+	ctWaitIdle(t, r, conv.ID)
+
+	msgs, err := r.st.ListChatMessages(ctx, conv.ID)
+	require.NoError(t, err)
+	byID := map[string]domain.ChatMessage{}
+	var reply string
+	for _, m := range msgs {
+		byID[m.ID] = m
+		if m.Role == "assistant" {
+			reply = m.Text
+		}
+	}
+	assert.Contains(t, reply, "I can't run")
+	assert.True(t, byID[old.ID].Queued, "the old message waits for the next send")
+	assert.True(t, byID[fresh.ID].Queued, "so does the one that rode with it")
+	assert.Empty(t, byID[old.ID].RunID)
 }
