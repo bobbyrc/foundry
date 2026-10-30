@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"sess-ids","model":"claude-test"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_A","name":"Bash","input":{"command":"ls"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_A","content":"a.txt"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"sess-ids"}

@@ -36,7 +36,7 @@ export type RunStatus =
   | 'denied'
   | 'cancelled';
 
-export type LogKind = 'text' | 'tool_use' | 'tool_result' | 'denial' | 'system' | 'stderr' | 'error';
+export type LogKind = 'text' | 'tool_use' | 'tool_result' | 'denial' | 'system' | 'stderr' | 'error' | 'prompt' | 'owner';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
@@ -99,6 +99,8 @@ export interface LogLine {
   time: string;
   kind: LogKind;
   text: string;
+  /** Pairs a tool_use line with its tool_result line. */
+  tool_id?: string;
 }
 
 /**

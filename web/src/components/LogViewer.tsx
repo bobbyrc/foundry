@@ -189,6 +189,8 @@ function LogRow({ line, expanded, onToggle }: { line: LogLine; expanded: boolean
       <span className="gutter">{time ? formatClock(time) : ''}</span>
       <div className="log-body">
         {kind === 'denial' ? <span className="log-denied">DENIED</span> : null}
+        {kind === 'prompt' ? <span className="log-label">Prompt</span> : null}
+        {kind === 'owner' ? <span className="log-label">You</span> : null}
         {kind === 'tool_use' ? (
           <div className="log-tool">
             <Chevron />

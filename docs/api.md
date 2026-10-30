@@ -118,6 +118,10 @@ value. `limit` is a non-negative integer, where 0 or absent means the route's de
 or non-numeric value is a 400. Most list routes default to 200. The exceptions are
 `GET /events/history` (500) and `GET /runs/{id}/logs` (1000).
 
+A run's log starts with a `prompt` line holding the exact text onett gave the agent. `owner` lines
+are messages from the owner sent into a run. A `tool_use` line and its `tool_result` line share a
+`tool_id`, so a client can pair them; other lines omit it.
+
 `POST /tasks` rejects `"kind":"review"` with 400, since onett creates review tasks itself. An
 empty `kind` is stored as `feature`. A `risk` field is not part of `NewTask`, so it is rejected
 with 400 like any unknown field.

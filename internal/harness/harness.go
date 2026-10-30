@@ -34,6 +34,8 @@ type Event struct {
 	Time time.Time
 	Kind domain.LogKind
 	Text string
+	// ToolID pairs a tool_use event with its tool_result event.
+	ToolID string
 	// SessionID is set on the first event that reveals it.
 	SessionID string
 }

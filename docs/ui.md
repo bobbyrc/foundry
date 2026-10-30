@@ -255,7 +255,7 @@ screen (at least 360px on a desktop; 60% of the screen height on a phone). Its t
 the line count, and a "Follow" toggle (default on) that keeps the view at the newest line. Log
 lines: `text` plain; `tool_use` with a green drawn chevron before it; `tool_result` muted,
 collapsed to 3 lines with "show more"; `denial` on a red-tinted line with a "DENIED" tag before
-the text; `stderr` muted italic; `error` red; `system` muted. The time gutter is 64px (52px on a
+the text; `prompt` (what onett gave the agent to start the run) a muted block labelled "Prompt"; `owner` (a message from the owner) a line labelled "You"; `stderr` muted italic; `error` red; `system` muted. The time gutter is 64px (52px on a
 phone). Logs load from `/runs/:id/logs` and then append `run.log` events for this run,
 deduplicated by `seq`.
 

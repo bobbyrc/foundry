@@ -1739,7 +1739,7 @@ components:
 
     LogKind:
       type: string
-      enum: [text, tool_use, tool_result, denial, system, stderr, error]
+      enum: [text, tool_use, tool_result, denial, system, stderr, error, prompt, owner]
 
     EventType:
       type: string
@@ -1909,6 +1909,9 @@ components:
           $ref: '#/components/schemas/LogKind'
         text:
           type: string
+        tool_id:
+          type: string
+          description: Pairs a `tool_use` line with its `tool_result` line. Omitted on other lines.
 
     Event:
       type: object

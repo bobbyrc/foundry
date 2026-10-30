@@ -159,6 +159,8 @@ const (
 	LogSystem     LogKind = "system"      // onett or harness bookkeeping
 	LogStderr     LogKind = "stderr"
 	LogError      LogKind = "error"
+	LogPrompt     LogKind = "prompt" // the text onett gave the agent to start a run or turn
+	LogOwner      LogKind = "owner"  // a message from the owner, sent into a run
 )
 
 // LogLine is one entry in a run's log. Seq is assigned by the store, starting at 1 per run.
@@ -168,6 +170,8 @@ type LogLine struct {
 	Time  time.Time `json:"time"`
 	Kind  LogKind   `json:"kind"`
 	Text  string    `json:"text"`
+	// ToolID pairs a tool_use line with its tool_result line; empty on other lines.
+	ToolID string `json:"tool_id,omitempty"`
 }
 
 // Event is an append-only record of something that happened. ID is assigned by the store and

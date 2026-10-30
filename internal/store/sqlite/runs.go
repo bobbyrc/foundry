@@ -88,8 +88,8 @@ func (s *Store) AppendRunLogs(ctx context.Context, runID string, lines []domain.
 				l.Time = nowUTC()
 			}
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO run_logs (run_id, seq, time, kind, text) VALUES (?, ?, ?, ?, ?)`,
-				runID, l.Seq, nanos(l.Time), string(l.Kind), l.Text); err != nil {
+				`INSERT INTO run_logs (run_id, seq, time, kind, text, tool_id) VALUES (?, ?, ?, ?, ?, ?)`,
+				runID, l.Seq, nanos(l.Time), string(l.Kind), l.Text, l.ToolID); err != nil {
 				return fmt.Errorf("insert log: %w", err)
 			}
 			out = append(out, l)
@@ -121,13 +121,13 @@ func (s *Store) ListRunLogs(ctx context.Context, runID string, afterSeq int64, l
 		var l domain.LogLine
 		var kind string
 		var t int64
-		if err := r.Scan(&l.RunID, &l.Seq, &t, &kind, &l.Text); err != nil {
+		if err := r.Scan(&l.RunID, &l.Seq, &t, &kind, &l.Text, &l.ToolID); err != nil {
 			return l, err
 		}
 		l.Time = fromNanos(t)
 		l.Kind = domain.LogKind(kind)
 		return l, nil
-	}, `SELECT run_id, seq, time, kind, text FROM run_logs
+	}, `SELECT run_id, seq, time, kind, text, tool_id FROM run_logs
 	    WHERE run_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?`, runID, afterSeq, limitOr(limit, 1000))
 	if err != nil {
 		return nil, fmt.Errorf("list run logs %s: %w", runID, err)

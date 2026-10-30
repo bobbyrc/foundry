@@ -44,6 +44,7 @@ type message struct {
 // block is one content block of an assistant or user message.
 type block struct {
 	Type      string          `json:"type"`
+	ID        string          `json:"id"`
 	Text      string          `json:"text"`
 	Name      string          `json:"name"`
 	Input     json.RawMessage `json:"input"`
@@ -138,7 +139,9 @@ func (p *parser) assistantEvents(raw json.RawMessage) []harness.Event {
 			events = append(events, event(domain.LogText, b.Text))
 		case "tool_use":
 			text := b.Name + ": " + harness.CompactJSON(b.Input, maxInputChars)
-			events = append(events, event(domain.LogToolUse, text))
+			ev := event(domain.LogToolUse, text)
+			ev.ToolID = b.ID
+			events = append(events, ev)
 		}
 	}
 	return events
@@ -158,7 +161,9 @@ func toolResultEvents(raw json.RawMessage) []harness.Event {
 		if b.IsError {
 			text = "error: " + text
 		}
-		events = append(events, event(domain.LogToolResult, text))
+		ev := event(domain.LogToolResult, text)
+		ev.ToolID = b.ToolUseID
+		events = append(events, ev)
 	}
 	return events
 }
