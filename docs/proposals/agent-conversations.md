@@ -328,10 +328,15 @@ PR.
 
 ## Builder must verify
 
-- The stream-json input message shape for the installed Claude Code version, and that a message
-  written after the `result` line but before stdin closes is either read or reported back as
-  not delivered, never silently dropped.
 - That a resumed Codex session keeps its sandbox (see **Follow-ups**).
+
+Settled on 2026-10-29 against the installed Claude Code CLI: the input message shape is one JSON
+line per message, `{"type":"user","message":{"role":"user","content":"<text>"}}`. A message
+written after a `result` line starts another turn in the same process, which emits another
+`result` line (`result_index` counts them; `total_cost_usd` is cumulative; `usage` is per turn).
+A message written immediately before stdin closes is still read and answered before the process
+exits. So the harness closes stdin on every `result` line, a `Send` before the close is always
+answered, and a `Send` after it returns `ErrInputClosed`.
 
 ## Left to the builder
 
