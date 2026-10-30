@@ -15,6 +15,12 @@ const harnessType = "codex"
 // 0.165 rejects it combined with --sandbox, so --sandbox must not be added here.
 var defaultSandboxArgs = []string{"--approve-for-me"}
 
+// resumeSandboxOverride is passed as a config override when a session is resumed. `codex exec
+// resume` has no --sandbox or --approve-for-me flag, so without this a resumed session runs
+// read-only. The value is one argv element; the double quotes are part of it because there is
+// no shell.
+const resumeSandboxOverride = `sandbox_mode="workspace-write"`
+
 // instructionSeparator joins Spec.Instructions and Spec.Prompt on stdin, because codex has no
 // flag for a system prompt.
 const instructionSeparator = "\n\n---\n\n"
@@ -65,9 +71,10 @@ func stdinText(spec harness.Spec) string {
 	return spec.Instructions + instructionSeparator + spec.Prompt
 }
 
-// buildArgs returns the command line. A new session gets -C; a resumed one does not, because
-// `codex exec resume` has no -C, --sandbox or --approve-for-me flags. The sandbox default is
-// therefore applied only to new sessions.
+// buildArgs returns the command line. A new session gets -C and the --approve-for-me default. A
+// resumed one gets neither, because `codex exec resume` has no -C, --sandbox or --approve-for-me
+// flags; instead it gets a config override that keeps the workspace-write sandbox. Either default
+// is skipped when the config or the spec already chooses a sandbox.
 func buildArgs(cfg harness.Config, spec harness.Spec) []string {
 	args := []string{"codex"}
 	if len(cfg.Command) > 0 {
@@ -87,8 +94,12 @@ func buildArgs(cfg harness.Config, spec harness.Spec) []string {
 	}
 	args = append(args, cfg.Args...)
 	args = append(args, spec.Args...)
-	if !resume && !hasSandboxFlag(cfg.Args, spec.Args) {
-		args = append(args, defaultSandboxArgs...)
+	if !hasSandboxFlag(cfg.Args, spec.Args) {
+		if resume {
+			args = append(args, "-c", resumeSandboxOverride)
+		} else {
+			args = append(args, defaultSandboxArgs...)
+		}
 	}
 	// "-" reads the prompt from stdin.
 	return append(args, "-")

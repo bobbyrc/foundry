@@ -47,8 +47,8 @@ func TestBuildArgsResumeSession(t *testing.T) {
 	args := buildArgs(harness.Config{}, spec)
 	assert.Equal(t, []string{
 		"codex", "exec", "resume", "thread-1", "--json", "--skip-git-repo-check",
-		"--model", "m", "-",
-	}, args, "resume takes no -C and no sandbox flags")
+		"--model", "m", "-c", `sandbox_mode="workspace-write"`, "-",
+	}, args, "resume takes no -C and no sandbox flag, so it gets the sandbox override")
 }
 
 func TestBuildArgsSandboxFlagSuppressesDefault(t *testing.T) {

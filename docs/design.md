@@ -248,7 +248,9 @@ web/                  React + Vite + TypeScript UI (built into internal/api/webd
   such as Tailscale.
 - Agents never get push credentials from onett; onett pushes. Harness permissions are
   configured per agent profile (`claude-code` defaults to `acceptEdits` plus an allowed-tools
-  list; `codex` defaults to `--approve-for-me`, its workspace-write sandbox with automatic review of escalations).
+  list; `codex` defaults to `--approve-for-me`, its workspace-write sandbox with automatic review
+  of escalations; resumed Codex sessions get the same workspace-write sandbox through a config
+  override, since `codex exec resume` takes no sandbox flag).
 - Secrets for providers come from the environment or `~/.config/onett/secrets.env`.
 - Agents get an allowlist of onett's environment (PATH, HOME, locale, their own provider
   keys), plus what a harness's `inherit_env` and the project's `env` add. Onett's GitHub and
