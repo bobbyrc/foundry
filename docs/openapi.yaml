@@ -496,6 +496,70 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /tasks/{id}/messages:
+    post:
+      operationId: sendTaskMessage
+      tags: [tasks]
+      summary: Send a message to a task's agent.
+      description: |
+        Works for the root task or any conversation follow-up task. A live agent whose harness
+        takes input gets the message at once (the stored message then has `run_id`). Otherwise it
+        is stored queued (`queued: true`) and the next run carries it: with no run live, onett
+        starts one now, resuming the agent's session (a blocked, failed, in-review or
+        done-without-a-PR task is re-queued; a merged or done-with-a-PR task gets a follow-up
+        task with its own branch). While a run is live, the queue waits for that run to succeed;
+        it is never sent after a run that was cancelled, denied, stalled, timed out or failed,
+        only by another send or by the flush route. 409 carries the `reason` the agent cannot
+        be messaged (see `can_send` on the conversation).
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '202':
+          description: The stored user message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tasks/{id}/conversation/flush:
+    post:
+      operationId: flushTaskMessages
+      tags: [tasks]
+      summary: Send a task agent's queued messages now.
+      description: |
+        Starts the follow-up run for the queued messages instead of waiting for the current run
+        to succeed. This is how queued messages move after a run that was denied, stalled, timed
+        out or failed. Does nothing when no message is queued or a run is live.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '202':
+          description: Accepted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /agent-conversations:
     get:
       operationId: listAgentConversations

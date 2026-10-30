@@ -177,6 +177,34 @@ func (s *server) taskConversation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tc)
 }
 
+func (s *server) sendTaskMessage(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Text string `json:"text"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if in.Text == "" {
+		s.fail(w, invalidf("text is required"))
+		return
+	}
+	m, err := s.opts.Controller.SendTaskMessage(r.Context(), chi.URLParam(r, "id"), in.Text)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, m)
+}
+
+func (s *server) flushTaskMessages(w http.ResponseWriter, r *http.Request) {
+	if err := s.opts.Controller.FlushTaskMessages(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (s *server) agentConversations(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.opts.Controller.AgentConversations(r.Context())
 	if err != nil {

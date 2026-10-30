@@ -86,9 +86,16 @@ func (e *Engine) startTask(ctx context.Context, t domain.Task) {
 		"run started: "+t.Role+" on "+t.Title, run)
 
 	started := e.goTracked(func() {
-		defer e.unregisterRun(run.ID)
-		defer cancel()
-		e.runTask(runCtx, t, run, ar, p, h, agent, parent)
+		func() {
+			defer e.unregisterRun(run.ID)
+			defer cancel()
+			e.runTask(runCtx, t, run, ar, p, h, agent, parent)
+		}()
+		// The run is unregistered by now, so a message sent while it was ending is not left
+		// waiting on a run that no longer exists.
+		if ar.continueRoot != "" {
+			e.continueConversation(bg, ar.continueRoot)
+		}
 	})
 	if !started {
 		// Shutting down: the run never starts. The task stays running; recover re-queues it.
@@ -202,7 +209,6 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.blockTask(bg, t.ID, "could not load role prompt: "+err.Error())
 		return
 	}
-	prompt := buildTaskPrompt(t, p, parent, conflicts)
 
 	env := map[string]string{}
 	for k, v := range e.d.AgentEnv {
@@ -236,16 +242,33 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		}
 	}
 
+	// Owner messages queued for this task's agent go with this run: a follow-up resumes the
+	// agent's session with just the messages; a first run gets them after the task prompt.
+	prompt := buildTaskPrompt(t, p, parent, conflicts)
+	resumeID := ""
+	root, claimed := e.claimOwnerMessages(bg, t)
+	if len(claimed) > 0 {
+		texts, _ := messageTexts(claimed)
+		if prev, ok := e.resumeSession(bg, root); ok {
+			prompt, resumeID = ownerPrompt(texts), prev.SessionID
+		} else {
+			prompt += "\n\n" + ownerPrompt(texts)
+		}
+	}
+
 	sess, err := h.Start(ctx, harness.Spec{
-		RunID:        run.ID,
-		Workdir:      ws.Dir,
-		Prompt:       prompt,
-		Instructions: instructions,
-		Model:        agent.Model,
-		Env:          env,
-		Args:         agent.Args,
+		RunID:           run.ID,
+		Workdir:         ws.Dir,
+		Prompt:          prompt,
+		ResumeSessionID: resumeID,
+		Instructions:    instructions,
+		Model:           agent.Model,
+		Env:             env,
+		Args:            agent.Args,
 	})
 	if err != nil {
+		_, ids := messageTexts(claimed)
+		e.restoreQueued(bg, ids)
 		if stopped() {
 			return
 		}
@@ -254,6 +277,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		return
 	}
 	ar.setSession(sess)
+	e.deliverClaimed(bg, claimed, run.ID)
 	e.appendRunLog(bg, run.ID, domain.LogPrompt, prompt)
 	if r, err := e.updateRun(bg, run.ID, func(r *domain.Run) error {
 		r.Status = domain.RunRunning
@@ -371,6 +395,12 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 
 	e.queueFollowups(bg, t, result)
 	e.removeWorktree(bg, repo, ws)
+	// Only a run that succeeded hands queued owner messages on (startTask does it once the run
+	// is unregistered); every other outcome returned above, and a denial, stall, timeout or
+	// failure waits for an explicit owner send or flush.
+	if status == domain.RunSucceeded {
+		ar.continueRoot = root.ID
+	}
 }
 
 // publish pushes the run's branch, opens the pull request if there is none, and moves the task

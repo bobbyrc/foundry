@@ -82,6 +82,8 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `POST /tasks` | `NewTask` | `Task` (201) |
 | `GET /tasks/{id}` | | `TaskDetail` |
 | `GET /tasks/{id}/conversation` | | `TaskConversation`: the task agent's root task, follow-up tasks, runs across them (oldest first), messages, `live_run_id`, and `can_send` with a `reason` when false. A follow-up task id returns its root's conversation. |
+| `POST /tasks/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202). Messages the task's agent (the root task or any follow-up id). A live agent that takes input gets it at once (`run_id` set); otherwise it is queued (`queued: true`) and the next run resumes the agent's session with it, started now when no run is live. 409 with the `reason` when the agent cannot be messaged |
+| `POST /tasks/{id}/conversation/flush` | | 202; starts the follow-up for queued messages now (the way past a denied, stalled, timed-out or failed run); no-op when none are queued |
 | `GET /agent-conversations` | | `[]AgentConversation`: root tasks with a run; open ones first, then ones closed or active in the last 7 days; at most 100 |
 | `POST /tasks/{id}/cancel` | | 204 |
 | `POST /tasks/{id}/retry` | `{"note":"…"}` (optional) | 204 |
