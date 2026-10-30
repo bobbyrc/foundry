@@ -79,8 +79,8 @@ Client to server:
 | `unsubscribe` | exactly one of `run_id`, `conversation_id` | stop |
 
 Client messages are decoded strictly: an unknown `kind`, an unknown field, both IDs or neither
-gets an `error` reply and is otherwise ignored. A frame that is not valid JSON or exceeds the
-read limit closes the socket.
+gets an `error` reply and is otherwise ignored, as does a frame that is not valid JSON. Only a
+frame over the read limit closes the socket (the library does that).
 
 ### Filtering
 
@@ -101,21 +101,27 @@ keep-alive, and a filter that decides whether a live event is sent. SSE passes a
 sends everything. The exact shape is the builder's call. The SSE handler's behaviour and tests
 must not change.
 
-The socket handler runs two goroutines: the shared loop (writes) and a reader (client messages,
-updating the socket's subscription set behind a mutex, and queueing the `subscribed` /
-`unsubscribed` / `error` replies for the writer, since only one goroutine may write to the
-connection). The keep-alive for the socket is a WebSocket ping (`Conn.Ping`), which also detects
+The socket handler runs two goroutines: the shared loop (events) and a reader (client
+messages). The reader updates the socket's subscription set behind a mutex and then writes the
+`subscribed` / `unsubscribed` / `error` reply itself: `coder/websocket` allows concurrent
+writes, and because the set changes before the reply is written, every event processed after
+the client sees `subscribed` passes the filter. The reader also cancels the stream when the
+client goes away (a hijacked connection does not cancel the request context). The keep-alive for the socket is a WebSocket ping (`Conn.Ping`), which also detects
 a dead peer.
 
 ### Security
 
 - **Origin.** A WebSocket upgrade is a GET, and `requireAuth` only applies the cross-site check
   (`sameOrigin`) to non-GET methods; `http.CrossOriginProtection` treats GET as safe and always
-  passes it. So the existing check does **not** protect this route. Keep the library's own
-  Origin check on (`websocket.Accept` refuses an `Origin` whose host differs from the request
-  `Host`), and add the hosts from `public_url` and `allowed_hosts` to `OriginPatterns` so the
-  UI works behind a reverse proxy. Never set `InsecureSkipVerify`. A test proves a cross-origin
-  upgrade is refused.
+  passes it. So the existing check does **not** protect this route, and WebSockets have no
+  CORS to fall back on. Use the library's own Origin check with no extra patterns:
+  `websocket.Accept` refuses an `Origin` whose host and port differ from the request `Host`.
+  Do not add `allowed_hosts` names as `OriginPatterns`: they carry no port, so a page served
+  from another port on the same machine would pass, and cookies are not scoped by port. Behind
+  a reverse proxy this still works, because the proxy must already pass the public `Host` for
+  the host guard, and the browser's `Origin` is that same public name. Never set
+  `InsecureSkipVerify`. Tests prove a cross-origin upgrade, and one from another port, are
+  refused.
 - **Credentials.** The session cookie authenticates browsers, as now. The API token is accepted
   only in the `Authorization` header (for tests and tools), never in the query string: the
   `?token=` exception in `tokenMatches` stays limited to `/api/v1/events`.
@@ -144,10 +150,11 @@ Inside, `EventSource` becomes `WebSocket` (URL from `location`, `ws:` or `wss:` 
 page), with the same backoff, `online` / `visibilitychange` retry, 401 check via `getStats`, and
 full refetch on reconnect.
 
-New: `watch(target: { run_id: string } | { conversation_id: string }): Promise<() => void>`.
-It sends `subscribe` (reference-counted, so two components watching one run send it once),
-resolves when `subscribed` arrives, and returns a function that releases it (`unsubscribe` when
-the count reaches zero). On every reconnect the client re-sends `subscribe` for every live
+New: `watch(target: { run_id: string } | { conversation_id: string }): { ready: Promise<void>;
+release: () => void }`. It sends `subscribe` (reference-counted, so two components watching one
+run send it once); `ready` resolves when `subscribed` arrives, and `release` lets go of it
+(`unsubscribe` when the count reaches zero). `release` is returned at once, not after `ready`,
+so a component that unmounts before the acknowledgement can still clean up. On every reconnect the client re-sends `subscribe` for every live
 watch, and the status becomes `live` only once every one of them is acknowledged with
 `subscribed`. Until then the status stays `reconnecting`. This matters because components run
 their catch-up fetch when the status turns `live`: a line written between that fetch and an
@@ -180,9 +187,9 @@ Go, in a new file `internal/api/ws_test.go` (httptest server, `coder/websocket` 
 - `run.log` delivered only after `subscribe` for that run, and not after `unsubscribe`;
   same for `chat.delta` by conversation;
 - `subscribed` arrives before the first event it covers;
-- unknown kind, unknown field, both IDs, neither ID each get `error` and the socket stays open;
+- invalid JSON, unknown kind, unknown field, both IDs, neither ID each get `error` and the socket stays open;
   the 65th subscription gets `error`;
-- a cross-origin upgrade is refused; an allowed host from `allowed_hosts` is accepted;
+- an upgrade from another site, or from another port on the same host, is refused; a same-origin one is accepted;
 - no credential is 401; `?token=` is refused on this route;
 - a signed-out user loses the socket within one (shortened) `pingInterval`;
 - sockets and SSE streams share the stream cap;
