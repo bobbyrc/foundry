@@ -12,6 +12,7 @@ import (
 // through read, operate or administer; see those helpers and auth.Action.
 func (s *server) apiRoutes(r chi.Router) {
 	s.read(r, "/events", s.events)
+	s.read(r, "/ws", s.eventsWS)
 	s.read(r, "/events/history", s.eventHistory)
 	s.read(r, "/stats", s.stats)
 

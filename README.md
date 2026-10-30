@@ -198,7 +198,7 @@ cmd/onett/      one binary: `onett serve` (daemon) and the CLI commands (API cli
 internal/domain/  shared types: Task, Run, Event, Approval, Deployment, Signal, Friction, outbox
 internal/config/  onett.yaml schema, loading, defaults, validation
 internal/store/   Store interface; store/sqlite implementation (SQLite, no cgo)
-internal/events/  event bus: stores events and fans them out to SSE subscribers
+internal/events/  event bus: stores events and fans them out to SSE and WebSocket subscribers
 internal/harness/ Harness interface and registry; claude/, codex/, exec/, fake/
 internal/workspace/ git worktrees, diff stats, commit, push
 internal/scm/     SCM interface; scm/github uses the gh CLI
@@ -208,7 +208,7 @@ internal/observe/ Observer interface; exec and sentry observers
 internal/notify/  Notifier interface; log, ntfy and exec notifiers
 internal/engine/  scheduler, supervisor, PR shepherd, loops, prompt assembly
 internal/chat/    orchestrator conversations
-internal/api/     HTTP API, SSE stream and the embedded web UI
+internal/api/     HTTP API, SSE stream (CLI), WebSocket (web UI) and the embedded web UI
 web/              React + Vite + TypeScript UI (built into internal/api/webdist)
 docs/             design, API, UI and plugin documentation
 ```

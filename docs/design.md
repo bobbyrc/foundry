@@ -61,7 +61,7 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
 4. **Configuration is a file you own.** `onett.yaml` (plus per-repo `.onett/` overrides) is
    the source of truth for projects, agents, policies and loops. The database holds only runtime
    state (tasks, runs, events). Put the config in your dotfiles repo if you like.
-5. **One API for every client.** The web UI is just a client of the HTTP+SSE API
+5. **One API for every client.** The web UI is just a client of the HTTP API (SSE for the CLI, a WebSocket for the UI)
    (`docs/api.md`); native and mobile apps later use the same API.
 6. **Onett manages itself.** The onett repo is registered as a project, so friction that
    agents report becomes issues that agents fix — that is the self-improvement loop.
@@ -70,7 +70,7 @@ paths or accounts, nothing that assumes one machine and one person) when it cost
 
 ```text
             chat / web UI / CLI / future apps
-                         │  HTTP + SSE (/api/v1)
+                         │  HTTP: SSE (CLI), WebSocket (UI) (/api/v1)
                 ┌────────▼─────────┐
                 │      onettd    │  single Go binary, SQLite state
                 │                  │
@@ -149,7 +149,7 @@ queued ─► running ─► review ─► merged ─► deploying ─► done
 
 The supervisor owns every harness session:
 
-- streams output into the run log (SSE to the UI) and updates `last_output_at`;
+- streams output into the run log (WebSocket to the UI) and updates `last_output_at`;
 - kills the session after `stall_timeout` without output (status `stalled`) or `run_timeout`
   overall (`timed_out`);
 - marks `denied` when the harness reports a permission denial;
@@ -218,7 +218,7 @@ never closes issues itself. Nothing is filed when there is no evidence. It is on
 Chat messages go to a persistent `orchestrator` harness session (resumed by session ID per
 conversation). It runs with the `onett` CLI on its PATH and `ONETT_API`/`ONETT_TOKEN` in
 its environment, so it delegates by running `onett task create …`, inspects with `onett
-task list`, `onett run logs`, and so on. Its answer streams back to the UI over SSE.
+task list`, `onett run logs`, and so on. Its answer streams back to the UI over its WebSocket.
 
 ## Code layout
 
@@ -227,7 +227,7 @@ cmd/onett/          one binary: `onett serve` (daemon) and CLI subcommands (API 
 internal/domain/      shared types: Task, Run, Event, Approval, Deployment, Signal, Friction, outbox
 internal/config/      onett.yaml schema, loading, defaults, validation
 internal/store/       Store interface; store/sqlite implementation (modernc.org/sqlite, no cgo)
-internal/events/      event bus: persist + fan-out to SSE subscribers
+internal/events/      event bus: persist + fan-out to SSE and WebSocket subscribers
 internal/harness/     Harness interface + registry; claude/, codex/, exec/, fake/
 internal/workspace/   git worktrees, diff stats, commit, push
 internal/scm/         SCM interface; scm/github (gh CLI)
@@ -237,7 +237,7 @@ internal/observe/     Observer interface; exec observer; sentry observer
 internal/notify/      Notifier interface; ntfy, exec, log
 internal/engine/      scheduler, supervisor, shepherd, loops, prompt assembly
 internal/chat/        orchestrator conversations
-internal/api/         chi HTTP API + SSE + embedded web UI
+internal/api/         chi HTTP API + SSE + WebSocket + embedded web UI
 web/                  React + Vite + TypeScript UI (built into internal/api/webdist)
 ```
 
@@ -257,6 +257,9 @@ web/                  React + Vite + TypeScript UI (built into internal/api/webd
 - The server answers only requests whose Host header is localhost, a loopback address, the bind
   host, the `public_url` host, or `server.allowed_hosts`. This blocks DNS rebinding, where a web
   page points its own name at 127.0.0.1. Responses carry a strict CSP and refuse framing.
+  Behind a reverse proxy, forward the `Upgrade` and `Connection` headers, or the UI's WebSocket
+  cannot connect, and keep the `Host` header the browser sent, since the host check and the
+  WebSocket's Origin check both compare against it.
 - Agent text that onett posts to GitHub (PR bodies, issues, comments) has an invisible
   zero-width space inserted after the @ of every mention outside fenced code blocks, so an agent
   cannot notify people. Release evidence is redacted

@@ -101,7 +101,10 @@ export interface LogLine {
   text: string;
 }
 
-/** An SSE event. Live-only events (run.log, chat.delta) may carry id 0. */
+/**
+ * A live event from the server (WebSocket for the UI, SSE for the CLI). Live-only events
+ * (run.log, chat.delta) may carry id 0.
+ */
 export interface OnettEvent<T = unknown> {
   id: number;
   time: string;
@@ -111,6 +114,19 @@ export interface OnettEvent<T = unknown> {
   run_id?: string;
   message: string;
   data?: T;
+}
+
+/** A frame the server sends on /api/v1/ws. Each is one JSON text message. */
+export type WsServerMessage =
+  | { kind: 'event'; event: OnettEvent }
+  | { kind: 'subscribed' | 'unsubscribed'; run_id?: string; conversation_id?: string }
+  | { kind: 'error'; message: string };
+
+/** A frame the client sends on /api/v1/ws. It names exactly one ID. */
+export interface WsClientMessage {
+  kind: 'subscribe' | 'unsubscribe';
+  run_id?: string;
+  conversation_id?: string;
 }
 
 export interface ChatDeltaData {

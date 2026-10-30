@@ -139,13 +139,24 @@ that needs remote access, such as Tailscale, and the name you use must be in
 
 ## Live data
 
-One `EventSource` to `/api/v1/events?after=<last id>`, which the browser sends with the session
-cookie. It starts only once someone is signed in. It reconnects with backoff (1s → 5s), and at once when the tab is shown again or the network returns. Events invalidate react-query keys: `task.*` → tasks, task detail, stats;
-`run.updated` → runs, run detail; `approval.*` → approvals, stats; `deploy.updated` →
-deployments; `signal.new` → signals; `friction.reported`/`issue.filed` → friction;
-`chat.message` → that conversation. `run.log` and `chat.delta` are delivered to subscribers
-directly (log viewer, chat stream) without refetching. Lists also refetch every 30s as a
-fallback.
+Each tab keeps one WebSocket open, to `/api/v1/ws?after=<last id>` (`wss:` on an https page). A
+WebSocket is a connection that stays open in both directions, so the server can push events and
+the page can ask for subscriptions over it. The browser sends the session cookie with the
+connection, and it starts only once someone is signed in. It reconnects with backoff (1s → 5s),
+and at once when the tab is shown again or the network returns. The `onett` CLI uses SSE
+(`/api/v1/events`) instead.
+
+Events invalidate react-query keys: `task.*` → tasks, task detail, stats; `run.updated` → runs,
+run detail; `approval.*` → approvals, stats; `deploy.updated` → deployments; `signal.new` →
+signals; `friction.reported`/`issue.filed` → friction; `chat.message` → that conversation.
+
+`run.log` goes only to tabs subscribed to that run, and `chat.delta` only to tabs subscribed to
+that conversation; every other event goes to every tab. A page subscribes with `watch()` in
+`web/src/events.ts`. The log viewer watches its run and, once the server confirms, fetches the
+lines it missed. The chat thread watches its conversation. After a reconnect the live indicator
+shows "live" only once the server has confirmed every subscription the page holds. A watch added
+on a connection that is already open does not change the indicator. Lists also refetch every 30s
+as a fallback.
 
 ## Pages
 

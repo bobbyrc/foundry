@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api';
 import { useCan } from '../auth';
-import { subscribe } from '../events';
+import { subscribe, watch } from '../events';
 import { cx, errorMessage } from '../lib/format';
 import { parseTime, formatRelative } from '../lib/time';
 import { useNow } from '../lib/clock';
@@ -179,6 +179,10 @@ function Thread({ conversationId }: { conversationId: string }) {
       }),
     [conversationId],
   );
+
+  // The server sends a conversation's chat tokens only to a socket that asked for them. Holding the
+  // watch while this thread is open, and letting go when it closes, keeps that request in place.
+  useEffect(() => watch({ conversation_id: conversationId }).release, [conversationId]);
 
   // A reply that finished without a chat.message event must not leave the provisional text behind.
   const busy = conversation.data?.conversation.busy ?? false;

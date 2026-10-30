@@ -12,7 +12,8 @@ export default defineConfig({
   server: {
     proxy: {
       // ONETT_API points the dev server at another daemon (the default is the local one).
-      '/api': { target: process.env.ONETT_API ?? 'http://127.0.0.1:7777' },
+      // ws: true forwards the /api/v1/ws upgrade to the daemon.
+      '/api': { target: process.env.ONETT_API ?? 'http://127.0.0.1:7777', ws: true },
     },
   },
   test: {
