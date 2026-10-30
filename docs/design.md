@@ -249,6 +249,20 @@ A run that was cancelled, denied, stalled, timed out or failed leaves them (inva
 explicit send or `POST /tasks/{id}/conversation/flush` starts the follow-up. Nothing here adds a
 path from agent output to a commit, push or merge: follow-ups run through the same publish code.
 
+### When a conversation closes
+
+A task agent's conversation stays open until something closes it, and closing only marks it
+(`closed_at`, `closed_by`, `closed_reason`): it never changes the task, runs or git. Three things
+close it. The agent, by setting `"finished": true` in its report, closed by `agent` with its
+summary as the reason (reviews are ignored). The orchestrator, with `onett task close-conversation
+ID --reason R` (`POST /tasks/{id}/conversation/close`), closed by `orchestrator`. The owner, by
+cancelling the task (closed by `owner:<username>`, or `orchestrator` when the API token cancels)
+or through the same route. A closed conversation refuses new messages; messages already queued
+stay queued and visible but are never delivered, because `continueConversation` does nothing for
+a closed one. Closing twice is a conflict. Only a signed-in person can reopen
+(`POST /tasks/{id}/conversation/reopen`), so an agent cannot undo an owner's decision. Both
+routes emit `conversation.updated` with the root `task_id`.
+
 A task re-queued or created by an owner message carries `follow_up_pending`; only its run claims
 the queue, resuming the session with the owner's text plus any merge-conflict section. An
 automatic retry after a failure never has the flag, so it keeps its attempt notes and leaves the

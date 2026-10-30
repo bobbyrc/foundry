@@ -196,24 +196,25 @@ type Event struct {
 // Event types. Clients must ignore types they do not know.
 // Types marked "live" are fanned out to subscribers but not persisted.
 const (
-	EvTaskCreated       = "task.created" // Data: Task
-	EvTaskUpdated       = "task.updated" // Data: Task
-	EvRunUpdated        = "run.updated"  // Data: Run (start, status change, finish)
-	EvRunLog            = "run.log"      // Data: []LogLine; live
-	EvPROpened          = "pr.opened"
-	EvPRMerged          = "pr.merged"
-	EvPolicyDecision    = "policy.decision"    // Data: policy.Decision
-	EvApprovalRequested = "approval.requested" // Data: Approval
-	EvApprovalDecided   = "approval.decided"   // Data: Approval
-	EvDeployUpdated     = "deploy.updated"     // Data: Deployment
-	EvSignalNew         = "signal.new"         // Data: Signal
-	EvFrictionReported  = "friction.reported"  // Data: Friction
-	EvIssueFiled        = "issue.filed"
-	EvChatMessage       = "chat.message" // Data: ChatMessage
-	EvChatDelta         = "chat.delta"   // Data: {"conversation_id","text"}; live
-	EvLoopError         = "loop.error"
-	EvNotification      = "notification"
-	EvSystem            = "system"
+	EvTaskCreated         = "task.created" // Data: Task
+	EvTaskUpdated         = "task.updated" // Data: Task
+	EvRunUpdated          = "run.updated"  // Data: Run (start, status change, finish)
+	EvRunLog              = "run.log"      // Data: []LogLine; live
+	EvPROpened            = "pr.opened"
+	EvPRMerged            = "pr.merged"
+	EvPolicyDecision      = "policy.decision"    // Data: policy.Decision
+	EvApprovalRequested   = "approval.requested" // Data: Approval
+	EvApprovalDecided     = "approval.decided"   // Data: Approval
+	EvDeployUpdated       = "deploy.updated"     // Data: Deployment
+	EvSignalNew           = "signal.new"         // Data: Signal
+	EvFrictionReported    = "friction.reported"  // Data: Friction
+	EvIssueFiled          = "issue.filed"
+	EvChatMessage         = "chat.message"         // Data: ChatMessage
+	EvConversationUpdated = "conversation.updated" // Data: {"task_id"}
+	EvChatDelta           = "chat.delta"           // Data: {"conversation_id","text"}; live
+	EvLoopError           = "loop.error"
+	EvNotification        = "notification"
+	EvSystem              = "system"
 )
 
 type ApprovalStatus string

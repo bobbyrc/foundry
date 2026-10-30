@@ -318,6 +318,10 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		return nil
 	})
 
+	if result.Finished && t.Kind != domain.KindReview {
+		e.closeOnFinished(bg, t, result.Summary)
+	}
+
 	if t.Kind == domain.KindReview {
 		e.applyReview(bg, t, parent, ws, result)
 		e.removeWorktree(bg, repo, ws)

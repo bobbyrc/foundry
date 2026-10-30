@@ -292,6 +292,14 @@ func (c *Client) CancelTask(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodPost, "/tasks/"+url.PathEscape(id)+"/cancel", nil, nil, nil)
 }
 
+// CloseTaskConversation calls POST /tasks/{id}/conversation/close.
+func (c *Client) CloseTaskConversation(ctx context.Context, id, reason string) error {
+	body := struct {
+		Reason string `json:"reason"`
+	}{reason}
+	return c.do(ctx, http.MethodPost, "/tasks/"+url.PathEscape(id)+"/conversation/close", nil, body, nil)
+}
+
 // RetryTask calls POST /tasks/{id}/retry. An empty note is not sent.
 func (c *Client) RetryTask(ctx context.Context, id, note string) error {
 	var body any

@@ -51,16 +51,25 @@ var cancellableStatuses = []domain.TaskStatus{
 // CancelTask cancels a task that is not done, failed or already cancelled (a blocked task may be
 // cancelled). It also cancels the task's open children, such as an in-flight review, and stops
 // their runs. The status check and the change happen in one store update.
-func (e *Engine) CancelTask(ctx context.Context, id string) error {
-	if _, err := e.setTask(ctx, id, "cancelled by owner", func(t *domain.Task) error {
+func (e *Engine) CancelTask(ctx context.Context, id, by string) error {
+	t, err := e.setTask(ctx, id, "cancelled by owner", func(t *domain.Task) error {
 		switch t.Status {
 		case domain.TaskDone, domain.TaskFailed, domain.TaskCancelled:
 			return fmt.Errorf("%w: task is %s", api.ErrConflict, t.Status)
 		}
 		t.Status = domain.TaskCancelled
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return err
+	}
+	// The owner is done with this agent; its queued messages stay queued but are never sent.
+	if t.Kind != domain.KindReview {
+		if root, err := e.conversationRoot(ctx, t); err == nil {
+			if err := e.closeConversation(ctx, root, by, "task cancelled"); err != nil && !errors.Is(err, api.ErrConflict) {
+				e.d.Logger.Error("cancel: close conversation", "task", id, "err", err)
+			}
+		}
 	}
 	return e.cancelTree(ctx, id)
 }

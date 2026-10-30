@@ -14,7 +14,9 @@ type Controller interface {
 	// CreateTask validates the project, fills Role from routing when empty, sets MaxAttempts
 	// from limits, queues the task and wakes the scheduler.
 	CreateTask(ctx context.Context, t domain.Task) (domain.Task, error)
-	CancelTask(ctx context.Context, id string) error
+	// CancelTask cancels the task. by names who asked ("orchestrator" or "owner:<username>"); it is
+	// recorded as the closer of the task agent's conversation.
+	CancelTask(ctx context.Context, id, by string) error
 	// RetryTask re-queues a blocked, failed or cancelled task with Attempts reset to 0.
 	// A non-empty note is appended to the task body as human guidance.
 	RetryTask(ctx context.Context, id, note string) error
@@ -31,6 +33,11 @@ type Controller interface {
 	// FlushTaskMessages starts the follow-up for queued messages now, instead of waiting for the
 	// agent's run to succeed. It does nothing when no message is queued.
 	FlushTaskMessages(ctx context.Context, taskID string) error
+	// CloseTaskConversation closes the task agent's conversation (ErrConflict when it is already
+	// closed); ReopenTaskConversation opens it again (ErrConflict when it is open). Neither
+	// changes the task.
+	CloseTaskConversation(ctx context.Context, taskID, by, reason string) error
+	ReopenTaskConversation(ctx context.Context, taskID string) error
 	DecideApproval(ctx context.Context, id string, approve bool, note string) (domain.Approval, error)
 
 	Loops(ctx context.Context) []LoopView

@@ -84,8 +84,10 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `GET /tasks/{id}/conversation` | | `TaskConversation`: the task agent's root task, follow-up tasks, runs across them (oldest first), messages, `live_run_id`, and `can_send` with a `reason` when false. A follow-up task id returns its root's conversation. |
 | `POST /tasks/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202). Messages the task's agent (the root task or any follow-up id). A live agent that takes input gets it at once (`run_id` set); otherwise it is queued (`queued: true`) and the next run resumes the agent's session with it, started now when no run is live. 409 with the `reason` when the agent cannot be messaged |
 | `POST /tasks/{id}/conversation/flush` | | 202; starts the follow-up for queued messages now (the way past a denied, stalled, timed-out or failed run); no-op when none are queued |
+| `POST /tasks/{id}/conversation/close` | `{"reason":"…"}` | 204; closes the task agent's conversation: it can no longer be messaged and queued messages stay queued, never delivered. Marks the conversation only; the task is untouched. Closed by `orchestrator` (the API token) or `owner:<username>`; 409 when already closed. Emits `conversation.updated` |
+| `POST /tasks/{id}/conversation/reopen` | | 204; reopens a closed conversation. A signed-in person only (the API token gets 403); 409 when it is open. Emits `conversation.updated` |
 | `GET /agent-conversations` | | `[]AgentConversation`: root tasks with a run; open ones first, then ones closed or active in the last 7 days; at most 100 |
-| `POST /tasks/{id}/cancel` | | 204 |
+| `POST /tasks/{id}/cancel` | | 204; also closes the task agent's conversation (by `owner:<username>` or `orchestrator`) |
 | `POST /tasks/{id}/retry` | `{"note":"…"}` (optional) | 204 |
 | `GET /runs` | `?task_id=&project=&status=&limit=` | `[]Run` |
 | `GET /runs/{id}` | | `Run` |

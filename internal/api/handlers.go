@@ -205,6 +205,44 @@ func (s *server) flushTaskMessages(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+func (s *server) closeTaskConversation(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if err := s.opts.Controller.CloseTaskConversation(r.Context(), id, closedBy(r), in.Reason); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// reopenTaskConversation is for a person only: the API token, which the orchestrator holds, gets
+// 403, so an agent cannot undo the owner's close.
+func (s *server) reopenTaskConversation(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userPrincipal(w, r); !ok {
+		return
+	}
+	if err := s.opts.Controller.ReopenTaskConversation(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// closedBy names the caller for the record of who closed a conversation: "orchestrator" for the
+// API token, "owner:<username>" for a signed-in person.
+func closedBy(r *http.Request) string {
+	if p, ok := principalFrom(r.Context()); ok && !p.token {
+		return "owner:" + p.user.Username
+	}
+	return "orchestrator"
+}
+
 func (s *server) agentConversations(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.opts.Controller.AgentConversations(r.Context())
 	if err != nil {
@@ -252,7 +290,7 @@ func (s *server) getTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) cancelTask(w http.ResponseWriter, r *http.Request) {
-	if err := s.opts.Controller.CancelTask(r.Context(), chi.URLParam(r, "id")); err != nil {
+	if err := s.opts.Controller.CancelTask(r.Context(), chi.URLParam(r, "id"), closedBy(r)); err != nil {
 		s.fail(w, err)
 		return
 	}

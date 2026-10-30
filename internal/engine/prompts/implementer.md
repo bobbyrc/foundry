@@ -19,3 +19,5 @@ You turn a task into a working, tested change on your branch.
 
 If the task is not actionable as written (unclear, already done, not reproducible), do not
 invent work: report `no_changes` with the reason, or `blocked` with the question.
+
+Leave `finished` unset: your change still goes through review and merge.

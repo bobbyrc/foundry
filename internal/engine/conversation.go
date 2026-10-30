@@ -490,3 +490,110 @@ func (e *Engine) deliverClaimed(ctx context.Context, claimed []domain.ChatMessag
 		e.emitMessage(ctx, got)
 	}
 }
+
+// maxCloseReason caps the reason stored when an agent's summary becomes it.
+const maxCloseReason = 200
+
+// CloseTaskConversation closes the conversation of the task agent that works on taskID: the
+// owner can no longer message it, and queued messages stay queued but are never delivered. It
+// only marks the conversation; the task, its runs and git are untouched (invariant 1). by is
+// "agent", "orchestrator" or "owner:<username>". ErrConflict when it is already closed. The
+// conversation row is created when none exists yet.
+func (e *Engine) CloseTaskConversation(ctx context.Context, taskID, by, reason string) error {
+	t, err := e.d.Store.GetTask(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	root, err := e.conversationRoot(ctx, t)
+	if err != nil {
+		return err
+	}
+	return e.closeConversation(ctx, root, by, reason)
+}
+
+func (e *Engine) closeConversation(ctx context.Context, root domain.Task, by, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "closed"
+	}
+	e.convMu.Lock()
+	conv, err := e.d.Store.GetConversationByTask(ctx, root.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		conv, err = e.d.Store.CreateConversation(ctx, domain.Conversation{
+			TaskID: root.ID, Title: root.Title, Project: root.Project,
+		})
+	}
+	if err == nil {
+		_, err = e.d.Store.UpdateConversation(ctx, conv.ID, func(c *domain.Conversation) error {
+			if c.ClosedAt != nil {
+				return fmt.Errorf("%w: conversation is already closed", api.ErrConflict)
+			}
+			now := time.Now().UTC()
+			c.ClosedAt, c.ClosedBy, c.ClosedReason = &now, by, reason
+			return nil
+		})
+	}
+	e.convMu.Unlock()
+	if err != nil {
+		return err
+	}
+	e.d.Bus.Emit(ctx, domain.EvConversationUpdated, root.Project, root.ID, "", "conversation closed by "+by,
+		map[string]string{"task_id": root.ID})
+	return nil
+}
+
+// ReopenTaskConversation opens a closed conversation again. It clears the close and nothing
+// else: queued messages stay as they were until the owner sends or flushes. ErrConflict when the
+// conversation is open.
+func (e *Engine) ReopenTaskConversation(ctx context.Context, taskID string) error {
+	t, err := e.d.Store.GetTask(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	root, err := e.conversationRoot(ctx, t)
+	if err != nil {
+		return err
+	}
+	e.convMu.Lock()
+	conv, err := e.d.Store.GetConversationByTask(ctx, root.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		e.convMu.Unlock()
+		return fmt.Errorf("%w: conversation is not closed", api.ErrConflict)
+	}
+	if err == nil {
+		_, err = e.d.Store.UpdateConversation(ctx, conv.ID, func(c *domain.Conversation) error {
+			if c.ClosedAt == nil {
+				return fmt.Errorf("%w: conversation is not closed", api.ErrConflict)
+			}
+			c.ClosedAt, c.ClosedBy, c.ClosedReason = nil, "", ""
+			return nil
+		})
+	}
+	e.convMu.Unlock()
+	if err != nil {
+		return err
+	}
+	e.d.Bus.Emit(ctx, domain.EvConversationUpdated, root.Project, root.ID, "", "conversation reopened",
+		map[string]string{"task_id": root.ID})
+	return nil
+}
+
+// closeOnFinished closes the conversation when the agent reported finished. A conversation the
+// owner already closed stays as it was.
+func (e *Engine) closeOnFinished(ctx context.Context, t domain.Task, summary string) {
+	root, err := e.conversationRoot(ctx, t)
+	if err != nil {
+		e.d.Logger.Error("finished: find conversation root", "task", t.ID, "err", err)
+		return
+	}
+	reason := strings.TrimSpace(summary)
+	if r := []rune(reason); len(r) > maxCloseReason {
+		reason = string(r[:maxCloseReason]) + "…"
+	}
+	if reason == "" {
+		reason = "finished"
+	}
+	if err := e.closeConversation(ctx, root, "agent", reason); err != nil && !errors.Is(err, api.ErrConflict) {
+		e.d.Logger.Error("finished: close conversation", "task", root.ID, "err", err)
+	}
+}
