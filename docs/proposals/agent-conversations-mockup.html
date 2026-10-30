@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onett chat mockup</title>
+<style>
+  :root {
+    --bg: #e3eae4; --panel: #f5f8f5; --panel-2: #eaf0eb; --input: #fff; --border: #b9c6bd;
+    --rule: #cdd7d0; --text: #18201c; --muted: #4b5751; --board: #1f2422; --board-2: #2b312e;
+    --board-text: #eef3ef; --board-muted: #a9b5ae; --board-rule: #3d4541; --lamp-run: #2fa35a;
+    --lamp-call: #f2c230; --lamp-stop: #d7342a; --lamp-done: #7f9d8c; --ok: #1d6f3d;
+    --call: #7a5800; --danger: #b0251c; --link: #1f5c3e;
+    --font: 'Barlow', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --cond: 'Barlow Condensed', 'Barlow', -apple-system, system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
+  .note { background: #fff8dc; border-bottom: 1px solid #e6d58a; padding: 8px 16px; font-size: 13px; }
+  .shell { display: grid; grid-template-columns: 180px 1fr; min-height: calc(100vh - 37px); }
+  .rail { background: var(--board); color: var(--board-text); padding: 16px 0; }
+  .rail .brand { font: 700 20px var(--cond); padding: 0 16px 16px; letter-spacing: .02em; }
+  .rail a { display: block; padding: 7px 16px; color: var(--board-muted); text-decoration: none; font-size: 14px; }
+  .rail a.on { color: var(--board-text); background: var(--board-2); box-shadow: inset 3px 0 var(--lamp-call); }
+  .page { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 0; }
+  .list { border-right: 1px solid var(--rule); padding: 18px 0; background: var(--panel-2); }
+  .list h4 { font: 700 13px var(--cond); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 16px 6px; }
+  .newchat { margin: 0 16px 6px; width: calc(100% - 32px); padding: 9px 12px; background: var(--text); color: #fff;
+    border: 0; border-radius: 2px; font: 600 14px var(--font); text-align: left; cursor: pointer; }
+  .conv { padding: 8px 16px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+  .conv:hover { background: var(--panel); }
+  .conv.on { background: var(--panel); font-weight: 600; box-shadow: inset 3px 0 var(--text); }
+  .conv .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .conv .m { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .task { padding: 8px 16px 2px; font-size: 13px; color: var(--muted); }
+  .agent { padding: 5px 16px 5px 28px; font-size: 13.5px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .agent:hover { background: var(--panel); }
+  .agent.on { background: var(--panel); font-weight: 600; box-shadow: inset 3px 0 var(--text); }
+  .lamp { width: 9px; height: 9px; display: inline-block; flex: none; }
+  .l-run { background: var(--lamp-run); animation: blink 1.2s steps(2, jump-none) infinite; }
+  .l-done { background: var(--lamp-done); } .l-stop { background: var(--lamp-stop); } .l-call { background: var(--lamp-call); }
+  @keyframes blink { 50% { opacity: .25; } }
+  .thread { display: flex; flex-direction: column; height: calc(100vh - 37px); }
+  .head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--rule); background: var(--panel); }
+  .head .who { font: 700 20px var(--cond); }
+  .head .sub { font-size: 13px; color: var(--muted); }
+  .head .sub a { color: var(--link); }
+  .seg { margin-left: auto; display: flex; border: 1px solid var(--border); border-radius: 2px; overflow: hidden; }
+  .seg button { border: 0; background: var(--input); padding: 5px 12px; font: 500 13px var(--font); cursor: pointer; color: var(--muted); }
+  .seg button.on { background: var(--text); color: #fff; }
+  .scroll { flex: 1; overflow-y: auto; padding: 22px 24px; }
+  .col { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .you { align-self: flex-end; max-width: 72ch; background: var(--panel); border: 1px solid var(--border); padding: 9px 13px; }
+  .lbl { font: 700 12px var(--cond); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 2px; }
+  .ai p { margin: 0 0 8px; }
+  .tool { border-left: 2px solid var(--rule); padding: 3px 0 3px 10px; font-size: 13.5px; cursor: pointer; }
+  .tool .row { display: flex; gap: 8px; align-items: baseline; }
+  .tool .chev { color: var(--ok); font-family: var(--mono); width: 10px; }
+  .tool .name { font-weight: 600; }
+  .tool .arg { font-family: var(--mono); font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tool .diff { margin-left: auto; font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .tool .diff .a { color: var(--ok); } .tool .diff .d { color: var(--danger); }
+  .tool pre { display: none; margin: 6px 0 2px; background: var(--input); border: 1px solid var(--rule); padding: 8px 10px;
+    font: 12px/1.45 var(--mono); white-space: pre-wrap; color: var(--muted); }
+  .tool.open pre { display: block; }
+  .tool.open .chev::before { content: '▾'; } .tool .chev::before { content: '▸'; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: var(--input);
+    padding: 6px 10px; font-size: 13.5px; margin: 2px 0 6px; }
+  .chip a { color: var(--link); font-size: 12.5px; }
+  .working { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .queued { align-self: flex-end; max-width: 72ch; border: 1px dashed var(--border); padding: 7px 12px; font-size: 14px; color: var(--muted); }
+  .queued .q { font-size: 12px; display: block; }
+  .queued a { color: var(--link); }
+  .composer { border-top: 1px solid var(--rule); background: var(--panel); padding: 12px 24px 14px; }
+  .composer .box { max-width: 760px; margin: 0 auto; background: var(--input); border: 1px solid var(--border); padding: 10px 12px; }
+  .composer .ph { color: #8a968f; min-height: 40px; }
+  .composer .bar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+  .composer .send { background: var(--text); color: #fff; border: 0; padding: 5px 14px; font: 600 13px var(--font); border-radius: 2px; }
+  .hint { max-width: 760px; margin: 0 auto 8px; font-size: 13px; color: var(--call); background: #fbf3d4; border: 1px solid #ead79a; padding: 6px 10px; }
+  .hint a { color: var(--link); }
+  /* terminal view */
+  .term { font: 12.5px/1.55 var(--mono); max-width: 100%; }
+  .term .ln { display: grid; grid-template-columns: 64px 18px 1fr; }
+  .term .ts { color: #8a968f; }
+  .term .k-user { color: var(--text); font-weight: 700; }
+  .term .k-tool .g { color: var(--ok); }
+  .term .k-res { color: var(--muted); }
+  .term .k-text { color: var(--text); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="note"><b>Mockup</b> (throwaway, not onett code). Click conversations in the list, click tool rows to expand them, and try the Conversation / Terminal toggle.</div>
+<div class="shell">
+  <nav class="rail">
+    <div class="brand">ONETT</div>
+    <a>Overview</a><a>Projects</a><a class="on">Chat</a><a>Tasks</a><a>Approvals</a><a>Runs</a><a>Deploys</a>
+  </nav>
+  <div class="page">
+    <aside class="list">
+      <button class="newchat">+ New conversation</button>
+      <h4>Orchestrator</h4>
+      <div class="conv on" data-c="orch"><span class="t">Fix the flaky stall test</span><span class="m">2m ago</span></div>
+      <div class="conv" data-c="orch"><span class="t">What's running right now?</span><span class="m">yesterday</span></div>
+      <div class="conv" data-c="orch"><span class="t">Triage open issues in onett</span><span class="m">Oct 27</span></div>
+
+      <h4>Agents</h4>
+      <div class="task">Fix flaky TestStallEndsOnCancel</div>
+      <div class="agent" data-c="impl"><span class="lamp l-run"></span>implementer · run 1</div>
+      <div class="task">Triage: codex resume loses model</div>
+      <div class="agent" data-c="impl"><span class="lamp l-done"></span>triager · run 1</div>
+      <div class="task">Add WebSocket keepalive</div>
+      <div class="agent" data-c="impl"><span class="lamp l-stop"></span>implementer · run 2</div>
+      <div class="agent" data-c="impl"><span class="lamp l-done"></span>reviewer · run 1</div>
+    </aside>
+
+    <section class="thread">
+      <div class="head">
+        <div>
+          <div class="who" id="who">Orchestrator</div>
+          <div class="sub" id="sub">claude · opus · Fix the flaky stall test</div>
+        </div>
+        <div class="seg">
+          <button class="on" data-v="conv">Conversation</button>
+          <button data-v="term">Terminal</button>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <!-- ORCHESTRATOR, conversation view -->
+        <div class="col" id="orch-conv">
+          <div class="you">TestStallEndsOnCancel flaked twice on main today. Can you get someone on it?</div>
+          <div class="ai">
+            <div class="lbl">Orchestrator</div>
+            <div class="tool"><div class="row"><span class="chev"></span><span class="name">Bash</span><span class="arg">onett run logs --task flaky --failed | tail -40</span></div>
+              <pre>--- FAIL: TestStallEndsOnCancel (5.02s)
+    stall_test.go:88: run still active after cancel: status=running
+FAIL  github.com/bobbyrc/onett/internal/engine  12.4s</pre></div>
+            <div class="tool"><div class="row"><span class="chev"></span><span class="name">Read</span><span class="arg">internal/engine/stall_test.go</span></div>
+              <pre>  80	cancel()
+  81	time.Sleep(50 * time.Millisecond)
+  82	// the stall watcher may still be mid-tick here
+  …</pre></div>
+            <div class="tool"><div class="row"><span class="chev"></span><span class="name">Bash</span><span class="arg">onett task create --project onett --kind bugfix --title "Fix flaky TestStallEndsOnCancel" …</span></div>
+              <pre>created task t_8f2c1 (bugfix, implementer, priority 0)</pre></div>
+            <div class="chip"><span class="lamp l-run"></span>Fix flaky TestStallEndsOnCancel · running <a href="#" data-c="impl">open agent</a> <a href="#">task</a></div>
+            <p>Queued <b>t_8f2c1</b>: the test sleeps 50ms after cancel and races the stall watcher's tick. I asked the implementer to wait on the run's done channel instead of sleeping, and to run the test 200 times with <code>-race</code> before reporting.</p>
+          </div>
+          <div class="you">Thanks. Tell me if it touches the stall watcher itself.</div>
+          <div class="ai"><div class="lbl">Orchestrator</div><p>Will do. I'll flag it here if the diff goes beyond the test file.</p></div>
+        </div>
+
+        <!-- ORCHESTRATOR, terminal view -->
+        <div class="col term hidden" id="orch-term">
+          <div class="ln k-user"><span class="ts">14:02:11</span><span>›</span><span>TestStallEndsOnCancel flaked twice on main today. Can you get someone on it?</span></div>
+          <div class="ln k-tool"><span class="ts">14:02:14</span><span class="g">●</span><span>Bash  onett run logs --task flaky --failed | tail -40</span></div>
+          <div class="ln k-res"><span class="ts"></span><span>⎿</span><span>--- FAIL: TestStallEndsOnCancel (5.02s)</span></div>
+          <div class="ln k-res"><span class="ts"></span><span></span><span>    stall_test.go:88: run still active after cancel: status=running</span></div>
+          <div class="ln k-tool"><span class="ts">14:02:16</span><span class="g">●</span><span>Read  internal/engine/stall_test.go</span></div>
+          <div class="ln k-res"><span class="ts"></span><span>⎿</span><span>Read 142 lines</span></div>
+          <div class="ln k-tool"><span class="ts">14:02:21</span><span class="g">●</span><span>Bash  onett task create --project onett --kind bugfix --title "Fix flaky TestStallEndsOnCancel" …</span></div>
+          <div class="ln k-res"><span class="ts"></span><span>⎿</span><span>created task t_8f2c1 (bugfix, implementer, priority 0)</span></div>
+          <div class="ln k-text"><span class="ts">14:02:24</span><span>●</span><span>Queued t_8f2c1: the test sleeps 50ms after cancel and races the stall watcher's tick. …</span></div>
+          <div class="ln k-user"><span class="ts">14:03:02</span><span>›</span><span>Thanks. Tell me if it touches the stall watcher itself.</span></div>
+          <div class="ln k-text"><span class="ts">14:03:05</span><span>●</span><span>Will do. I'll flag it here if the diff goes beyond the test file.</span></div>
+        </div>
+
+        <!-- TASK AGENT, conversation view -->
+        <div class="col hidden" id="impl-conv">
+          <div class="you"><div class="lbl">Task prompt · from orchestrator</div>Fix flaky TestStallEndsOnCancel: the test sleeps 50ms after cancel and races the stall watcher's tick. Wait on the run's done channel instead…</div>
+          <div class="ai">
+            <div class="lbl">Implementer</div>
+            <p>I'll confirm the race first, then replace the sleep with a wait on the run finishing.</p>
+            <div class="tool"><div class="row"><span class="chev"></span><span class="name">Bash</span><span class="arg">go test -race -count=200 -run TestStallEndsOnCancel ./internal/engine/</span></div>
+              <pre>--- FAIL: TestStallEndsOnCancel (5.01s)   [3 of 200]
+FAIL</pre></div>
+            <div class="tool"><div class="row"><span class="chev"></span><span class="name">Edit</span><span class="arg">internal/engine/stall_test.go</span><span class="diff"><span class="a">+6</span> <span class="d">−2</span></span></div>
+              <pre>-	cancel()
+-	time.Sleep(50 * time.Millisecond)
++	cancel()
++	select {
++	case &lt;-sess.Done():
++	case &lt;-time.After(5 * time.Second):
++		t.Fatal("run did not end after cancel")
++	}</pre></div>
+            <div class="tool"><div class="row"><span class="chev"></span><span class="name">Bash</span><span class="arg">go test -race -count=200 -run TestStallEndsOnCancel ./internal/engine/</span></div>
+              <pre>(running…)</pre></div>
+          </div>
+          <div class="working"><span class="lamp l-run"></span>Working · 3m 41s · output 2s ago</div>
+          <div class="queued"><span class="q">Queued · sends when the agent finishes this turn · <a href="#">edit</a> · <a href="#">cancel</a></span>Also check whether the same sleep pattern is in loop_shepherd_test.go.</div>
+        </div>
+
+        <!-- TASK AGENT, terminal view -->
+        <div class="col term hidden" id="impl-term">
+          <div class="ln k-user"><span class="ts">14:02:40</span><span>›</span><span>[task prompt] Fix flaky TestStallEndsOnCancel: the test sleeps 50ms after cancel and races …</span></div>
+          <div class="ln k-text"><span class="ts">14:02:52</span><span>●</span><span>I'll confirm the race first, then replace the sleep with a wait on the run finishing.</span></div>
+          <div class="ln k-tool"><span class="ts">14:02:53</span><span class="g">●</span><span>Bash  go test -race -count=200 -run TestStallEndsOnCancel ./internal/engine/</span></div>
+          <div class="ln k-res"><span class="ts"></span><span>⎿</span><span>--- FAIL: TestStallEndsOnCancel (5.01s)   [3 of 200]</span></div>
+          <div class="ln k-tool"><span class="ts">14:04:30</span><span class="g">●</span><span>Edit  internal/engine/stall_test.go  (+6 −2)</span></div>
+          <div class="ln k-tool"><span class="ts">14:04:33</span><span class="g">●</span><span>Bash  go test -race -count=200 -run TestStallEndsOnCancel ./internal/engine/</span></div>
+          <div class="ln k-res"><span class="ts"></span><span>⎿</span><span>running…</span></div>
+          <div class="ln k-user"><span class="ts">14:05:10</span><span>›</span><span>[queued] Also check whether the same sleep pattern is in loop_shepherd_test.go.</span></div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="hint hidden" id="hint">You're talking directly to this task's agent. For anything beyond this task, <a href="#" data-c="orch">ask the orchestrator</a>.</div>
+        <div class="box">
+          <div class="ph" id="ph">Message the orchestrator…</div>
+          <div class="bar"><span>Enter to send · Shift+Enter for a new line · Esc stops the current turn</span><button class="send">Send</button></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+  let who = 'orch', view = 'conv';
+  const meta = {
+    orch: { who: 'Orchestrator', sub: 'claude · opus · Fix the flaky stall test', ph: 'Message the orchestrator…' },
+    impl: { who: 'Implementer · run 1', sub: 'claude · sonnet · task <a href="#">Fix flaky TestStallEndsOnCancel</a> · branch onett/t_8f2c1', ph: 'Message the implementer… (queues until this turn ends)' },
+  };
+  function render() {
+    for (const id of ['orch-conv', 'orch-term', 'impl-conv', 'impl-term'])
+      document.getElementById(id).classList.toggle('hidden', id !== who + '-' + view);
+    document.getElementById('who').textContent = meta[who].who;
+    document.getElementById('sub').innerHTML = meta[who].sub;
+    document.getElementById('ph').textContent = meta[who].ph;
+    document.getElementById('hint').classList.toggle('hidden', who !== 'impl');
+    document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
+  }
+  document.addEventListener('click', e => {
+    const c = e.target.closest('[data-c]');
+    if (c) {
+      e.preventDefault(); who = c.dataset.c;
+      document.querySelectorAll('.conv, .agent').forEach(x => x.classList.remove('on'));
+      if (c.matches('.conv, .agent')) c.classList.add('on');
+      else document.querySelector(who === 'orch' ? '.conv' : '.agent').classList.add('on');
+      render(); return;
+    }
+    const v = e.target.closest('.seg button');
+    if (v) { view = v.dataset.v; render(); return; }
+    const t = e.target.closest('.tool');
+    if (t) t.classList.toggle('open');
+  });
+  render();
+</script>
+</body>
+</html>
