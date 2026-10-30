@@ -219,9 +219,13 @@ How the follow-up runs depends on where the task is:
 - **Cancelled:** cancelling a task closes its conversation (below), so there is no follow-up.
 
 Codex: `codex exec resume` takes no `--sandbox` or `--approve-for-me` flags (see
-`internal/harness/codex/codex.go`). **Builder must verify** that a resumed Codex session keeps
-the workspace-write sandbox it started with. Until that is shown, Codex task agents are
-read-only once their run ends, with the reason in place of the message box.
+`internal/harness/codex/codex.go`). Checked on 2026-10-29 with codex-cli 0.166.0: a resumed
+session started with neither flag runs **read-only**. It could not write inside its own working
+directory, and outside it was blocked too. With `-c sandbox_mode="workspace-write"` on the
+resume command, it could write inside its working directory and still could not write outside
+it. So the Codex harness passes that override on every resume unless the config already picks
+a sandbox, and Codex task agents can be continued like Claude ones. This also fixes resumed
+orchestrator turns on Codex, which today silently run read-only.
 
 ### When a conversation closes
 
@@ -326,11 +330,10 @@ The change touches `internal/engine/prompts/**`, `internal/api/routes.go` and pr
 `internal/engine/helpers.go`, all high risk under the built-in rules, so the owner approves the
 PR.
 
-## Builder must verify
+## Checked against the real CLIs
 
-- That a resumed Codex session keeps its sandbox (see **Follow-ups**).
-
-Settled on 2026-10-29 against the installed Claude Code CLI: the input message shape is one JSON
+Everything this section once listed for the builder to verify is settled. Codex is under
+**Follow-ups**. Claude was settled on 2026-10-29 against the installed Claude Code CLI: the input message shape is one JSON
 line per message, `{"type":"user","message":{"role":"user","content":"<text>"}}`. A message
 written after a `result` line starts another turn in the same process, which emits another
 `result` line (`result_index` counts them; `total_cost_usd` is cumulative; `usage` is per turn).
@@ -360,6 +363,5 @@ shared transcript component and the Chat page for orchestrator conversations, wi
 toggle; (3) the Claude harness on stream-json input with `Steerable`, used first by the
 orchestrator, plus queued messages and Stop; (4) task agent conversations, read-only; (5) task
 agent messages and follow-ups, including after a merge; (6) closing and reopening, `finished`,
-and the prompt changes. Codex task agents stay read-only after a run until the Codex sandbox
-check passes. Docs (`docs/ui.md`, `docs/api.md`, `docs/design.md`, the README's chat section)
+and the prompt changes; and, early, the Codex resume sandbox override. Docs (`docs/ui.md`, `docs/api.md`, `docs/design.md`, the README's chat section)
 change with the piece that changes the behaviour they describe.

@@ -184,6 +184,36 @@ any task.
 - [ ] **Step 4: Run all harness tests and the full Go suite; all pass**
 - [ ] **Step 5: Commit** `Run Claude with stream-json input and let callers send mid-run`
 
+### Task 2b: Codex resumes keep a workspace-write sandbox
+
+Background (spec, **Follow-ups**, Codex paragraph): `codex exec resume` takes no `--sandbox` or
+`--approve-for-me` flag, and without one a resumed session runs read-only. Verified on
+codex-cli 0.166.0: `-c sandbox_mode="workspace-write"` on the resume command restores writing
+inside the working directory, and writing outside it stays blocked.
+
+**Files:**
+- Modify: `internal/harness/codex/codex.go` (`buildArgs` and its doc comment)
+- Modify: any doc that says resumed Codex sessions get no sandbox default (`grep -rn "resume" docs README.md`)
+- Test: `internal/harness/codex/resume_sandbox_conv_test.go`
+
+**Interfaces:** none new.
+
+- [ ] **Step 1: Write the failing tests**
+  - `TestBuildArgsResumeKeepsWorkspaceWrite`: for `Spec{ResumeSessionID: "s1"}` with no extra
+    args, the args contain `"-c"` immediately followed by `sandbox_mode="workspace-write"`
+    (that exact string, quotes included, one argv element). They contain neither `--sandbox`
+    nor `--approve-for-me`, and they still end with `"-"`.
+  - `TestBuildArgsResumeRespectsConfiguredSandbox`: when `cfg.Args` or `spec.Args` contains a
+    flag that `hasSandboxFlag` recognises, no `sandbox_mode` override is added.
+  - A new session (no `ResumeSessionID`) is unchanged: it gets `--approve-for-me` and no `-c`.
+- [ ] **Step 2: Run them and see them fail** (`mise exec -- go test -race -count=1 ./internal/harness/codex/`)
+- [ ] **Step 3: Implement.** In `buildArgs`, when resuming and `!hasSandboxFlag(cfg.Args,
+  spec.Args)`, append `"-c", `sandbox_mode="workspace-write"`` before the trailing `"-"`. Put
+  the value in a named constant with a comment explaining why. Update the doc comment, which
+  today says the sandbox default applies only to new sessions.
+- [ ] **Step 4: Codex tests and the full Go suite pass**
+- [ ] **Step 5: Commit** `Keep Codex's workspace-write sandbox on resumed sessions`
+
 ### Task 3: Deliver owner messages into a live run
 
 **Files:**
@@ -366,10 +396,8 @@ no-op with an empty queue.
 `CanSend`/`Reason` rules, in order: a viewer is shown the existing viewer line client-side,
 so it is not decided here. Closed → `false`, `"Closed by <ClosedBy>: <ClosedReason>"`. No run
 with a session, and nothing live → `false`, `"This agent has no session to continue. Retry the
-task instead."`. The last run's harness (`Run.Harness` is the config name; look up its
-`Type` in `cfg.Harness`, the `map[string]config.Harness`) has type `codex` and nothing is live → `false`, `"Codex agents
-can't be continued yet: a resumed Codex session's sandbox is unverified."`. Task `queued` with
-no runs → `true` (messages queue). Otherwise `true`. `AgentConversations` lists root tasks that
+task instead."`. Task `queued` with no runs → `true` (messages queue). Otherwise `true`.
+(Codex agents are continued like any other since Task 2b; there is no Codex rule.) `AgentConversations` lists root tasks that
 have at least one run: open ones (not closed) first, then ones closed or updated in the last 7
 days, newest first, at most 100.
 
