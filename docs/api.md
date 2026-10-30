@@ -81,6 +81,8 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `GET /tasks` | `?project=&status=queued,running&kind=&limit=` | `[]Task` |
 | `POST /tasks` | `NewTask` | `Task` (201) |
 | `GET /tasks/{id}` | | `TaskDetail` |
+| `GET /tasks/{id}/conversation` | | `TaskConversation`: the task agent's root task, follow-up tasks, runs across them (oldest first), messages, `live_run_id`, and `can_send` with a `reason` when false. A follow-up task id returns its root's conversation. |
+| `GET /agent-conversations` | | `[]AgentConversation`: root tasks with a run; open ones first, then ones closed or active in the last 7 days; at most 100 |
 | `POST /tasks/{id}/cancel` | | 204 |
 | `POST /tasks/{id}/retry` | `{"note":"…"}` (optional) | 204 |
 | `GET /runs` | `?task_id=&project=&status=&limit=` | `[]Run` |
@@ -124,6 +126,11 @@ or non-numeric value is a 400. Most list routes default to 200. The exceptions a
 A run's log starts with a `prompt` line holding the exact text onett gave the agent. `owner` lines
 are messages from the owner sent into a run. A `tool_use` line and its `tool_result` line share a
 `tool_id`, so a client can pair them; other lines omit it.
+
+`POST /tasks` records `created_by_run` on the task from the `X-Onett-Run-ID` request header, but
+only when the caller is the API token; the header is ignored for a signed-in user. The CLI sends
+it with the value of `ONETT_RUN_ID` when that variable is set, which onett sets for every agent
+run, so a task an agent creates names the run that created it.
 
 `POST /tasks` rejects `"kind":"review"` with 400, since onett creates review tasks itself. An
 empty `kind` is stored as `feature`. A `risk` field is not part of `NewTask`, so it is rejected

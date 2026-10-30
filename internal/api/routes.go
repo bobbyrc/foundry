@@ -28,6 +28,8 @@ func (s *server) apiRoutes(r chi.Router) {
 	s.read(r, "/tasks", s.listTasks)
 	s.operate(r, http.MethodPost, "/tasks", s.createTask)
 	s.read(r, "/tasks/{id}", s.getTask)
+	s.read(r, "/tasks/{id}/conversation", s.taskConversation)
+	s.read(r, "/agent-conversations", s.agentConversations)
 	s.operate(r, http.MethodPost, "/tasks/{id}/cancel", s.cancelTask)
 	s.operate(r, http.MethodPost, "/tasks/{id}/retry", s.retryTask)
 

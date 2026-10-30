@@ -141,21 +141,49 @@ func (s *server) createTask(w http.ResponseWriter, r *http.Request) {
 	if source == "" {
 		source = "api"
 	}
+	// The CLI sends the run it is called from, so a task an agent creates names that run. Only
+	// the API token is trusted to say so: a signed-in person's header is ignored.
+	var createdByRun string
+	if p, ok := principalFrom(r.Context()); ok && p.token {
+		createdByRun = r.Header.Get(RunIDHeader)
+	}
 	t, err := s.opts.Controller.CreateTask(r.Context(), domain.Task{
-		Project:  in.Project,
-		Kind:     in.Kind,
-		Title:    in.Title,
-		Body:     in.Body,
-		Role:     in.Role,
-		Priority: in.Priority,
-		ParentID: in.ParentID,
-		Source:   source,
+		Project:      in.Project,
+		Kind:         in.Kind,
+		Title:        in.Title,
+		Body:         in.Body,
+		Role:         in.Role,
+		Priority:     in.Priority,
+		ParentID:     in.ParentID,
+		Source:       source,
+		CreatedByRun: createdByRun,
 	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, t)
+}
+
+// RunIDHeader names the run a request is made from. The CLI sets it from ONETT_RUN_ID.
+const RunIDHeader = "X-Onett-Run-ID"
+
+func (s *server) taskConversation(w http.ResponseWriter, r *http.Request) {
+	tc, err := s.opts.Controller.TaskConversation(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tc)
+}
+
+func (s *server) agentConversations(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.opts.Controller.AgentConversations(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, nonNil(rows))
 }
 
 func (s *server) getTask(w http.ResponseWriter, r *http.Request) {

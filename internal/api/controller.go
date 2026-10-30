@@ -19,6 +19,11 @@ type Controller interface {
 	// A non-empty note is appended to the task body as human guidance.
 	RetryTask(ctx context.Context, id, note string) error
 	CancelRun(ctx context.Context, id string) error
+	// TaskConversation returns the task agent conversation that taskID belongs to: the root
+	// task, follow-up tasks, the agent's runs, messages, and whether the owner can message it.
+	TaskConversation(ctx context.Context, taskID string) (domain.TaskConversation, error)
+	// AgentConversations lists the task agents the owner can talk to, open ones first.
+	AgentConversations(ctx context.Context) ([]domain.AgentConversation, error)
 	DecideApproval(ctx context.Context, id string, approve bool, note string) (domain.Approval, error)
 
 	Loops(ctx context.Context) []LoopView

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,10 @@ import (
 	"github.com/bobbyrc/onett/internal/config"
 	"github.com/bobbyrc/onett/internal/domain"
 )
+
+// RunIDHeader names the run a request is made from; the server records it as a created task's
+// created_by_run when the caller is the API token.
+const RunIDHeader = "X-Onett-Run-ID"
 
 // apiPrefix is the base path of every route. The health check is under it too.
 const apiPrefix = "/api/v1"
@@ -268,6 +273,20 @@ func (c *Client) GetTask(ctx context.Context, id string) (TaskDetail, error) {
 	return out, err
 }
 
+// TaskConversation calls GET /tasks/{id}/conversation.
+func (c *Client) TaskConversation(ctx context.Context, id string) (domain.TaskConversation, error) {
+	var out domain.TaskConversation
+	err := c.do(ctx, http.MethodGet, "/tasks/"+url.PathEscape(id)+"/conversation", nil, nil, &out)
+	return out, err
+}
+
+// AgentConversations calls GET /agent-conversations.
+func (c *Client) AgentConversations(ctx context.Context) ([]domain.AgentConversation, error) {
+	var out []domain.AgentConversation
+	err := c.do(ctx, http.MethodGet, "/agent-conversations", nil, nil, &out)
+	return out, err
+}
+
 // CancelTask calls POST /tasks/{id}/cancel.
 func (c *Client) CancelTask(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodPost, "/tasks/"+url.PathEscape(id)+"/cancel", nil, nil, nil)
@@ -489,6 +508,10 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, in, 
 func (c *Client) authorize(req *http.Request) {
 	if c.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	// An agent's CLI calls name the run they come from, so created tasks record their creator.
+	if id := os.Getenv("ONETT_RUN_ID"); id != "" {
+		req.Header.Set(RunIDHeader, id)
 	}
 }
 

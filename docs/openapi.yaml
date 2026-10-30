@@ -470,6 +470,52 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /tasks/{id}/conversation:
+    get:
+      operationId: getTaskConversation
+      tags: [tasks]
+      summary: Read a task agent's conversation across its runs.
+      description: |
+        Works for the root task or any conversation follow-up task: both return the same
+        conversation. `tasks` is the root then its follow-ups, oldest first; `runs` are the
+        agent's runs across them, oldest first. `can_send` says whether the owner can message
+        the agent now; when false, `reason` says why.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: The conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskConversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /agent-conversations:
+    get:
+      operationId: listAgentConversations
+      tags: [tasks]
+      summary: List the task agents the owner can talk to.
+      description: Root tasks with at least one run. Open conversations come first, then ones closed or last active in the past 7 days, newest first, at most 100.
+      responses:
+        '200':
+          description: The conversations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentConversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /tasks/{id}/cancel:
     post:
       operationId: cancelTask
@@ -1909,6 +1955,9 @@ components:
           description: The latest agent summary.
         blocked_reason:
           type: string
+        created_by_run:
+          type: string
+          description: The run that created this task, when an agent created it through the CLI with the API token. Set from the `X-Onett-Run-ID` request header; ignored for a signed-in user.
         attempts:
           type: integer
         max_attempts:
@@ -2188,6 +2237,17 @@ components:
         active_run_id:
           type: string
           description: The orchestrator run in flight, while busy.
+        task_id:
+          type: string
+          description: The root task of a task agent conversation. Empty for the orchestrator.
+        closed_at:
+          type: string
+          format: date-time
+        closed_by:
+          type: string
+          description: "`agent`, `orchestrator` or `owner:<username>`."
+        closed_reason:
+          type: string
         created_at:
           type: string
           format: date-time
@@ -2399,6 +2459,59 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatMessage'
+
+    TaskConversation:
+      type: object
+      description: The owner's view of a task agent across its runs.
+      required: [task, tasks, runs, messages, can_send]
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+        conversation:
+          $ref: '#/components/schemas/Conversation'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Run'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        live_run_id:
+          type: string
+          description: A run of the agent that is running now.
+        can_send:
+          type: boolean
+        reason:
+          type: string
+          description: Why `can_send` is false.
+
+    AgentConversation:
+      type: object
+      required: [task_id, title, project, role, task_status, live, closed, updated_at]
+      properties:
+        task_id:
+          type: string
+          description: The root task.
+        title:
+          type: string
+        project:
+          type: string
+        role:
+          type: string
+        task_status:
+          $ref: '#/components/schemas/TaskStatus'
+        live:
+          type: boolean
+        closed:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
 
     DecideApprovalRequest:
       type: object
