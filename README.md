@@ -145,7 +145,7 @@ as in `onett task create -h`.
 | `project add\|pause\|resume` | add a project to the config, or pause or resume one |
 | `agents [--all]` | list agent roles; `--all` also shows removed (disabled) ones |
 | `config` | print the redacted config, or `--reload` it |
-| `task` | create, list, show, cancel and retry tasks |
+| `task` | create, list, show, cancel and retry tasks; `task close-conversation ID --reason R` closes a task agent's conversation |
 | `run` | list, show, cancel and print logs of agent runs |
 | `deploys` | list releases, or show one with its log |
 | `approvals` | list approvals waiting for a decision |

@@ -496,6 +496,130 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /tasks/{id}/messages:
+    post:
+      operationId: sendTaskMessage
+      tags: [tasks]
+      summary: Send a message to a task's agent.
+      description: |
+        Works for the root task or any conversation follow-up task. A live agent whose harness
+        takes input gets the message at once (the stored message then has `run_id`). Otherwise it
+        is stored queued (`queued: true`) and the next run carries it: with no run live, onett
+        starts one now, resuming the agent's session (a blocked, failed, in-review or
+        done-without-a-PR task is re-queued; a merged or done-with-a-PR task gets a follow-up
+        task with its own branch). While a run is live, the queue waits for that run to succeed;
+        it is never sent after a run that was cancelled, denied, stalled, timed out or failed,
+        only by another send or by the flush route. 409 carries the `reason` the agent cannot
+        be messaged (see `can_send` on the conversation).
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '202':
+          description: The stored user message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tasks/{id}/conversation/close:
+    post:
+      operationId: closeTaskConversation
+      tags: [tasks]
+      summary: Close a task agent's conversation.
+      description: |
+        The agent can no longer be messaged. Queued messages stay queued and are never delivered.
+        Only the conversation is marked; the task is untouched. The closer is recorded as
+        `orchestrator` for the API token and `owner:<username>` for a person. Emits
+        `conversation.updated`.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason:
+                  type: string
+      responses:
+        '204':
+          description: Closed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tasks/{id}/conversation/reopen:
+    post:
+      operationId: reopenTaskConversation
+      tags: [tasks]
+      summary: Reopen a closed task agent conversation.
+      description: |
+        A signed-in person only; the API token gets 403. Clears the close and nothing else.
+        Emits `conversation.updated`.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '204':
+          description: Reopened.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tasks/{id}/conversation/flush:
+    post:
+      operationId: flushTaskMessages
+      tags: [tasks]
+      summary: Send a task agent's queued messages now.
+      description: |
+        Starts the follow-up run for the queued messages instead of waiting for the current run
+        to succeed. This is how queued messages move after a run that was denied, stalled, timed
+        out or failed. Does nothing when no message is queued or a run is live.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '202':
+          description: Accepted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /agent-conversations:
     get:
       operationId: listAgentConversations
@@ -1889,6 +2013,7 @@ components:
         - friction.reported
         - issue.filed
         - chat.message
+        - conversation.updated
         - chat.delta
         - loop.error
         - notification
@@ -2070,7 +2195,7 @@ components:
           type: string
           description: One human-readable line.
         data:
-          description: Type-specific payload. Task for task.*, Run for run.updated, Approval for approval.*, Deployment for deploy.updated, Signal for signal.new, Friction for friction.reported, ChatMessage for chat.message, `[]LogLine` for run.log and `{conversation_id, text}` for chat.delta. Omitted when the event has no payload.
+          description: Type-specific payload. Task for task.*, Run for run.updated, Approval for approval.*, Deployment for deploy.updated, Signal for signal.new, Friction for friction.reported, ChatMessage for chat.message, `{task_id}` for conversation.updated, `[]LogLine` for run.log and `{conversation_id, text}` for chat.delta. Omitted when the event has no payload.
 
     Approval:
       type: object
