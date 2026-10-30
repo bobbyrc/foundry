@@ -36,7 +36,7 @@ export type RunStatus =
   | 'denied'
   | 'cancelled';
 
-export type LogKind = 'text' | 'tool_use' | 'tool_result' | 'denial' | 'system' | 'stderr' | 'error';
+export type LogKind = 'text' | 'tool_use' | 'tool_result' | 'denial' | 'system' | 'stderr' | 'error' | 'prompt' | 'owner';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
@@ -64,10 +64,12 @@ export interface Task {
   pushed_at?: string;
   summary?: string;
   blocked_reason?: string;
+  follow_up_pending?: boolean;
   attempts: number;
   max_attempts: number;
   created_at: string;
   updated_at: string;
+  created_by_run?: string;
 }
 
 export interface Run {
@@ -99,6 +101,8 @@ export interface LogLine {
   time: string;
   kind: LogKind;
   text: string;
+  /** Pairs a tool_use line with its tool_result line. */
+  tool_id?: string;
 }
 
 /**
@@ -204,6 +208,11 @@ export interface Conversation {
   busy: boolean;
   created_at: string;
   updated_at: string;
+  task_id?: string;
+  active_run_id?: string;
+  closed_at?: string;
+  closed_by?: string;
+  closed_reason?: string;
 }
 
 export interface ChatMessage {
@@ -213,6 +222,29 @@ export interface ChatMessage {
   text: string;
   run_id?: string;
   created_at: string;
+  queued?: boolean;
+}
+
+export interface TaskConversation {
+  task: Task;
+  conversation?: Conversation;
+  tasks: Task[];
+  runs: Run[];
+  messages: ChatMessage[];
+  live_run_id?: string;
+  can_send: boolean;
+  reason?: string;
+}
+
+export interface AgentConversation {
+  task_id: string;
+  title: string;
+  project: string;
+  role: string;
+  task_status: TaskStatus;
+  live: boolean;
+  closed: boolean;
+  updated_at: string;
 }
 
 export interface ConversationDetail {

@@ -71,7 +71,7 @@ func (f *fakeCtl) CreateTask(_ context.Context, t domain.Task) (domain.Task, err
 	return t, nil
 }
 
-func (f *fakeCtl) CancelTask(_ context.Context, id string) error {
+func (f *fakeCtl) CancelTask(_ context.Context, id, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.note("CancelTask:" + id)

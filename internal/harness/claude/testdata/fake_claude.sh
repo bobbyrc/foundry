@@ -3,7 +3,7 @@
 # arguments are the CLI arguments onett built, which are reported on stderr with the stdin.
 fixture=$1
 shift
-input=$(cat)
+IFS= read -r input
 for a in "$@"; do
 	printf 'arg=%s\n' "$a" >&2
 done

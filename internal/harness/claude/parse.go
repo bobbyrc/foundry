@@ -44,6 +44,7 @@ type message struct {
 // block is one content block of an assistant or user message.
 type block struct {
 	Type      string          `json:"type"`
+	ID        string          `json:"id"`
 	Text      string          `json:"text"`
 	Name      string          `json:"name"`
 	Input     json.RawMessage `json:"input"`
@@ -65,7 +66,13 @@ type parser struct {
 	announced bool   // whether sessionID has been attached to an emitted event
 	lastText  string // last assistant text block
 	denials   []string
-	final     *streamLine // the result line, once seen
+	final     *streamLine // the last result line seen
+	// inputTokens and outputTokens sum the per-turn usage of every result line: with stream-json
+	// input one process can answer several turns, and each result reports only its own turn.
+	inputTokens  int64
+	outputTokens int64
+	// onResult, if set, runs after each result line is parsed.
+	onResult func()
 }
 
 func newParser(model string) *parser {
@@ -138,7 +145,9 @@ func (p *parser) assistantEvents(raw json.RawMessage) []harness.Event {
 			events = append(events, event(domain.LogText, b.Text))
 		case "tool_use":
 			text := b.Name + ": " + harness.CompactJSON(b.Input, maxInputChars)
-			events = append(events, event(domain.LogToolUse, text))
+			ev := event(domain.LogToolUse, text)
+			ev.ToolID = b.ID
+			events = append(events, ev)
 		}
 	}
 	return events
@@ -158,7 +167,9 @@ func toolResultEvents(raw json.RawMessage) []harness.Event {
 		if b.IsError {
 			text = "error: " + text
 		}
-		events = append(events, event(domain.LogToolResult, text))
+		ev := event(domain.LogToolResult, text)
+		ev.ToolID = b.ToolUseID
+		events = append(events, ev)
 	}
 	return events
 }
@@ -166,6 +177,13 @@ func toolResultEvents(raw json.RawMessage) []harness.Event {
 func (p *parser) resultEvents(sl streamLine) []harness.Event {
 	final := sl
 	p.final = &final
+	if sl.Usage != nil {
+		p.inputTokens += sl.Usage.InputTokens + sl.Usage.CacheCreationInputTokens + sl.Usage.CacheReadInputTokens
+		p.outputTokens += sl.Usage.OutputTokens
+	}
+	if p.onResult != nil {
+		defer p.onResult()
+	}
 	var events []harness.Event
 	for _, d := range sl.PermissionDenials {
 		name := d.ToolName
@@ -194,10 +212,8 @@ func (p *parser) result(exitCode int, stderrTail []string) harness.Result {
 	if f := p.final; f != nil {
 		res.IsError = f.IsError
 		res.CostUSD = f.TotalCostUSD
-		if f.Usage != nil {
-			res.InputTokens = f.Usage.InputTokens + f.Usage.CacheCreationInputTokens + f.Usage.CacheReadInputTokens
-			res.OutputTokens = f.Usage.OutputTokens
-		}
+		res.InputTokens = p.inputTokens
+		res.OutputTokens = p.outputTokens
 		if f.Result != "" {
 			res.FinalText = f.Result
 		}

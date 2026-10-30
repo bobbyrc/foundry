@@ -32,8 +32,19 @@ func New(s Script) harness.Harness {
 	return &runner{script: s}
 }
 
+// SteerScript is a Script that also receives messages sent with harness.Steerable.Send.
+type SteerScript func(ctx context.Context, spec harness.Spec, inbox <-chan string, emit func(harness.Event)) (harness.Result, error)
+
+// NewSteerable returns a harness whose sessions run s and implement harness.Steerable. Send
+// delivers to the script's inbox until the script returns; after that it returns
+// harness.ErrInputClosed.
+func NewSteerable(s SteerScript) harness.Harness {
+	return &runner{steer: s}
+}
+
 type runner struct {
 	script Script
+	steer  SteerScript
 }
 
 // Start runs the script in a goroutine. Events is closed when the script returns.
@@ -45,16 +56,50 @@ func (r *runner) Start(ctx context.Context, spec harness.Spec) (harness.Session,
 		events: make(chan harness.Event, 1024),
 		done:   make(chan struct{}),
 	}
+	var target harness.Session = s
+	script := r.script
+	if r.steer != nil {
+		ss := &steerSession{session: s, inbox: make(chan string)}
+		target = ss
+		script = func(ctx context.Context, spec harness.Spec, emit func(harness.Event)) (harness.Result, error) {
+			return r.steer(ctx, spec, ss.inbox, emit)
+		}
+	}
 	go func() {
 		defer close(s.done)
-		res, err := r.script(sctx, spec, s.emit)
+		res, err := script(sctx, spec, s.emit)
 		close(s.events)
 		if sctx.Err() != nil || err != nil {
 			res.IsError = true
 		}
 		s.res, s.err = res, err
 	}()
-	return s, nil
+	return target, nil
+}
+
+// steerSession is a session whose script reads messages from inbox.
+type steerSession struct {
+	*session
+	inbox chan string
+}
+
+var _ harness.Steerable = (*steerSession)(nil)
+
+// Send hands text to the script, waiting until the script reads it or the session ends.
+func (s *steerSession) Send(text string) error {
+	select {
+	case <-s.done:
+		return harness.ErrInputClosed
+	default:
+	}
+	select {
+	case s.inbox <- text:
+		return nil
+	case <-s.done:
+		return harness.ErrInputClosed
+	case <-s.ctx.Done():
+		return harness.ErrInputClosed
+	}
 }
 
 type session struct {

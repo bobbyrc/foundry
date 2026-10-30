@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"s-two","model":"claude-haiku-5-5"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ONE"}]},"session_id":"s-two"}
+{"type":"result","subtype":"success","is_error":true,"result":"ONE","session_id":"s-two","total_cost_usd":0.01,"usage":{"input_tokens":10,"cache_creation_input_tokens":1,"cache_read_input_tokens":2,"output_tokens":3}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"TWO"}]},"session_id":"s-two"}
+{"type":"result","subtype":"success","is_error":false,"result":"TWO","session_id":"s-two","total_cost_usd":0.03,"usage":{"input_tokens":20,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":4}}

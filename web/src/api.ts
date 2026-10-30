@@ -15,6 +15,7 @@ import type {
   ConfigProblem,
   ConfigSaved,
   ConfigText,
+  AgentConversation,
   Conversation,
   ConversationDetail,
   Deployment,
@@ -31,6 +32,7 @@ import type {
   Signal,
   Stats,
   Task,
+  TaskConversation,
   TaskDetail,
   User,
 } from './types';
@@ -236,6 +238,33 @@ export const getConversation = (id: string) =>
 
 export const sendMessage = (id: string, text: string) =>
   request<ChatMessage>('POST', `/conversations/${encodeURIComponent(id)}/messages`, { body: { text } });
+
+export const editMessage = (id: string, text: string) =>
+  request<ChatMessage>('PATCH', `/messages/${encodeURIComponent(id)}`, { body: { text } });
+
+export const cancelMessage = (id: string) => request<void>('DELETE', `/messages/${encodeURIComponent(id)}`);
+
+export const flushConversation = (id: string) =>
+  request<void>('POST', `/conversations/${encodeURIComponent(id)}/flush`);
+
+// ---- task agents' conversations ----
+
+export const listAgentConversations = () => request<AgentConversation[]>('GET', '/agent-conversations');
+
+export const getTaskConversation = (taskId: string) =>
+  request<TaskConversation>('GET', `/tasks/${encodeURIComponent(taskId)}/conversation`);
+
+export const sendTaskMessage = (taskId: string, text: string) =>
+  request<ChatMessage>('POST', `/tasks/${encodeURIComponent(taskId)}/messages`, { body: { text } });
+
+export const flushTaskMessages = (taskId: string) =>
+  request<void>('POST', `/tasks/${encodeURIComponent(taskId)}/conversation/flush`);
+
+export const closeTaskConversation = (taskId: string, reason: string) =>
+  request<void>('POST', `/tasks/${encodeURIComponent(taskId)}/conversation/close`, { body: { reason } });
+
+export const reopenTaskConversation = (taskId: string) =>
+  request<void>('POST', `/tasks/${encodeURIComponent(taskId)}/conversation/reopen`);
 
 // ---- config editing (owner only) ----
 // These calls need the problems list from a 422 and the status of a 409, which the shared

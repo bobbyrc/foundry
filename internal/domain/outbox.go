@@ -36,6 +36,9 @@ type RunResult struct {
 	Review    *ReviewVerdict   `json:"review,omitempty"`
 	Followups []FollowupTask   `json:"followups,omitempty"`
 	Friction  []FrictionReport `json:"friction,omitempty"`
+	// Finished: the agent says nothing more can come of its conversation. It closes the
+	// conversation and changes nothing about the task.
+	Finished bool `json:"finished,omitempty"`
 }
 
 type ReviewVerdict struct {

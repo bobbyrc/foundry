@@ -151,7 +151,7 @@ func TestControllerCancelTask(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, e.CancelTask(ctx, task.ID))
+	require.NoError(t, e.CancelTask(ctx, task.ID, "owner:test"))
 	got, err := r.st.GetTask(ctx, task.ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.TaskCancelled, got.Status)
@@ -162,10 +162,10 @@ func TestControllerCancelTask(t *testing.T) {
 	assert.Equal(t, "task cancelled", a.Note)
 	assert.NotNil(t, a.DecidedAt)
 
-	err = e.CancelTask(ctx, task.ID)
+	err = e.CancelTask(ctx, task.ID, "owner:test")
 	assert.True(t, errors.Is(err, api.ErrConflict), "cancelling a terminal task: %v", err)
 
-	err = e.CancelTask(ctx, "no-such-task")
+	err = e.CancelTask(ctx, "no-such-task", "owner:test")
 	assert.True(t, errors.Is(err, store.ErrNotFound), "unknown task: %v", err)
 }
 
@@ -185,7 +185,7 @@ func TestControllerCancelTaskCancelsLiveRuns(t *testing.T) {
 	e.active["run-other"] = &activeRun{runID: "run-other", taskID: other.ID, cancel: cancelOther}
 	e.runsMu.Unlock()
 
-	require.NoError(t, e.CancelTask(ctx, task.ID))
+	require.NoError(t, e.CancelTask(ctx, task.ID, "owner:test"))
 	assert.Error(t, runCtx.Err(), "the task's live run is cancelled")
 	assert.NoError(t, otherCtx.Err(), "another task's run is left alone")
 	reason, _ := e.active["run-mine"].reason.Load().(string)
@@ -419,7 +419,7 @@ func TestControllerCancelBlockedTask(t *testing.T) {
 	task := ctTask(t, e, "stuck")
 	ctSetTask(t, r, task.ID, func(x *domain.Task) { x.Status = domain.TaskBlocked })
 
-	require.NoError(t, e.CancelTask(ctx, task.ID), "a blocked task can be cancelled")
+	require.NoError(t, e.CancelTask(ctx, task.ID, "owner:test"), "a blocked task can be cancelled")
 	got, err := r.st.GetTask(ctx, task.ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.TaskCancelled, got.Status)
@@ -446,7 +446,7 @@ func TestControllerCancelTaskCancelsChildren(t *testing.T) {
 	e.active["run-review"] = &activeRun{runID: "run-review", taskID: review.ID, cancel: cancelRun}
 	e.runsMu.Unlock()
 
-	require.NoError(t, e.CancelTask(ctx, parent.ID))
+	require.NoError(t, e.CancelTask(ctx, parent.ID, "owner:test"))
 
 	gotReview, err := r.st.GetTask(ctx, review.ID)
 	require.NoError(t, err)

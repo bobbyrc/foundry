@@ -102,17 +102,7 @@ func buildTaskPrompt(t domain.Task, p *config.Project, parent *domain.Task, conf
 		b.WriteString(strings.TrimSpace(parent.Body) + "\n\n")
 	}
 
-	if len(conflicts) > 0 {
-		base := "the default branch"
-		if p != nil {
-			base = "origin/" + p.DefaultBranch
-		}
-		fmt.Fprintf(&b, "## Merge conflicts to resolve\n\nOnett merged %s into this branch and git reported conflicts in:\n", base)
-		for _, f := range conflicts {
-			fmt.Fprintf(&b, "- %s\n", f)
-		}
-		b.WriteString("\nResolve every conflict marker in these files. Do not commit; onett commits when you finish.\n\n")
-	}
+	b.WriteString(mergeConflictSection(p, conflicts))
 
 	b.WriteString("## Details\n\n")
 	if body := strings.TrimSpace(t.Body); body != "" {
@@ -120,5 +110,28 @@ func buildTaskPrompt(t domain.Task, p *config.Project, parent *domain.Task, conf
 	} else {
 		b.WriteString("(no details)\n")
 	}
+	return b.String()
+}
+
+// resumeReportReminder ends a resumed follow-up prompt: each run's outbox starts empty, and the
+// owner's message alone does not remind the agent that onett reads its report from there.
+const resumeReportReminder = "When you have done what the owner asks, write your report to `$ONETT_OUTBOX/result.json` again, as your instructions describe. This run's outbox starts empty, so your earlier report is gone."
+
+// mergeConflictSection tells the agent which files onett's merge of the base branch left in
+// conflict; "" when there are none. A follow-up that resumes a session needs it too.
+func mergeConflictSection(p *config.Project, conflicts []string) string {
+	if len(conflicts) == 0 {
+		return ""
+	}
+	base := "the default branch"
+	if p != nil {
+		base = "origin/" + p.DefaultBranch
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Merge conflicts to resolve\n\nOnett merged %s into this branch and git reported conflicts in:\n", base)
+	for _, f := range conflicts {
+		fmt.Fprintf(&b, "- %s\n", f)
+	}
+	b.WriteString("\nResolve every conflict marker in these files. Do not commit; onett commits when you finish.\n\n")
 	return b.String()
 }

@@ -141,21 +141,124 @@ func (s *server) createTask(w http.ResponseWriter, r *http.Request) {
 	if source == "" {
 		source = "api"
 	}
+	// The CLI sends the run it is called from, so a task an agent creates names that run. Only
+	// the API token is trusted to say so: a signed-in person's header is ignored.
+	var createdByRun string
+	if p, ok := principalFrom(r.Context()); ok && p.token {
+		createdByRun = r.Header.Get(RunIDHeader)
+	}
 	t, err := s.opts.Controller.CreateTask(r.Context(), domain.Task{
-		Project:  in.Project,
-		Kind:     in.Kind,
-		Title:    in.Title,
-		Body:     in.Body,
-		Role:     in.Role,
-		Priority: in.Priority,
-		ParentID: in.ParentID,
-		Source:   source,
+		Project:      in.Project,
+		Kind:         in.Kind,
+		Title:        in.Title,
+		Body:         in.Body,
+		Role:         in.Role,
+		Priority:     in.Priority,
+		ParentID:     in.ParentID,
+		Source:       source,
+		CreatedByRun: createdByRun,
 	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, t)
+}
+
+// RunIDHeader names the run a request is made from. The CLI sets it from ONETT_RUN_ID.
+const RunIDHeader = "X-Onett-Run-ID"
+
+func (s *server) taskConversation(w http.ResponseWriter, r *http.Request) {
+	tc, err := s.opts.Controller.TaskConversation(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tc)
+}
+
+// sendTaskMessage is for a person only: the API token, which the orchestrator holds, gets 403,
+// so an agent cannot speak to a task agent in the owner's voice.
+func (s *server) sendTaskMessage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userPrincipal(w, r); !ok {
+		return
+	}
+	var in struct {
+		Text string `json:"text"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if in.Text == "" {
+		s.fail(w, invalidf("text is required"))
+		return
+	}
+	m, err := s.opts.Controller.SendTaskMessage(r.Context(), chi.URLParam(r, "id"), in.Text)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, m)
+}
+
+// flushTaskMessages is for a person only, like sendTaskMessage.
+func (s *server) flushTaskMessages(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userPrincipal(w, r); !ok {
+		return
+	}
+	if err := s.opts.Controller.FlushTaskMessages(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *server) closeTaskConversation(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if err := s.opts.Controller.CloseTaskConversation(r.Context(), id, closedBy(r), in.Reason); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// reopenTaskConversation is for a person only: the API token, which the orchestrator holds, gets
+// 403, so an agent cannot undo the owner's close.
+func (s *server) reopenTaskConversation(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userPrincipal(w, r); !ok {
+		return
+	}
+	if err := s.opts.Controller.ReopenTaskConversation(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// closedBy names the caller for the record of who closed a conversation: "orchestrator" for the
+// API token, "owner:<username>" for a signed-in person.
+func closedBy(r *http.Request) string {
+	if p, ok := principalFrom(r.Context()); ok && !p.token {
+		return "owner:" + p.user.Username
+	}
+	return "orchestrator"
+}
+
+func (s *server) agentConversations(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.opts.Controller.AgentConversations(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, nonNil(rows))
 }
 
 func (s *server) getTask(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +299,7 @@ func (s *server) getTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) cancelTask(w http.ResponseWriter, r *http.Request) {
-	if err := s.opts.Controller.CancelTask(r.Context(), chi.URLParam(r, "id")); err != nil {
+	if err := s.opts.Controller.CancelTask(r.Context(), chi.URLParam(r, "id"), closedBy(r)); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -625,14 +728,38 @@ func (s *server) createConversation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, c)
 }
 
-func (s *server) getConversation(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := chi.URLParam(r, "id")
-	c, err := s.opts.Store.GetConversation(ctx, id)
+// orchestratorConversation loads a conversation of the orchestrator chat. A task agent's
+// conversation (TaskID set) is reached through the /tasks routes, so here it is not found.
+func (s *server) orchestratorConversation(w http.ResponseWriter, r *http.Request) (domain.Conversation, bool) {
+	c, err := s.opts.Store.GetConversation(r.Context(), chi.URLParam(r, "id"))
+	if err == nil && c.TaskID != "" {
+		err = store.ErrNotFound
+	}
 	if err != nil {
 		s.fail(w, err)
+		return domain.Conversation{}, false
+	}
+	return c, true
+}
+
+// refuseTaskConversation answers 404 and reports true when the conversation in the path is a
+// task agent's. Any other lookup result is left to the controller, which reports a missing one.
+func (s *server) refuseTaskConversation(w http.ResponseWriter, r *http.Request) bool {
+	c, err := s.opts.Store.GetConversation(r.Context(), chi.URLParam(r, "id"))
+	if err != nil || c.TaskID == "" {
+		return false
+	}
+	s.fail(w, store.ErrNotFound)
+	return true
+}
+
+func (s *server) getConversation(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	c, ok := s.orchestratorConversation(w, r)
+	if !ok {
 		return
 	}
+	id := c.ID
 	msgs, err := s.opts.Store.ListChatMessages(ctx, id)
 	if err != nil {
 		s.fail(w, err)
@@ -642,6 +769,9 @@ func (s *server) getConversation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) sendMessage(w http.ResponseWriter, r *http.Request) {
+	if s.refuseTaskConversation(w, r) {
+		return
+	}
 	var in struct {
 		Text string `json:"text"`
 	}
@@ -659,6 +789,48 @@ func (s *server) sendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, m)
+}
+
+func (s *server) flushConversation(w http.ResponseWriter, r *http.Request) {
+	if s.refuseTaskConversation(w, r) {
+		return
+	}
+	if err := s.opts.Controller.FlushChat(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// editMessage and cancelMessage are for a person only: the messages are the owner's words.
+func (s *server) editMessage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userPrincipal(w, r); !ok {
+		return
+	}
+	var in struct {
+		Text string `json:"text"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	m, err := s.opts.Controller.EditQueuedMessage(r.Context(), chi.URLParam(r, "id"), in.Text)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+func (s *server) cancelMessage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := userPrincipal(w, r); !ok {
+		return
+	}
+	if err := s.opts.Controller.CancelQueuedMessage(r.Context(), chi.URLParam(r, "id")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- events history ---

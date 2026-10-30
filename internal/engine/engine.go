@@ -64,6 +64,10 @@ type Engine struct {
 	paused atomic.Bool
 	wake   chan struct{}
 
+	// convMu serialises the steps that decide how a task agent conversation continues, so two
+	// messages cannot both start a follow-up or both create the conversation.
+	convMu sync.Mutex
+
 	runsMu sync.Mutex
 	active map[string]*activeRun // by run ID
 
@@ -109,6 +113,15 @@ type activeRun struct {
 	// reason is set before cancel to say why (shown in the run's error and the task's
 	// blocked reason): "cancelled by user", "stalled: no output for 15m", ...
 	reason atomic.Value // string
+
+	// sess is the live harness session, set once Start succeeds; guarded by sessMu.
+	sessMu sync.Mutex
+	sess   harness.Session
+
+	// continueRoot is set by runTask when its run succeeded: the root of the conversation to
+	// continue once the run is no longer registered as live. Written and read by the run's own
+	// goroutine only.
+	continueRoot string
 }
 
 // New validates deps and returns an engine. It does not start anything.
@@ -260,6 +273,7 @@ func (e *Engine) recover(ctx context.Context) error {
 		if c.Busy {
 			if _, err := e.d.Store.UpdateConversation(ctx, c.ID, func(c *domain.Conversation) error {
 				c.Busy = false
+				c.ActiveRunID = ""
 				return nil
 			}); err != nil {
 				return err

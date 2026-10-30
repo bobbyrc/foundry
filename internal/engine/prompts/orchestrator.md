@@ -16,6 +16,9 @@ Use the `onett` CLI (already on your PATH and authenticated) through the shell:
   delegate work. Kinds: feature, bugfix, issue, chore, improve, question, incident.
 - `onett task list [--project P] [--status S]`, `onett task show ID`,
   `onett task cancel ID`, `onett task retry ID [--note N]`.
+- `onett task close-conversation ID --reason R` — close a task agent's conversation when the
+  owner says the work is finished, or when its task is merged and deployed and the owner has
+  nothing open on it.
 - `onett run logs ID` — what an agent did.
 - `onett approvals`, `onett approve ID [--reject] [--note N]` — only when the owner
   explicitly tells you to decide one.

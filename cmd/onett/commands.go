@@ -253,7 +253,7 @@ func cmdVersion(e *env, args []string) error {
 
 func cmdTask(e *env, args []string) error {
 	if len(args) == 0 {
-		return usagef("usage: onett task create|list|show|cancel|retry ...")
+		return usagef("usage: onett task create|list|show|cancel|retry|close-conversation ...")
 	}
 	sub, rest := args[0], args[1:]
 	if isHelpFlag(sub) || sub == "help" {
@@ -271,8 +271,10 @@ func cmdTask(e *env, args []string) error {
 		return taskCancel(e, rest)
 	case "retry":
 		return taskRetry(e, rest)
+	case "close-conversation":
+		return taskCloseConversation(e, rest)
 	}
-	return usagef("unknown task command %q (want create, list, show, cancel or retry)", sub)
+	return usagef("unknown task command %q (want create, list, show, cancel, retry or close-conversation)", sub)
 }
 
 func taskCreate(e *env, args []string) error {
@@ -539,6 +541,30 @@ func taskRetry(e *env, args []string) error {
 		return err
 	}
 	fmt.Fprintf(e.out, "retried task %s\n", positional[0])
+	return nil
+}
+
+func taskCloseConversation(e *env, args []string) error {
+	fs := newFlagSet("task close-conversation", e)
+	reason := fs.String("reason", "", "why the conversation is closed (required)")
+	positional, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := requireArgs(positional, 1, "task close-conversation ID --reason R"); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*reason) == "" {
+		return usagef("task close-conversation needs --reason")
+	}
+	c, err := apiClient()
+	if err != nil {
+		return err
+	}
+	if err := c.CloseTaskConversation(context.Background(), positional[0], *reason); err != nil {
+		return err
+	}
+	fmt.Fprintf(e.out, "closed the conversation of task %s\n", positional[0])
 	return nil
 }
 

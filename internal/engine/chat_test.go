@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bobbyrc/onett/internal/api"
 	"github.com/bobbyrc/onett/internal/config"
 	"github.com/bobbyrc/onett/internal/domain"
 	"github.com/bobbyrc/onett/internal/harness"
@@ -111,7 +110,7 @@ func TestChatSendReplyAndDeltas(t *testing.T) {
 	}
 }
 
-func TestChatSecondSendWhileBusyConflicts(t *testing.T) {
+func TestChatSecondSendWhileBusyIsQueued(t *testing.T) {
 	ctx := context.Background()
 	r := ctNewRig(t)
 	e := r.engine(nil)
@@ -124,8 +123,9 @@ func TestChatSecondSendWhileBusyConflicts(t *testing.T) {
 	require.NoError(t, err)
 	runID := ctActiveRunID(t, e)
 
-	_, err = e.SendChat(ctx, conv.ID, "are you there?")
-	assert.True(t, errors.Is(err, api.ErrConflict), "second send while busy: %v", err)
+	queued, err := e.SendChat(ctx, conv.ID, "are you there?")
+	require.NoError(t, err, "a send while busy is queued, not refused")
+	assert.True(t, queued.Queued)
 
 	busy, err := r.st.GetConversation(ctx, conv.ID)
 	require.NoError(t, err)
@@ -137,10 +137,11 @@ func TestChatSecondSendWhileBusyConflicts(t *testing.T) {
 
 	msgs, err := r.st.ListChatMessages(ctx, conv.ID)
 	require.NoError(t, err)
-	require.Len(t, msgs, 2, "the refused send is not stored")
-	assert.Equal(t, "assistant", msgs[1].Role)
-	assert.Equal(t, runID, msgs[1].RunID)
-	assert.Contains(t, msgs[1].Text, "_(The orchestrator run ended: cancelled")
+	require.Len(t, msgs, 3, "the queued send is stored and held after the cancel")
+	assert.Equal(t, "assistant", msgs[2].Role)
+	assert.Equal(t, runID, msgs[2].RunID)
+	assert.Contains(t, msgs[2].Text, "_(The orchestrator run ended: cancelled")
+	assert.True(t, msgs[1].Queued)
 }
 
 func TestChatInstructionsListProjectsAndAgents(t *testing.T) {

@@ -86,9 +86,16 @@ func (e *Engine) startTask(ctx context.Context, t domain.Task) {
 		"run started: "+t.Role+" on "+t.Title, run)
 
 	started := e.goTracked(func() {
-		defer e.unregisterRun(run.ID)
-		defer cancel()
-		e.runTask(runCtx, t, run, ar, p, h, agent, parent)
+		func() {
+			defer e.unregisterRun(run.ID)
+			defer cancel()
+			e.runTask(runCtx, t, run, ar, p, h, agent, parent)
+		}()
+		// The run is unregistered by now, so a message sent while it was ending is not left
+		// waiting on a run that no longer exists.
+		if ar.continueRoot != "" {
+			e.continueConversation(bg, ar.continueRoot)
+		}
 	})
 	if !started {
 		// Shutting down: the run never starts. The task stays running; recover re-queues it.
@@ -135,13 +142,17 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	// itself is still registered as live, so the sweep never removes its own worktree.
 	defer e.sweepWorktrees(bg, p)
 	cancelled := false
+	// fail ends an attempt that went wrong: it re-queues the task, or blocks it when attempts are
+	// spent. Once this run has taken the owner's queued messages it is replaced (below) by a
+	// version that blocks instead, so a failed follow-up is not retried behind the owner's back.
+	var fail failFunc = e.requeueOrBlock
 	defer func() {
 		if cancelled {
 			return
 		}
 		cur, err := e.d.Store.GetTask(bg, t.ID)
 		if err == nil && cur.Status == domain.TaskRunning {
-			e.requeueOrBlock(bg, t.ID, "internal error: run ended without an outcome", "")
+			fail(bg, t.ID, "internal error: run ended without an outcome", "")
 		}
 	}()
 
@@ -202,7 +213,6 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.blockTask(bg, t.ID, "could not load role prompt: "+err.Error())
 		return
 	}
-	prompt := buildTaskPrompt(t, p, parent, conflicts)
 
 	env := map[string]string{}
 	for k, v := range e.d.AgentEnv {
@@ -236,16 +246,42 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		}
 	}
 
+	// Owner messages queued for this task's agent go with this run: a follow-up resumes the
+	// agent's session with just the messages; a first run gets them after the task prompt.
+	prompt := buildTaskPrompt(t, p, parent, conflicts)
+	resumeID := ""
+	root, claimed := e.claimOwnerMessages(bg, t)
+	if t.FollowUpPending {
+		e.setTask(bg, t.ID, "follow-up started", func(x *domain.Task) error {
+			x.FollowUpPending = false
+			return nil
+		})
+	}
+	if len(claimed) > 0 {
+		fail = e.failFollowUp(claimed)
+		texts, _ := messageTexts(claimed)
+		if prev, ok := e.resumeSession(bg, root); ok {
+			prompt = ownerPrompt(texts) + "\n\n" + mergeConflictSection(p, conflicts)
+			prompt = strings.TrimRight(prompt, "\n") + "\n\n" + resumeReportReminder
+			resumeID = prev.SessionID
+		} else {
+			prompt += "\n\n" + ownerPrompt(texts)
+		}
+	}
+
 	sess, err := h.Start(ctx, harness.Spec{
-		RunID:        run.ID,
-		Workdir:      ws.Dir,
-		Prompt:       prompt,
-		Instructions: instructions,
-		Model:        agent.Model,
-		Env:          env,
-		Args:         agent.Args,
+		RunID:           run.ID,
+		Workdir:         ws.Dir,
+		Prompt:          prompt,
+		ResumeSessionID: resumeID,
+		Instructions:    instructions,
+		Model:           agent.Model,
+		Env:             env,
+		Args:            agent.Args,
 	})
 	if err != nil {
+		_, ids := messageTexts(claimed)
+		e.restoreQueued(bg, ids)
 		if stopped() {
 			return
 		}
@@ -253,6 +289,9 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.blockTask(bg, t.ID, "could not start harness: "+err.Error())
 		return
 	}
+	ar.setSession(sess)
+	e.deliverClaimed(bg, claimed, run.ID)
+	e.appendRunLog(bg, run.ID, domain.LogPrompt, prompt)
 	if r, err := e.updateRun(bg, run.ID, func(r *domain.Run) error {
 		r.Status = domain.RunRunning
 		return nil
@@ -285,6 +324,13 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		return nil
 	})
 
+	// Only a report of finished work can say the conversation is over; a blocked or failed one
+	// is a run that needs the owner, who must stay able to answer.
+	finishedWork := result.Status == domain.ResultCompleted || result.Status == domain.ResultNoChanges
+	if result.Finished && finishedWork && t.Kind != domain.KindReview {
+		e.closeOnFinished(bg, t, result.Summary)
+	}
+
 	if t.Kind == domain.KindReview {
 		e.applyReview(bg, t, parent, ws, result)
 		e.removeWorktree(bg, repo, ws)
@@ -300,7 +346,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		e.blockTask(bg, t.ID, "agent needs a human: "+reason)
 		return
 	case domain.ResultFailed:
-		e.requeueOrBlock(bg, t.ID, "agent reported failure", result.Summary)
+		fail(bg, t.ID, "agent reported failure", result.Summary)
 		return
 	}
 
@@ -312,7 +358,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		}
 		e.d.Bus.Emit(bg, domain.EvSystem, t.Project, t.ID, run.ID,
 			fmt.Sprintf("check %s failed: %v", f.name, f.err), nil)
-		e.requeueOrBlock(bg, t.ID, "check failed: "+f.name, f.context())
+		fail(bg, t.ID, "check failed: "+f.name, f.context())
 		return
 	}
 
@@ -323,15 +369,15 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	}
 	if _, err := e.d.Workspaces.Commit(bg, ws, commitMsg); err != nil {
 		if errors.Is(err, workspace.ErrUnresolvedConflicts) {
-			e.requeueOrBlock(bg, t.ID, "unresolved merge conflicts", err.Error())
+			fail(bg, t.ID, "unresolved merge conflicts", err.Error())
 		} else {
-			e.requeueOrBlock(bg, t.ID, "commit failed", err.Error())
+			fail(bg, t.ID, "commit failed", err.Error())
 		}
 		return
 	}
 	head, err := e.d.Workspaces.HeadSHA(bg, ws)
 	if err != nil {
-		e.requeueOrBlock(bg, t.ID, "could not read HEAD", err.Error())
+		fail(bg, t.ID, "could not read HEAD", err.Error())
 		return
 	}
 	// Work to publish is either a commit this run made, or, for a task with no pull request yet, a
@@ -342,7 +388,7 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	if !hasWork && t.PRNumber == 0 {
 		contained, err := e.d.Workspaces.IsAncestor(bg, e.repoFor(p), head, ws.BaseRef)
 		if err != nil {
-			e.requeueOrBlock(bg, t.ID, "could not compare the branch with "+ws.BaseRef, err.Error())
+			fail(bg, t.ID, "could not compare the branch with "+ws.BaseRef, err.Error())
 			return
 		}
 		hasWork = !contained
@@ -363,28 +409,51 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 		if !moved {
 			return // the task moved on during the run; nothing more to do
 		}
-	} else if !e.publish(bg, t, p, ws, result) {
+	} else if !e.publish(bg, t, p, ws, result, fail) {
 		return // publish has requeued or blocked the task, or it moved on; keep the worktree
 	}
 
 	e.queueFollowups(bg, t, result)
 	e.removeWorktree(bg, repo, ws)
+	// Only a run that succeeded hands queued owner messages on (startTask does it once the run
+	// is unregistered); every other outcome returned above, and a denial, stall, timeout or
+	// failure waits for an explicit owner send or flush.
+	if status == domain.RunSucceeded {
+		ar.continueRoot = root.ID
+	}
+}
+
+// failFunc records a failed attempt of a task: why is the reason, detail context for the next
+// agent (it may be empty).
+type failFunc func(ctx context.Context, id, why, detail string)
+
+// failFollowUp returns the failFunc for a run that took the owner's queued messages. It puts the
+// messages back in the queue (they show as not delivered, with Send now) and blocks the task with
+// "follow-up failed: <why>" instead of re-queueing it: a retry would run without the messages,
+// and the owner asked for this work. Runs that took none use requeueOrBlock.
+func (e *Engine) failFollowUp(claimed []domain.ChatMessage) failFunc {
+	return func(ctx context.Context, id, why, _ string) {
+		_, ids := messageTexts(claimed)
+		e.restoreQueued(ctx, ids)
+		e.blockTaskFrom(ctx, id, []domain.TaskStatus{domain.TaskRunning, domain.TaskReview, domain.TaskAwaitingApproval},
+			"follow-up failed: "+why)
+	}
 }
 
 // publish pushes the run's branch, opens the pull request if there is none, and moves the task
 // to review. It reports false when it re-queued or blocked the task instead.
-func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, ws workspace.Workspace, result domain.RunResult) bool {
+func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, ws workspace.Workspace, result domain.RunResult, fail failFunc) bool {
 	if !e.stillRunning(ctx, t.ID) {
 		return false // the owner cancelled or blocked the task during the run: push nothing
 	}
 	if err := e.d.Workspaces.Push(ctx, e.repoFor(p), ws); err != nil {
-		e.requeueOrBlock(ctx, t.ID, "push failed", err.Error())
+		fail(ctx, t.ID, "push failed", err.Error())
 		return false
 	}
 	pushedAt := e.d.Now().UTC()
 	s, err := e.d.SCMFor(p)
 	if err != nil {
-		e.requeueOrBlock(ctx, t.ID, "could not reach the code host", err.Error())
+		fail(ctx, t.ID, "could not reach the code host", err.Error())
 		return false
 	}
 
@@ -393,13 +462,13 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 	if t.PRNumber != 0 {
 		pr, err = s.GetPR(ctx, t.PRNumber)
 		if err != nil {
-			e.requeueOrBlock(ctx, t.ID, "could not read the pull request", err.Error())
+			fail(ctx, t.ID, "could not read the pull request", err.Error())
 			return false
 		}
 	} else {
 		existing, ok, err := s.FindPR(ctx, ws.Branch)
 		if err != nil {
-			e.requeueOrBlock(ctx, t.ID, "could not look up the pull request", err.Error())
+			fail(ctx, t.ID, "could not look up the pull request", err.Error())
 			return false
 		}
 		if ok {
@@ -420,7 +489,7 @@ func (e *Engine) publish(ctx context.Context, t domain.Task, p *config.Project, 
 				Labels: []string{"onett"},
 			})
 			if err != nil {
-				e.requeueOrBlock(ctx, t.ID, "could not open the pull request", err.Error())
+				fail(ctx, t.ID, "could not open the pull request", err.Error())
 				return false
 			}
 			pr = opened

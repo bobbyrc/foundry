@@ -81,7 +81,13 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `GET /tasks` | `?project=&status=queued,running&kind=&limit=` | `[]Task` |
 | `POST /tasks` | `NewTask` | `Task` (201) |
 | `GET /tasks/{id}` | | `TaskDetail` |
-| `POST /tasks/{id}/cancel` | | 204 |
+| `GET /tasks/{id}/conversation` | | `TaskConversation`: the task agent's root task, follow-up tasks, runs across them (oldest first), messages, `live_run_id`, and `can_send` with a `reason` when false. A follow-up task id returns its root's conversation. |
+| `POST /tasks/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202). Messages the task's agent (the root task or any follow-up id). A live agent that takes input gets it at once (`run_id` set); otherwise it is queued (`queued: true`) and the next run resumes the agent's session with it, started now when no run is live. 409 with the `reason` when the agent cannot be messaged. A signed-in person only (the API token gets 403) |
+| `POST /tasks/{id}/conversation/flush` | | 202; starts the follow-up for queued messages now (the way past a denied, stalled, timed-out or failed run); no-op when none are queued. A signed-in person only (the API token gets 403) |
+| `POST /tasks/{id}/conversation/close` | `{"reason":"…"}` | 204; closes the task agent's conversation: it can no longer be messaged and queued messages stay queued, never delivered. Marks the conversation only; the task is untouched. Closed by `orchestrator` (the API token) or `owner:<username>`; 409 when already closed. Emits `conversation.updated` |
+| `POST /tasks/{id}/conversation/reopen` | | 204; reopens a closed conversation. A signed-in person only (the API token gets 403); 409 when it is open. Emits `conversation.updated` |
+| `GET /agent-conversations` | | `[]AgentConversation`: root tasks with a run; open ones first, then ones closed or active in the last 7 days; at most 100 |
+| `POST /tasks/{id}/cancel` | | 204; also closes the task agent's conversation (by `owner:<username>` or `orchestrator`) |
 | `POST /tasks/{id}/retry` | `{"note":"…"}` (optional) | 204 |
 | `GET /runs` | `?task_id=&project=&status=&limit=` | `[]Run` |
 | `GET /runs/{id}` | | `Run` |
@@ -99,8 +105,11 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `POST /config/reload` | | 204 |
 | `GET /conversations` | | `[]Conversation` |
 | `POST /conversations` | `{"title":"…","project":"…"}` | `Conversation` (201) |
-| `GET /conversations/{id}` | | `{"conversation":Conversation,"messages":[]ChatMessage}` |
-| `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202); 409 while busy |
+| `GET /conversations/{id}` | | 404 for a task agent's conversation (use `/tasks/{id}/conversation`). `{"conversation":Conversation,"messages":[]ChatMessage}` |
+| `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202); 404 for a task agent's conversation. Sent while the orchestrator works, it reaches the agent at once if the harness takes input (`run_id` set), else is queued (`queued: true`) |
+| `POST /conversations/{id}/flush` | | 202; sends the queued messages now (no-op when empty or busy) |
+| `PATCH /messages/{id}` | `{"text":"…"}` | `ChatMessage`; 409 once delivered. A signed-in person only (the API token gets 403) |
+| `DELETE /messages/{id}` | | 204; 409 once delivered. A signed-in person only (the API token gets 403) |
 
 Which role may call each route: every `GET` needs `viewer` or better (the token included). Every
 `POST` that acts on work (tasks, approvals, pause, loops, chat, `config/reload`, projects) needs
@@ -117,6 +126,15 @@ means the file was written but the reload failed.
 value. `limit` is a non-negative integer, where 0 or absent means the route's default; a negative
 or non-numeric value is a 400. Most list routes default to 200. The exceptions are
 `GET /events/history` (500) and `GET /runs/{id}/logs` (1000).
+
+A run's log starts with a `prompt` line holding the exact text onett gave the agent. `owner` lines
+are messages from the owner sent into a run. A `tool_use` line and its `tool_result` line share a
+`tool_id`, so a client can pair them; other lines omit it.
+
+`POST /tasks` records `created_by_run` on the task from the `X-Onett-Run-ID` request header, but
+only when the caller is the API token; the header is ignored for a signed-in user. The CLI sends
+it with the value of `ONETT_RUN_ID` when that variable is set, which onett sets for every agent
+run, so a task an agent creates names the run that created it.
 
 `POST /tasks` rejects `"kind":"review"` with 400, since onett creates review tasks itself. An
 empty `kind` is stored as `feature`. A `risk` field is not part of `NewTask`, so it is rejected

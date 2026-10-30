@@ -68,17 +68,7 @@ func (e *Engine) supervise(ctx context.Context, run domain.Run, sess harness.Ses
 		}()
 	}
 
-	flush := func(lines []domain.LogLine) {
-		if len(lines) == 0 {
-			return
-		}
-		stored, err := e.d.Store.AppendRunLogs(bg, run.ID, lines)
-		if err != nil {
-			e.d.Logger.Error("store run log", "run", run.ID, "err", err)
-			return
-		}
-		e.d.Bus.Emit(bg, domain.EvRunLog, run.Project, run.TaskID, run.ID, "", stored)
-	}
+	flush := func(lines []domain.LogLine) { e.storeRunLogs(bg, run, lines) }
 
 	ticker := time.NewTicker(logFlushEvery)
 	defer ticker.Stop()
@@ -109,7 +99,7 @@ func (e *Engine) supervise(ctx context.Context, run domain.Run, sess harness.Ses
 			if at.IsZero() {
 				at = now
 			}
-			batch = append(batch, domain.LogLine{RunID: run.ID, Time: at, Kind: ev.Kind, Text: ev.Text})
+			batch = append(batch, domain.LogLine{RunID: run.ID, Time: at, Kind: ev.Kind, Text: ev.Text, ToolID: ev.ToolID})
 			if onEvent != nil {
 				onEvent(ev)
 			}
@@ -184,4 +174,27 @@ func (e *Engine) supervise(ctx context.Context, run domain.Run, sess harness.Ses
 		return nil
 	})
 	return res, status, reason
+}
+
+// storeRunLogs appends lines to the run's log and tells subscribers.
+func (e *Engine) storeRunLogs(ctx context.Context, run domain.Run, lines []domain.LogLine) {
+	if len(lines) == 0 {
+		return
+	}
+	stored, err := e.d.Store.AppendRunLogs(ctx, run.ID, lines)
+	if err != nil {
+		e.d.Logger.Error("store run log", "run", run.ID, "err", err)
+		return
+	}
+	e.d.Bus.Emit(ctx, domain.EvRunLog, run.Project, run.TaskID, run.ID, "", stored)
+}
+
+// appendRunLog stores one line of kind on the run's log, as supervise does for agent output.
+func (e *Engine) appendRunLog(ctx context.Context, runID string, kind domain.LogKind, text string) {
+	run, err := e.d.Store.GetRun(ctx, runID)
+	if err != nil {
+		e.d.Logger.Error("store run log: read run", "run", runID, "err", err)
+		return
+	}
+	e.storeRunLogs(ctx, run, []domain.LogLine{{RunID: runID, Time: e.d.Now(), Kind: kind, Text: text}})
 }

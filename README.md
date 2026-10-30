@@ -127,6 +127,11 @@ Put `onett` on your PATH to drop the `./`. Before you point onett at a real repo
 [docs/getting-started.md](docs/getting-started.md): it starts with a throwaway repository and a
 paused project.
 
+The web UI's **Chat** page works like a coding agent's terminal for every agent: talk to the
+orchestrator, open any task's agent from the sidebar or from a task, watch its tool calls as they
+happen (Conversation or Terminal view), type while it works, queue a message, stop a run with Stop
+or Esc, and close or reopen a task agent's conversation. See [docs/ui.md](docs/ui.md).
+
 To use the web UI on a phone, add it to the home screen; see [docs/ui.md](docs/ui.md#install-on-a-phone).
 
 ### Commands
@@ -145,7 +150,7 @@ as in `onett task create -h`.
 | `project add\|pause\|resume` | add a project to the config, or pause or resume one |
 | `agents [--all]` | list agent roles; `--all` also shows removed (disabled) ones |
 | `config` | print the redacted config, or `--reload` it |
-| `task` | create, list, show, cancel and retry tasks |
+| `task` | create, list, show, cancel and retry tasks; `task close-conversation ID --reason R` closes a task agent's conversation |
 | `run` | list, show, cancel and print logs of agent runs |
 | `deploys` | list releases, or show one with its log |
 | `approvals` | list approvals waiting for a decision |

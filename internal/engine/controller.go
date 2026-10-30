@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/bobbyrc/onett/internal/api"
 	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/harness"
 	"github.com/bobbyrc/onett/internal/notify"
 	"github.com/bobbyrc/onett/internal/store"
 )
@@ -49,16 +51,26 @@ var cancellableStatuses = []domain.TaskStatus{
 // CancelTask cancels a task that is not done, failed or already cancelled (a blocked task may be
 // cancelled). It also cancels the task's open children, such as an in-flight review, and stops
 // their runs. The status check and the change happen in one store update.
-func (e *Engine) CancelTask(ctx context.Context, id string) error {
-	if _, err := e.setTask(ctx, id, "cancelled by owner", func(t *domain.Task) error {
+func (e *Engine) CancelTask(ctx context.Context, id, by string) error {
+	t, err := e.setTask(ctx, id, "cancelled by owner", func(t *domain.Task) error {
 		switch t.Status {
 		case domain.TaskDone, domain.TaskFailed, domain.TaskCancelled:
 			return fmt.Errorf("%w: task is %s", api.ErrConflict, t.Status)
 		}
 		t.Status = domain.TaskCancelled
+		t.FollowUpPending = false
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return err
+	}
+	// The owner is done with this agent; its queued messages stay queued but are never sent.
+	if t.Kind != domain.KindReview {
+		if root, err := e.conversationRoot(ctx, t); err == nil {
+			if err := e.closeConversation(ctx, root, by, "task cancelled"); err != nil && !errors.Is(err, api.ErrConflict) {
+				e.d.Logger.Error("cancel: close conversation", "task", id, "err", err)
+			}
+		}
 	}
 	return e.cancelTree(ctx, id)
 }
@@ -116,6 +128,7 @@ func (e *Engine) RetryTask(ctx context.Context, id, note string) error {
 		t.Status = domain.TaskQueued
 		t.Attempts = 0
 		t.BlockedReason = ""
+		t.FollowUpPending = false
 		if note != "" {
 			t.Body += "\n\n## Note from the owner\n\n" + note
 		}
@@ -341,18 +354,38 @@ func (e *Engine) SetProjectPaused(ctx context.Context, name string, paused bool)
 	return nil
 }
 
-// SendChat stores the owner's message and starts the orchestrator's reply in the background.
-// The conversation is marked busy in the same store update that checks it, so two sends
-// cannot both start a reply.
+// SendChat stores the owner's message. While the orchestrator is replying, a live agent that
+// takes input gets the message at once; otherwise it is queued and goes out with the next turn.
+// When idle it starts a turn in the background, carrying any queued messages too. The busy flag
+// is set in the same store update that checks it, so two sends cannot both start a turn.
 func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (domain.ChatMessage, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return domain.ChatMessage{}, fmt.Errorf("%w: message is empty", api.ErrInvalid)
 	}
-	conv, err := e.d.Store.UpdateConversation(ctx, conversationID, func(c *domain.Conversation) error {
-		if c.Busy {
-			return fmt.Errorf("%w: the orchestrator is still replying", api.ErrConflict)
+	cur, err := e.d.Store.GetConversation(ctx, conversationID)
+	if err != nil {
+		return domain.ChatMessage{}, err
+	}
+	if cur.TaskID != "" {
+		return domain.ChatMessage{}, fmt.Errorf("%w: conversation %s", store.ErrNotFound, conversationID)
+	}
+	if cur.Busy && cur.ActiveRunID != "" {
+		switch err := e.deliverToRun(ctx, cur.ActiveRunID, text); {
+		case err == nil:
+			return e.storeOwnerMessage(ctx, cur, domain.ChatMessage{
+				ConversationID: cur.ID, Role: "user", Text: text, RunID: cur.ActiveRunID,
+			})
+		case errors.Is(err, errRunNotLive), errors.Is(err, harness.ErrInputClosed):
+			// The agent cannot take it now; it waits in the queue.
+		default:
+			e.d.Logger.Warn("chat: deliver to agent", "conversation", cur.ID, "err", err)
 		}
+	}
+
+	wasBusy := false
+	conv, err := e.d.Store.UpdateConversation(ctx, conversationID, func(c *domain.Conversation) error {
+		wasBusy = c.Busy
 		c.Busy = true
 		if c.Title == "" {
 			c.Title = firstRunes(text, 60)
@@ -362,15 +395,116 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 	if err != nil {
 		return domain.ChatMessage{}, err
 	}
-	msg, err := e.d.Store.AppendChatMessage(ctx, domain.ChatMessage{
-		ConversationID: conv.ID, Role: "user", Text: text,
-	})
+	if wasBusy {
+		msg, err := e.storeOwnerMessage(ctx, conv, domain.ChatMessage{
+			ConversationID: conv.ID, Role: "user", Text: text, Queued: true,
+		})
+		if err != nil {
+			return domain.ChatMessage{}, err
+		}
+		// The turn may have ended between the check and the store; nobody would send it then.
+		if now, err := e.d.Store.GetConversation(ctx, conv.ID); err == nil && !now.Busy {
+			if err := e.FlushChat(ctx, conv.ID); err != nil && !errors.Is(err, errStopped) {
+				e.d.Logger.Error("chat: send queued messages", "conversation", conv.ID, "err", err)
+			}
+		}
+		return msg, nil
+	}
+
+	// Idle: this turn takes the queue plus the new message. Claiming happens first, so an edit
+	// or cancel of a queued message either lands before (and is respected) or conflicts.
+	queued, err := e.claimQueued(ctx, conv.ID)
 	if err != nil {
 		e.releaseConversation(ctx, conv.ID)
 		return domain.ChatMessage{}, err
 	}
-	e.d.Bus.Emit(ctx, domain.EvChatMessage, conv.Project, "", "", "message from owner", msg)
+	_, queuedIDs := messageTexts(queued)
+	msg, err := e.storeOwnerMessage(ctx, conv, domain.ChatMessage{
+		ConversationID: conv.ID, Role: "user", Text: text,
+	})
+	if err != nil {
+		e.restoreQueued(ctx, queuedIDs)
+		e.releaseConversation(ctx, conv.ID)
+		return domain.ChatMessage{}, err
+	}
+	texts, ids := messageTexts(queued)
+	texts, ids = append(texts, text), append(ids, msg.ID)
+	if err := e.startTurn(ctx, conv, texts, ids); err != nil {
+		e.restoreQueued(ctx, queuedIDs)
+		return domain.ChatMessage{}, err
+	}
+	return msg, nil
+}
 
+// storeOwnerMessage appends an owner message and announces it.
+func (e *Engine) storeOwnerMessage(ctx context.Context, conv domain.Conversation, m domain.ChatMessage) (domain.ChatMessage, error) {
+	msg, err := e.d.Store.AppendChatMessage(ctx, m)
+	if err != nil {
+		return domain.ChatMessage{}, err
+	}
+	e.d.Bus.Emit(ctx, domain.EvChatMessage, conv.Project, "", msg.RunID, "message from owner", msg)
+	return msg, nil
+}
+
+// claimQueued takes the conversation's queued owner messages, oldest first, so they can no
+// longer be edited or cancelled. The caller holds the busy flag.
+func (e *Engine) claimQueued(ctx context.Context, conversationID string) ([]domain.ChatMessage, error) {
+	all, err := e.d.Store.ListChatMessages(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	var claimed []domain.ChatMessage
+	for _, m := range all {
+		if !m.Queued {
+			continue
+		}
+		got, err := e.d.Store.UpdateChatMessage(ctx, m.ID, func(m *domain.ChatMessage) error {
+			m.Queued = false
+			return nil
+		})
+		if errors.Is(err, store.ErrNotFound) {
+			continue // cancelled meanwhile
+		}
+		if err != nil {
+			_, ids := messageTexts(claimed)
+			e.restoreQueued(ctx, ids)
+			return nil, err
+		}
+		claimed = append(claimed, got)
+	}
+	return claimed, nil
+}
+
+// restoreQueued puts claimed messages back in the queue after their turn could not start.
+func (e *Engine) restoreQueued(ctx context.Context, ids []string) {
+	for _, id := range ids {
+		m, err := e.d.Store.UpdateChatMessage(context.WithoutCancel(ctx), id, func(m *domain.ChatMessage) error {
+			m.Queued, m.RunID = true, "" // not delivered after all
+			return nil
+		})
+		if errors.Is(err, store.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			e.d.Logger.Error("chat: requeue message", "message", id, "err", err)
+			continue
+		}
+		e.emitMessage(ctx, m)
+	}
+}
+
+func messageTexts(msgs []domain.ChatMessage) (texts, ids []string) {
+	for _, m := range msgs {
+		texts = append(texts, m.Text)
+		ids = append(ids, m.ID)
+	}
+	return texts, ids
+}
+
+// startTurn runs one orchestrator turn in the background with the given owner message texts
+// joined as its prompt. The conversation is already busy. On failure to start it clears the flag.
+func (e *Engine) startTurn(ctx context.Context, conv domain.Conversation, texts, ids []string) error {
+	prompt := strings.Join(texts, "\n\n")
 	// The reply outlives the request, so it does not use the request's context. It derives from
 	// Run's context instead, so shutdown cancels it.
 	timeout := e.Config().Limits.RunTimeout.Duration
@@ -378,13 +512,112 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 	started := e.goTracked(func() {
 		runCtx, cancel := context.WithTimeout(base, timeout)
 		defer cancel()
-		e.chatReply(runCtx, conv, text)
+		e.chatReply(runCtx, conv, prompt, ids)
 	})
 	if !started {
 		e.releaseConversation(context.WithoutCancel(ctx), conv.ID)
-		return domain.ChatMessage{}, errStopped
+		return errStopped
 	}
+	return nil
+}
+
+// FlushChat starts a turn from the queued messages now, instead of waiting for the current
+// turn to succeed. It does nothing when the queue is empty or a turn is already running.
+func (e *Engine) FlushChat(ctx context.Context, conversationID string) error {
+	cur, err := e.d.Store.GetConversation(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	if cur.TaskID != "" {
+		return fmt.Errorf("%w: conversation %s", store.ErrNotFound, conversationID)
+	}
+	if cur.Busy {
+		return nil
+	}
+	// Look before taking the busy flag: a send that queues meanwhile then sees an idle
+	// conversation and flushes itself.
+	waiting, err := e.d.Store.ListChatMessages(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(waiting, func(m domain.ChatMessage) bool { return m.Queued }) {
+		return nil
+	}
+	won := false
+	conv, err := e.d.Store.UpdateConversation(ctx, conversationID, func(c *domain.Conversation) error {
+		if !c.Busy {
+			c.Busy, won = true, true
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !won {
+		return nil
+	}
+	queued, err := e.claimQueued(ctx, conv.ID)
+	if err != nil {
+		e.releaseConversation(ctx, conv.ID)
+		return err
+	}
+	if len(queued) == 0 {
+		e.releaseConversation(ctx, conv.ID)
+		return nil
+	}
+	texts, ids := messageTexts(queued)
+	if err := e.startTurn(ctx, conv, texts, ids); err != nil {
+		e.restoreQueued(ctx, ids)
+		return err
+	}
+	return nil
+}
+
+// EditQueuedMessage changes the text of a message that has not been delivered yet.
+// api.ErrConflict once it has.
+func (e *Engine) EditQueuedMessage(ctx context.Context, id, text string) (domain.ChatMessage, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return domain.ChatMessage{}, fmt.Errorf("%w: message is empty", api.ErrInvalid)
+	}
+	msg, err := e.d.Store.UpdateChatMessage(ctx, id, func(m *domain.ChatMessage) error {
+		if !m.Queued {
+			return fmt.Errorf("%w: the message was already delivered", api.ErrConflict)
+		}
+		m.Text = text
+		return nil
+	})
+	if err != nil {
+		return domain.ChatMessage{}, err
+	}
+	e.emitMessage(ctx, msg)
 	return msg, nil
+}
+
+// CancelQueuedMessage removes a message that has not been delivered yet. api.ErrConflict once
+// it has.
+func (e *Engine) CancelQueuedMessage(ctx context.Context, id string) error {
+	// The check and the delete are one transaction, so a turn cannot take the message between.
+	msg, err := e.d.Store.DeleteChatMessageIf(ctx, id, func(m domain.ChatMessage) error {
+		if !m.Queued {
+			return fmt.Errorf("%w: the message was already delivered", api.ErrConflict)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	e.emitMessage(ctx, msg)
+	return nil
+}
+
+// emitMessage announces a changed chat message; the UI refetches the conversation on it.
+func (e *Engine) emitMessage(ctx context.Context, msg domain.ChatMessage) {
+	proj := ""
+	if conv, err := e.d.Store.GetConversation(ctx, msg.ConversationID); err == nil {
+		proj = conv.Project
+	}
+	e.d.Bus.Emit(ctx, domain.EvChatMessage, proj, "", msg.RunID, "chat message changed", msg)
 }
 
 // replyBase is the context chat replies derive from: Run's context once Run has started, so
@@ -435,6 +668,7 @@ func (e *Engine) liveRunsOf(taskID string) []string {
 func (e *Engine) releaseConversation(ctx context.Context, id string) {
 	if _, err := e.d.Store.UpdateConversation(ctx, id, func(c *domain.Conversation) error {
 		c.Busy = false
+		c.ActiveRunID = ""
 		return nil
 	}); err != nil {
 		e.d.Logger.Error("chat: release conversation", "conversation", id, "err", err)

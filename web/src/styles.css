@@ -1619,6 +1619,16 @@ a.board-window:hover .board-name {
   color: var(--muted);
 }
 
+.kind-prompt {
+  color: var(--muted);
+}
+
+.log-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
 .kind-stderr {
   color: var(--muted);
   font-style: italic;

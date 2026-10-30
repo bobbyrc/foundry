@@ -58,6 +58,7 @@ export function TaskDetail() {
       <p className="task-meta muted">
         <span>{kicker}</span>
         <IdChip id={task.id} />
+        {runs.length > 0 ? <Link to={`/chat/task/${task.id}`}>Open conversation</Link> : null}
       </p>
       <TaskLine status={task.status} hasPR={Boolean(task.pr_number)} approvalCount={approvals.length} />
 

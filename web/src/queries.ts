@@ -1,9 +1,9 @@
 // React Query hooks for every route. Lists refetch every 30 seconds as a fallback to events.
 import { useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as api from './api';
 import { ApiError } from './api';
-import type { ConfigChange, NewTask, Role, Stats, TaskDetail } from './types';
+import type { ConfigChange, NewTask, Role, Run, Stats, TaskDetail } from './types';
 import { keys } from './keys';
 import { normaliseProject } from './lib/projects';
 
@@ -93,6 +93,19 @@ export function useRun(id: string) {
   });
 }
 
+/** Several runs by id (the same cached reads as useRun), for a transcript that says why each ended. */
+export function useRunsMap(ids: string[]): Record<string, Run> {
+  const results = useQueries({
+    queries: ids.map((id) => ({ queryKey: keys.run(id), queryFn: () => api.getRun(id) })),
+  });
+  const out: Record<string, Run> = {};
+  ids.forEach((id, i) => {
+    const run = results[i]?.data;
+    if (run) out[id] = run;
+  });
+  return out;
+}
+
 export function useApprovals(status: 'pending' | 'all') {
   return useQuery({
     queryKey: keys.approvalList(status),
@@ -157,6 +170,22 @@ export function useConversation(id: string) {
   return useQuery({
     queryKey: keys.conversation(id),
     queryFn: () => api.getConversation(id),
+    refetchInterval: LIST_REFRESH_MS,
+  });
+}
+
+export function useAgentConversations() {
+  return useQuery({
+    queryKey: keys.agentConversations,
+    queryFn: () => api.listAgentConversations(),
+    refetchInterval: LIST_REFRESH_MS,
+  });
+}
+
+export function useTaskConversation(taskId: string) {
+  return useQuery({
+    queryKey: keys.taskConversation(taskId),
+    queryFn: () => api.getTaskConversation(taskId),
     refetchInterval: LIST_REFRESH_MS,
   });
 }
@@ -258,6 +287,75 @@ export function useSendMessage(conversationId: string) {
   return useMutation({
     mutationFn: (text: string) => api.sendMessage(conversationId, text),
     onSuccess: () => invalidate(qc, keys.conversation(conversationId), keys.conversationsAll),
+  });
+}
+
+/** Stop: cancels whichever run is live in the open conversation. */
+export function useStopRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => api.cancelRun(runId),
+    onSuccess: () =>
+      invalidate(qc, keys.runsAll, keys.conversationsAll, keys.taskConversationsAll, keys.agentConversations, keys.tasksAll, keys.stats),
+  });
+}
+
+/** Everything a change to a conversation's messages can touch, orchestrator or task agent. */
+function invalidateChat(qc: QueryClient) {
+  invalidate(qc, keys.conversationsAll, keys.taskConversationsAll, keys.agentConversations);
+}
+
+export function useEditMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; text: string }) => api.editMessage(vars.id, vars.text),
+    onSuccess: () => invalidateChat(qc),
+    // A message delivered in the meantime answers 409: show the new state either way.
+    onError: () => invalidateChat(qc),
+  });
+}
+
+export function useCancelMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.cancelMessage(id),
+    onSuccess: () => invalidateChat(qc),
+    onError: () => invalidateChat(qc),
+  });
+}
+
+export function useFlushQueued() {
+  const qc = useQueryClient();
+  return useMutation({
+    // The orchestrator's queue is flushed by conversation id, a task agent's by task id.
+    mutationFn: (target: { conversationId: string } | { taskId: string }) =>
+      'taskId' in target ? api.flushTaskMessages(target.taskId) : api.flushConversation(target.conversationId),
+    onSuccess: () => invalidateChat(qc),
+  });
+}
+
+export function useSendTaskMessage(taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) => api.sendTaskMessage(taskId, text),
+    onSuccess: () => invalidateChat(qc),
+    onError: () => invalidateChat(qc),
+  });
+}
+
+export function useCloseTaskConversation(taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (reason: string) => api.closeTaskConversation(taskId, reason),
+    onSuccess: () => invalidateChat(qc),
+  });
+}
+
+export function useReopenTaskConversation(taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.reopenTaskConversation(taskId),
+    onSuccess: () => invalidateChat(qc),
   });
 }
 

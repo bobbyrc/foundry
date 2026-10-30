@@ -40,9 +40,29 @@ describe('keysFor', () => {
     expect(keysFor(ev('issue.filed'))).toEqual([keys.frictionAll]);
   });
 
-  it('maps chat.message to that conversation only', () => {
+  it('maps chat.message to the conversation, every task conversation and the agent list', () => {
     const keysOut = keysFor(ev('chat.message', { data: { conversation_id: 'c1', text: 'hi' } }));
-    expect(keysOut).toEqual([keys.conversationsAll, keys.conversation('c1')]);
+    expect(keysOut).toEqual([
+      keys.conversationsAll,
+      keys.conversation('c1'),
+      keys.taskConversationsAll,
+      keys.agentConversations,
+    ]);
+  });
+
+  it('maps conversation.updated to that task conversation and the agent list', () => {
+    expect(keysFor(ev('conversation.updated', { data: { task_id: 't1' } }))).toEqual([
+      keys.taskConversation('t1'),
+      keys.agentConversations,
+    ]);
+  });
+
+  it('refreshes conversations and run logs when a run changes', () => {
+    const keysOut = keysFor(ev('run.updated', { run_id: 'r1', task_id: 't1' }));
+    expect(keysOut).toContainEqual(keys.conversationsAll);
+    expect(keysOut).toContainEqual(keys.taskConversationsAll);
+    expect(keysOut).toContainEqual(keys.agentConversations);
+    expect(keysOut).toContainEqual(keys.runLogs('r1'));
   });
 
   it('never refetches for live-only events', () => {

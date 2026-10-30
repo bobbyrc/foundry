@@ -34,9 +34,14 @@ git-ignored). Onett reads only this file to learn what happened:
   "pr_title": "Imperative, under 70 characters.",
   "pr_body": "What changed, why, and how it was verified. Markdown.",
   "followups": [{"title": "…", "body": "…", "kind": "bugfix | feature | chore | improve"}],
-  "friction": [{"title": "…", "body": "…", "target": "project | onett"}]
+  "friction": [{"title": "…", "body": "…", "target": "project | onett"}],
+  "finished": false
 }
 ```
+
+Set `"finished": true` only when nothing more can come of this conversation: the owner has what
+they asked for and you have no open questions. It closes your conversation; it does not change
+the task.
 
 - `status`: `completed` when the work is done; `no_changes` when no code change
   was needed (explain why in `summary`); `blocked` when you need a human; `failed` when you

@@ -86,7 +86,7 @@ type Task struct {
 	Risk        Risk       `json:"risk,omitempty"`
 	RiskReasons []string   `json:"risk_reasons,omitempty"`
 	// Source says where the task came from: "chat", "api", "github_issue", "signal",
-	// "friction", "followup", "shepherd".
+	// "friction", "followup", "shepherd", "conversation".
 	Source string `json:"source"`
 	// SourceRef dedupes tasks per project: "github_issue:42", "signal:<fingerprint>".
 	SourceRef string `json:"source_ref,omitempty"`
@@ -104,10 +104,16 @@ type Task struct {
 	CIHeadSeenAt  *time.Time `json:"ci_head_seen_at,omitempty"`
 	Summary       string     `json:"summary,omitempty"` // latest agent summary
 	BlockedReason string     `json:"blocked_reason,omitempty"`
-	Attempts      int        `json:"attempts"`
-	MaxAttempts   int        `json:"max_attempts"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	// FollowUpPending marks a task queued by an owner message to its agent: its next run resumes
+	// the agent's session with the queued messages. An automatic retry never has it, so a retry
+	// after a failure keeps its attempt notes and leaves queued messages alone.
+	FollowUpPending bool      `json:"follow_up_pending,omitempty"`
+	Attempts        int       `json:"attempts"`
+	MaxAttempts     int       `json:"max_attempts"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	// CreatedByRun is the run that created this task, when an agent created it.
+	CreatedByRun string `json:"created_by_run,omitempty"`
 }
 
 type RunStatus string
@@ -159,6 +165,8 @@ const (
 	LogSystem     LogKind = "system"      // onett or harness bookkeeping
 	LogStderr     LogKind = "stderr"
 	LogError      LogKind = "error"
+	LogPrompt     LogKind = "prompt" // the text onett gave the agent to start a run or turn
+	LogOwner      LogKind = "owner"  // a message from the owner, sent into a run
 )
 
 // LogLine is one entry in a run's log. Seq is assigned by the store, starting at 1 per run.
@@ -168,6 +176,8 @@ type LogLine struct {
 	Time  time.Time `json:"time"`
 	Kind  LogKind   `json:"kind"`
 	Text  string    `json:"text"`
+	// ToolID pairs a tool_use line with its tool_result line; empty on other lines.
+	ToolID string `json:"tool_id,omitempty"`
 }
 
 // Event is an append-only record of something that happened. ID is assigned by the store and
@@ -186,24 +196,25 @@ type Event struct {
 // Event types. Clients must ignore types they do not know.
 // Types marked "live" are fanned out to subscribers but not persisted.
 const (
-	EvTaskCreated       = "task.created" // Data: Task
-	EvTaskUpdated       = "task.updated" // Data: Task
-	EvRunUpdated        = "run.updated"  // Data: Run (start, status change, finish)
-	EvRunLog            = "run.log"      // Data: []LogLine; live
-	EvPROpened          = "pr.opened"
-	EvPRMerged          = "pr.merged"
-	EvPolicyDecision    = "policy.decision"    // Data: policy.Decision
-	EvApprovalRequested = "approval.requested" // Data: Approval
-	EvApprovalDecided   = "approval.decided"   // Data: Approval
-	EvDeployUpdated     = "deploy.updated"     // Data: Deployment
-	EvSignalNew         = "signal.new"         // Data: Signal
-	EvFrictionReported  = "friction.reported"  // Data: Friction
-	EvIssueFiled        = "issue.filed"
-	EvChatMessage       = "chat.message" // Data: ChatMessage
-	EvChatDelta         = "chat.delta"   // Data: {"conversation_id","text"}; live
-	EvLoopError         = "loop.error"
-	EvNotification      = "notification"
-	EvSystem            = "system"
+	EvTaskCreated         = "task.created" // Data: Task
+	EvTaskUpdated         = "task.updated" // Data: Task
+	EvRunUpdated          = "run.updated"  // Data: Run (start, status change, finish)
+	EvRunLog              = "run.log"      // Data: []LogLine; live
+	EvPROpened            = "pr.opened"
+	EvPRMerged            = "pr.merged"
+	EvPolicyDecision      = "policy.decision"    // Data: policy.Decision
+	EvApprovalRequested   = "approval.requested" // Data: Approval
+	EvApprovalDecided     = "approval.decided"   // Data: Approval
+	EvDeployUpdated       = "deploy.updated"     // Data: Deployment
+	EvSignalNew           = "signal.new"         // Data: Signal
+	EvFrictionReported    = "friction.reported"  // Data: Friction
+	EvIssueFiled          = "issue.filed"
+	EvChatMessage         = "chat.message"         // Data: ChatMessage
+	EvConversationUpdated = "conversation.updated" // Data: {"task_id"}
+	EvChatDelta           = "chat.delta"           // Data: {"conversation_id","text"}; live
+	EvLoopError           = "loop.error"
+	EvNotification        = "notification"
+	EvSystem              = "system"
 )
 
 type ApprovalStatus string
@@ -301,7 +312,12 @@ type Friction struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// Conversation is one chat thread with the orchestrator agent.
+// SourceConversation is Task.Source for a follow-up task made from a task agent conversation
+// after the task has merged.
+const SourceConversation = "conversation"
+
+// Conversation is one chat thread: with the orchestrator agent, or (when TaskID is set) with
+// the agent of one task.
 type Conversation struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
@@ -310,6 +326,14 @@ type Conversation struct {
 	Busy      bool      `json:"busy"` // the orchestrator is replying
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// TaskID is the root task of a task agent conversation; "" means the orchestrator.
+	TaskID string `json:"task_id,omitempty"`
+	// ActiveRunID is the orchestrator turn in flight.
+	ActiveRunID string     `json:"active_run_id,omitempty"`
+	ClosedAt    *time.Time `json:"closed_at,omitempty"`
+	// ClosedBy is "agent", "orchestrator" or "owner:<username>".
+	ClosedBy     string `json:"closed_by,omitempty"`
+	ClosedReason string `json:"closed_reason,omitempty"`
 }
 
 type ChatMessage struct {
@@ -319,6 +343,33 @@ type ChatMessage struct {
 	Text           string    `json:"text"`
 	RunID          string    `json:"run_id,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
+	// Queued is an owner message held until the agent's current run finishes.
+	Queued bool `json:"queued,omitempty"`
+}
+
+// TaskConversation is the owner's view of a task agent: the root task, its conversation, the
+// follow-up tasks and runs, and the messages.
+type TaskConversation struct {
+	Task         Task          `json:"task"` // the root task
+	Conversation *Conversation `json:"conversation,omitempty"`
+	Tasks        []Task        `json:"tasks"` // root then conversation follow-ups, oldest first
+	Runs         []Run         `json:"runs"`  // the agent's runs across Tasks, oldest first
+	Messages     []ChatMessage `json:"messages"`
+	LiveRunID    string        `json:"live_run_id,omitempty"`
+	CanSend      bool          `json:"can_send"`
+	Reason       string        `json:"reason,omitempty"` // why CanSend is false
+}
+
+// AgentConversation is one row in the list of task agent conversations.
+type AgentConversation struct {
+	TaskID     string     `json:"task_id"`
+	Title      string     `json:"title"`
+	Project    string     `json:"project"`
+	Role       string     `json:"role"`
+	TaskStatus TaskStatus `json:"task_status"`
+	Live       bool       `json:"live"`
+	Closed     bool       `json:"closed"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 // LoopState is the persisted state of one recurring loop for one project ("" = global).

@@ -28,6 +28,12 @@ func (s *server) apiRoutes(r chi.Router) {
 	s.read(r, "/tasks", s.listTasks)
 	s.operate(r, http.MethodPost, "/tasks", s.createTask)
 	s.read(r, "/tasks/{id}", s.getTask)
+	s.read(r, "/tasks/{id}/conversation", s.taskConversation)
+	s.read(r, "/agent-conversations", s.agentConversations)
+	s.operate(r, http.MethodPost, "/tasks/{id}/messages", s.sendTaskMessage)
+	s.operate(r, http.MethodPost, "/tasks/{id}/conversation/flush", s.flushTaskMessages)
+	s.operate(r, http.MethodPost, "/tasks/{id}/conversation/close", s.closeTaskConversation)
+	s.operate(r, http.MethodPost, "/tasks/{id}/conversation/reopen", s.reopenTaskConversation)
 	s.operate(r, http.MethodPost, "/tasks/{id}/cancel", s.cancelTask)
 	s.operate(r, http.MethodPost, "/tasks/{id}/retry", s.retryTask)
 
@@ -63,6 +69,9 @@ func (s *server) apiRoutes(r chi.Router) {
 	s.operate(r, http.MethodPost, "/conversations", s.createConversation)
 	s.read(r, "/conversations/{id}", s.getConversation)
 	s.operate(r, http.MethodPost, "/conversations/{id}/messages", s.sendMessage)
+	s.operate(r, http.MethodPost, "/conversations/{id}/flush", s.flushConversation)
+	s.operate(r, http.MethodPatch, "/messages/{id}", s.editMessage)
+	s.operate(r, http.MethodDelete, "/messages/{id}", s.cancelMessage)
 }
 
 // read, operate and administer mount a handler under the action it needs. Every route in
