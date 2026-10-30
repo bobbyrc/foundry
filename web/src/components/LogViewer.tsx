@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getRunLogs } from '../api';
-import { subscribe, useLiveStatus } from '../events';
+import { subscribe, useLiveStatus, watch } from '../events';
 import { formatClock, cx } from '../lib/format';
 import { maxSeq, mergeLogLines } from '../lib/logs';
 import { parseTime } from '../lib/time';
@@ -80,6 +80,22 @@ export function LogViewer({ runId, active }: { runId: string; active: boolean })
       // The next poll or reconnect tries again.
     }
   };
+
+  // The server sends a run's log lines only to a socket that asked for them. Lines emitted before
+  // that request took effect are never replayed, so fetch them once the server confirms it.
+  useEffect(() => {
+    const w = watch({ run_id: runId });
+    let cancelled = false;
+    void w.ready.then(() => {
+      if (!cancelled) void catchUp();
+    });
+    return () => {
+      cancelled = true;
+      w.release();
+    };
+    // catchUp only reads runId and refs, so the effect's own deps are enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId]);
 
   // Poll while the run is active and the stream is not delivering.
   useEffect(() => {
