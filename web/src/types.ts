@@ -101,7 +101,10 @@ export interface LogLine {
   text: string;
 }
 
-/** An SSE event. Live-only events (run.log, chat.delta) may carry id 0. */
+/**
+ * A live event from the server (WebSocket for the UI, SSE for the CLI). Live-only events
+ * (run.log, chat.delta) may carry id 0.
+ */
 export interface OnettEvent<T = unknown> {
   id: number;
   time: string;
