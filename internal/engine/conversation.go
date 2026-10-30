@@ -300,6 +300,8 @@ func (e *Engine) SendTaskMessage(ctx context.Context, taskID, text string) (doma
 		return domain.ChatMessage{}, err
 	}
 	if msg.Queued {
+		// A client disconnect must not cut the requeue short.
+		ctx = context.WithoutCancel(ctx)
 		// If the live run ended while the message was being stored, nobody else will pick it up.
 		if l.live == "" {
 			e.continueConversation(ctx, root.ID)
@@ -413,6 +415,7 @@ func (e *Engine) continueConversation(ctx context.Context, rootID string) {
 				x.Status = domain.TaskQueued
 				x.Attempts = 0
 				x.BlockedReason = ""
+				x.FollowUpPending = true
 				return nil
 			})
 		if err != nil {
@@ -438,6 +441,8 @@ func (e *Engine) startFollowUp(ctx context.Context, root, newest domain.Task) {
 		Priority: root.Priority,
 		Source:   domain.SourceConversation,
 		ParentID: newest.ID,
+
+		FollowUpPending: true,
 	}); err != nil {
 		e.d.Logger.Error("continue conversation: create follow-up", "task", root.ID, "err", err)
 	}
@@ -450,6 +455,14 @@ func (e *Engine) claimOwnerMessages(ctx context.Context, t domain.Task) (domain.
 	root, err := e.conversationRoot(ctx, t)
 	if err != nil {
 		return t, nil
+	}
+	// Only an owner's follow-up, or the task's first run, takes the queue. An automatic retry
+	// leaves it alone (invariant 4: a failed run does not deliver messages by itself).
+	if !t.FollowUpPending {
+		runs, err := e.d.Store.ListRuns(ctx, store.RunFilter{TaskID: t.ID, Limit: 2})
+		if err != nil || len(runs) > 1 {
+			return root, nil
+		}
 	}
 	conv, err := e.d.Store.GetConversationByTask(ctx, root.ID)
 	if err != nil {

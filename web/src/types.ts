@@ -64,6 +64,7 @@ export interface Task {
   pushed_at?: string;
   summary?: string;
   blocked_reason?: string;
+  follow_up_pending?: boolean;
   attempts: number;
   max_attempts: number;
   created_at: string;

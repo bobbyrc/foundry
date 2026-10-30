@@ -249,6 +249,12 @@ A run that was cancelled, denied, stalled, timed out or failed leaves them (inva
 explicit send or `POST /tasks/{id}/conversation/flush` starts the follow-up. Nothing here adds a
 path from agent output to a commit, push or merge: follow-ups run through the same publish code.
 
+A task re-queued or created by an owner message carries `follow_up_pending`; only its run claims
+the queue, resuming the session with the owner's text plus any merge-conflict section. An
+automatic retry after a failure never has the flag, so it keeps its attempt notes and leaves the
+queue alone. Messages to a review task's agent are not continued after the review finishes (the
+review outcome is applied first and returns).
+
 ## Code layout
 
 ```text

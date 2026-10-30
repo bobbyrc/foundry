@@ -104,10 +104,14 @@ type Task struct {
 	CIHeadSeenAt  *time.Time `json:"ci_head_seen_at,omitempty"`
 	Summary       string     `json:"summary,omitempty"` // latest agent summary
 	BlockedReason string     `json:"blocked_reason,omitempty"`
-	Attempts      int        `json:"attempts"`
-	MaxAttempts   int        `json:"max_attempts"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	// FollowUpPending marks a task queued by an owner message to its agent: its next run resumes
+	// the agent's session with the queued messages. An automatic retry never has it, so a retry
+	// after a failure keeps its attempt notes and leaves queued messages alone.
+	FollowUpPending bool      `json:"follow_up_pending,omitempty"`
+	Attempts        int       `json:"attempts"`
+	MaxAttempts     int       `json:"max_attempts"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 	// CreatedByRun is the run that created this task, when an agent created it.
 	CreatedByRun string `json:"created_by_run,omitempty"`
 }

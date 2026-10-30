@@ -202,14 +202,19 @@ How the follow-up runs depends on where the task is:
   compare-and-set from those statuses (invariant 6) and goes through the scheduler like any run,
   so concurrency limits and run setup apply unchanged. Like Retry, this resets attempts, clears
   the blocked reason and cancels unfinished reviews of the old head (`cancelStaleReviews`). The
-  owner's undelivered messages are the marker: when the runner starts a task that has any, it
-  resumes the session with them as the prompt, marks them delivered, and does not build the
-  usual task prompt. The run ends through the normal pipeline: outbox, deterministic commit and
+  same transition sets an explicit marker on the task, `follow_up_pending`. When the runner
+  starts a task with that marker, it clears the marker, resumes the session with the owner's
+  messages as the prompt (plus any merge-conflict section the run needs), marks the messages
+  delivered, and does not build the usual task prompt. Queued messages alone are not the marker:
+  onett's automatic retry after a failed run builds the normal prompt with its attempt notes and
+  leaves the queue alone, so a failed run never delivers the owner's messages by itself
+  (invariant 4). The run ends through the normal pipeline: outbox, deterministic commit and
   push, PR update, CI, review, risk, approval. A new push withdraws an existing approval, because
   merges are pinned to the approved commit (invariant 5). (My call.)
 - **After a merge** (merged, deploying, done with a merged PR): the merged task is not reopened.
   Onett creates a child task (`ParentID` = the merged task, `Source: "conversation"`, same
-  project, kind and role) whose first run resumes the same session on a new branch from the
+  project, kind and role, created with `follow_up_pending` set) whose first run resumes the
+  same session on a new branch from the
   default branch and opens its own PR. The conversation carries on across both tasks. The
   existing `"followup"` source stays for agent-suggested follow-ups, which do not resume a
   session. (My call.)

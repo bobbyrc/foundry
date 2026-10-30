@@ -247,10 +247,17 @@ func (e *Engine) runTask(ctx context.Context, t domain.Task, run domain.Run, ar 
 	prompt := buildTaskPrompt(t, p, parent, conflicts)
 	resumeID := ""
 	root, claimed := e.claimOwnerMessages(bg, t)
+	if t.FollowUpPending {
+		e.setTask(bg, t.ID, "follow-up started", func(x *domain.Task) error {
+			x.FollowUpPending = false
+			return nil
+		})
+	}
 	if len(claimed) > 0 {
 		texts, _ := messageTexts(claimed)
 		if prev, ok := e.resumeSession(bg, root); ok {
-			prompt, resumeID = ownerPrompt(texts), prev.SessionID
+			prompt = ownerPrompt(texts) + "\n\n" + mergeConflictSection(p, conflicts)
+			prompt, resumeID = strings.TrimRight(prompt, "\n"), prev.SessionID
 		} else {
 			prompt += "\n\n" + ownerPrompt(texts)
 		}

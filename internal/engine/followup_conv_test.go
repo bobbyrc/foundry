@@ -265,3 +265,31 @@ func TestSendTaskMessageRefusals(t *testing.T) {
 	_, err = env.e.SendTaskMessage(env.ctx, task.ID, "  ")
 	assert.ErrorIs(t, err, api.ErrInvalid)
 }
+
+func TestAutoRetryDoesNotClaimQueuedMessages(t *testing.T) {
+	env, rec, entered, release := fuEnv(t)
+	task := env.create(domain.Task{Body: "HOLD [fake:fail]"})
+	<-entered
+	_, err := env.e.SendTaskMessage(env.ctx, task.ID, "please also do this")
+	require.NoError(t, err)
+
+	close(release)
+	env.waitStatus(task.ID, domain.TaskBlocked)
+	specs := rec.all()
+	require.Greater(t, len(specs), 1, "the failure is retried automatically")
+	for _, s := range specs {
+		assert.NotContains(t, s.Prompt, "Message from the owner")
+		assert.Empty(t, s.ResumeSessionID)
+	}
+	assert.Contains(t, specs[1].Prompt, "## Attempt 1", "the retry keeps its attempt notes")
+	assert.True(t, env.messages(task.ID)[0].Queued, "an automatic retry leaves the queue alone")
+}
+
+func TestFollowUpKeepsMergeConflictSection(t *testing.T) {
+	assert.Empty(t, mergeConflictSection(nil, nil))
+	got := mergeConflictSection(nil, []string{"a.go", "b.go"})
+	assert.Contains(t, got, "## Merge conflicts to resolve")
+	assert.Contains(t, got, "- a.go\n- b.go\n")
+	task := domain.Task{Title: "t", Body: "b"}
+	assert.Contains(t, buildTaskPrompt(task, nil, nil, []string{"a.go"}), mergeConflictSection(nil, []string{"a.go"}))
+}
