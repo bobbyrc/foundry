@@ -109,11 +109,20 @@ type Store interface {
 
 	CreateConversation(ctx context.Context, c domain.Conversation) (domain.Conversation, error)
 	GetConversation(ctx context.Context, id string) (domain.Conversation, error)
+	// ListConversations returns orchestrator conversations only (TaskID empty).
 	ListConversations(ctx context.Context, limit int) ([]domain.Conversation, error)
+	// ListTaskConversations returns task agent conversations (TaskID set), most recent first.
+	ListTaskConversations(ctx context.Context, limit int) ([]domain.Conversation, error)
+	// GetConversationByTask returns the conversation of a task agent, or ErrNotFound.
+	GetConversationByTask(ctx context.Context, taskID string) (domain.Conversation, error)
 	UpdateConversation(ctx context.Context, id string, fn func(*domain.Conversation) error) (domain.Conversation, error)
 	AppendChatMessage(ctx context.Context, m domain.ChatMessage) (domain.ChatMessage, error)
 	// ListChatMessages returns a conversation's messages in ascending order.
 	ListChatMessages(ctx context.Context, conversationID string) ([]domain.ChatMessage, error)
+	// UpdateChatMessage applies fn to one message in a transaction. ErrNotFound when absent.
+	UpdateChatMessage(ctx context.Context, id string, fn func(*domain.ChatMessage) error) (domain.ChatMessage, error)
+	// DeleteChatMessage removes one message. ErrNotFound when absent.
+	DeleteChatMessage(ctx context.Context, id string) error
 
 	// GetLoopState returns a zero LoopState (Name and Project set) when none is stored.
 	GetLoopState(ctx context.Context, name, project string) (domain.LoopState, error)

@@ -135,6 +135,9 @@ var migrations = []string{
 
 	// Lets a tool_result line be paired with its tool_use line.
 	`ALTER TABLE run_logs ADD COLUMN tool_id TEXT NOT NULL DEFAULT '';`,
+
+	`ALTER TABLE conversations ADD COLUMN task_id TEXT NOT NULL DEFAULT '';
+	CREATE INDEX conversations_task_id ON conversations (task_id);`,
 }
 
 // migrate applies every migration whose version is not yet recorded, each in its own transaction.

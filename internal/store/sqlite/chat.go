@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bobbyrc/onett/internal/domain"
+	"github.com/bobbyrc/onett/internal/store"
 )
 
 var conversations = entity[domain.Conversation]{
@@ -16,6 +17,7 @@ var conversations = entity[domain.Conversation]{
 	cols: func(c domain.Conversation) []col {
 		return []col{
 			{"id", c.ID},
+			{"task_id", c.TaskID},
 			{"updated_at", nanos(c.UpdatedAt)},
 		}
 	},
@@ -57,14 +59,37 @@ func (s *Store) GetConversation(ctx context.Context, id string) (domain.Conversa
 	return conversations.get(ctx, s.db, id)
 }
 
-// ListConversations returns conversations most recently updated first.
+// ListConversations returns orchestrator conversations most recently updated first.
 func (s *Store) ListConversations(ctx context.Context, limit int) ([]domain.Conversation, error) {
 	out, err := queryDocs[domain.Conversation](ctx, s.db,
-		"SELECT data FROM conversations ORDER BY updated_at DESC, id DESC LIMIT ?", limitOr(limit, 200))
+		"SELECT data FROM conversations WHERE task_id = '' ORDER BY updated_at DESC, id DESC LIMIT ?",
+		limitOr(limit, 200))
 	if err != nil {
 		return nil, fmt.Errorf("list conversations: %w", err)
 	}
 	return out, nil
+}
+
+// ListTaskConversations returns task agent conversations most recently updated first.
+func (s *Store) ListTaskConversations(ctx context.Context, limit int) ([]domain.Conversation, error) {
+	out, err := queryDocs[domain.Conversation](ctx, s.db,
+		"SELECT data FROM conversations WHERE task_id != '' ORDER BY updated_at DESC, id DESC LIMIT ?",
+		limitOr(limit, 200))
+	if err != nil {
+		return nil, fmt.Errorf("list task conversations: %w", err)
+	}
+	return out, nil
+}
+
+// GetConversationByTask returns the conversation of the task agent for taskID, or ErrNotFound.
+// An empty taskID never matches: that is the orchestrator's conversation, not a task's.
+func (s *Store) GetConversationByTask(ctx context.Context, taskID string) (domain.Conversation, error) {
+	if taskID == "" {
+		return domain.Conversation{}, fmt.Errorf("conversation for task \"\": %w", store.ErrNotFound)
+	}
+	return queryOne[domain.Conversation](ctx, s.db, "conversation for task "+taskID,
+		"SELECT data FROM conversations WHERE task_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1",
+		taskID)
 }
 
 // UpdateConversation applies fn to the conversation with id in one transaction.
@@ -95,4 +120,25 @@ func (s *Store) ListChatMessages(ctx context.Context, conversationID string) ([]
 		return nil, fmt.Errorf("list chat messages %s: %w", conversationID, err)
 	}
 	return out, nil
+}
+
+// UpdateChatMessage applies fn to the message with id in one transaction.
+func (s *Store) UpdateChatMessage(ctx context.Context, id string, fn func(*domain.ChatMessage) error) (domain.ChatMessage, error) {
+	return chatMessages.update(ctx, s.db, id, fn)
+}
+
+// DeleteChatMessage removes the message with id, or returns ErrNotFound.
+func (s *Store) DeleteChatMessage(ctx context.Context, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM chat_messages WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete chat message %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete chat message %s: %w", id, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("chat message %s: %w", id, store.ErrNotFound)
+	}
+	return nil
 }

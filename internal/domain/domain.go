@@ -86,7 +86,7 @@ type Task struct {
 	Risk        Risk       `json:"risk,omitempty"`
 	RiskReasons []string   `json:"risk_reasons,omitempty"`
 	// Source says where the task came from: "chat", "api", "github_issue", "signal",
-	// "friction", "followup", "shepherd".
+	// "friction", "followup", "shepherd", "conversation".
 	Source string `json:"source"`
 	// SourceRef dedupes tasks per project: "github_issue:42", "signal:<fingerprint>".
 	SourceRef string `json:"source_ref,omitempty"`
@@ -108,6 +108,8 @@ type Task struct {
 	MaxAttempts   int        `json:"max_attempts"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
+	// CreatedByRun is the run that created this task, when an agent created it.
+	CreatedByRun string `json:"created_by_run,omitempty"`
 }
 
 type RunStatus string
@@ -305,7 +307,12 @@ type Friction struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// Conversation is one chat thread with the orchestrator agent.
+// SourceConversation is Task.Source for a follow-up task made from a task agent conversation
+// after the task has merged.
+const SourceConversation = "conversation"
+
+// Conversation is one chat thread: with the orchestrator agent, or (when TaskID is set) with
+// the agent of one task.
 type Conversation struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
@@ -314,6 +321,14 @@ type Conversation struct {
 	Busy      bool      `json:"busy"` // the orchestrator is replying
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// TaskID is the root task of a task agent conversation; "" means the orchestrator.
+	TaskID string `json:"task_id,omitempty"`
+	// ActiveRunID is the orchestrator turn in flight.
+	ActiveRunID string     `json:"active_run_id,omitempty"`
+	ClosedAt    *time.Time `json:"closed_at,omitempty"`
+	// ClosedBy is "agent", "orchestrator" or "owner:<username>".
+	ClosedBy     string `json:"closed_by,omitempty"`
+	ClosedReason string `json:"closed_reason,omitempty"`
 }
 
 type ChatMessage struct {
@@ -323,6 +338,33 @@ type ChatMessage struct {
 	Text           string    `json:"text"`
 	RunID          string    `json:"run_id,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
+	// Queued is an owner message held until the agent's current run finishes.
+	Queued bool `json:"queued,omitempty"`
+}
+
+// TaskConversation is the owner's view of a task agent: the root task, its conversation, the
+// follow-up tasks and runs, and the messages.
+type TaskConversation struct {
+	Task         Task          `json:"task"` // the root task
+	Conversation *Conversation `json:"conversation,omitempty"`
+	Tasks        []Task        `json:"tasks"` // root then conversation follow-ups, oldest first
+	Runs         []Run         `json:"runs"`  // the agent's runs across Tasks, oldest first
+	Messages     []ChatMessage `json:"messages"`
+	LiveRunID    string        `json:"live_run_id,omitempty"`
+	CanSend      bool          `json:"can_send"`
+	Reason       string        `json:"reason,omitempty"` // why CanSend is false
+}
+
+// AgentConversation is one row in the list of task agent conversations.
+type AgentConversation struct {
+	TaskID     string     `json:"task_id"`
+	Title      string     `json:"title"`
+	Project    string     `json:"project"`
+	Role       string     `json:"role"`
+	TaskStatus TaskStatus `json:"task_status"`
+	Live       bool       `json:"live"`
+	Closed     bool       `json:"closed"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 // LoopState is the persisted state of one recurring loop for one project ("" = global).

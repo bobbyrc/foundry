@@ -68,6 +68,7 @@ export interface Task {
   max_attempts: number;
   created_at: string;
   updated_at: string;
+  created_by_run?: string;
 }
 
 export interface Run {
@@ -206,6 +207,11 @@ export interface Conversation {
   busy: boolean;
   created_at: string;
   updated_at: string;
+  task_id?: string;
+  active_run_id?: string;
+  closed_at?: string;
+  closed_by?: string;
+  closed_reason?: string;
 }
 
 export interface ChatMessage {
@@ -215,6 +221,29 @@ export interface ChatMessage {
   text: string;
   run_id?: string;
   created_at: string;
+  queued?: boolean;
+}
+
+export interface TaskConversation {
+  task: Task;
+  conversation?: Conversation;
+  tasks: Task[];
+  runs: Run[];
+  messages: ChatMessage[];
+  live_run_id?: string;
+  can_send: boolean;
+  reason?: string;
+}
+
+export interface AgentConversation {
+  task_id: string;
+  title: string;
+  project: string;
+  role: string;
+  task_status: TaskStatus;
+  live: boolean;
+  closed: boolean;
+  updated_at: string;
 }
 
 export interface ConversationDetail {

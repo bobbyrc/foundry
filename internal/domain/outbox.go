@@ -36,6 +36,7 @@ type RunResult struct {
 	Review    *ReviewVerdict   `json:"review,omitempty"`
 	Followups []FollowupTask   `json:"followups,omitempty"`
 	Friction  []FrictionReport `json:"friction,omitempty"`
+	Finished  bool             `json:"finished,omitempty"`
 }
 
 type ReviewVerdict struct {
