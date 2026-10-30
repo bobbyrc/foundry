@@ -30,6 +30,9 @@ async function fetchAllLogs(runId: string): Promise<LogLine[]> {
 export function LogViewer({ runId, active }: { runId: string; active: boolean }) {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // The run id the server has confirmed a watch for. Holding the id, not a flag, means a value left
+  // over from the previous run never matches the new one.
+  const [subscribedRunId, setSubscribedRunId] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [follow, setFollow] = useState(true);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set());
@@ -81,21 +84,29 @@ export function LogViewer({ runId, active }: { runId: string; active: boolean })
     }
   };
 
-  // The server sends a run's log lines only to a socket that asked for them. Lines emitted before
-  // that request took effect are never replayed, so fetch them once the server confirms it.
+  // The server sends a run's log lines only to a socket that asked for them. Hold the watch for this
+  // run and note when the server confirms it.
   useEffect(() => {
+    setSubscribedRunId(null);
     const w = watch({ run_id: runId });
     let cancelled = false;
     void w.ready.then(() => {
-      if (!cancelled) void catchUp();
+      if (!cancelled) setSubscribedRunId(runId);
     });
     return () => {
       cancelled = true;
       w.release();
     };
+  }, [runId]);
+
+  // Lines emitted before the watch took effect are never replayed, so fetch them. This waits for
+  // the initial load and the confirmation: an earlier catch-up would read a log that is not loaded
+  // yet and pick up only the first page.
+  useEffect(() => {
+    if (loaded && subscribedRunId === runId) void catchUp();
     // catchUp only reads runId and refs, so the effect's own deps are enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId]);
+  }, [loaded, subscribedRunId, runId]);
 
   // Poll while the run is active and the stream is not delivering.
   useEffect(() => {
