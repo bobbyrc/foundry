@@ -40,6 +40,18 @@ function argText(v: unknown): string {
   return typeof v === 'string' ? v : JSON.stringify(v);
 }
 
+/** The first known argument of truncated JSON input: its string value up to the closing quote or the end. */
+function partialArg(raw: string): string | undefined {
+  for (const key of ARG_KEYS) {
+    const m = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`).exec(raw);
+    if (!m) continue;
+    // A value cut off mid-escape ends in a lone backslash; drop it.
+    const body = m[1].replace(/\\$/, '');
+    return body.replace(/\\(["\\n]|.)/g, (_, c: string) => (c === 'n' ? '\n' : c));
+  }
+  return undefined;
+}
+
 /** Reads a tool_use line, which is `Name: <compact JSON input>` and may be truncated. */
 export function parseTool(text: string): ToolSummary {
   const i = text.indexOf(': ');
@@ -50,7 +62,7 @@ export function parseTool(text: string): ToolSummary {
   try {
     input = JSON.parse(raw);
   } catch {
-    return { name, arg: raw };
+    return { name, arg: partialArg(raw) ?? raw };
   }
   if (input === null || typeof input !== 'object' || Array.isArray(input)) return { name, arg: raw };
   const obj = input as Record<string, unknown>;

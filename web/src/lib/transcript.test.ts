@@ -26,8 +26,15 @@ describe('parseTool', () => {
   it('stringifies nested argument values', () => {
     expect(parseTool('Grep: {"pattern":{"re":"x"}}')).toEqual({ name: 'Grep', arg: '{"re":"x"}' });
   });
+  it('extracts the argument from truncated input', () => {
+    expect(parseTool('Bash: {"command":"onett task create --title \\"x\\" --body hel')).toEqual({
+      name: 'Bash',
+      arg: 'onett task create --title "x" --body hel',
+    });
+    expect(parseTool('Read: {"file_path":"/a/b.go","limit":')).toEqual({ name: 'Read', arg: '/a/b.go' });
+  });
   it('falls back on truncated input', () => {
-    expect(parseTool('Bash: {"command":"echo hel')).toEqual({ name: 'Bash', arg: '{"command":"echo hel' });
+    expect(parseTool('Bash: {"cmd":"echo hel')).toEqual({ name: 'Bash', arg: '{"cmd":"echo hel' });
   });
 });
 

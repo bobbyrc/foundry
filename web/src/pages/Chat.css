@@ -1,5 +1,23 @@
 /* Chat page. Every rule sits under .chat-page so it outranks the older chat rules in styles.css. */
 
+.chat-page {
+  min-width: 0;
+}
+
+.chat-page .chat-layout > *,
+.chat-page .thread > *,
+.chat-page .messages {
+  min-width: 0;
+}
+
+/* On desktop the thread is at least a screen tall, so the composer sits at the bottom of the
+   window when the transcript is short, and stays pinned there (sticky) when it is long. */
+@media (min-width: 760px) {
+  .chat-page .thread {
+    min-height: calc(100vh - 190px);
+  }
+}
+
 .chat-page .chat-layout {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);

@@ -24,6 +24,8 @@
 
 .tr-col {
   max-width: 760px;
+  min-width: 0;
+  width: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -32,7 +34,8 @@
 
 .tr-you {
   align-self: flex-end;
-  max-width: 72ch;
+  max-width: min(72ch, 100%);
+  min-width: 0;
   background: var(--panel);
   border: 1px solid var(--border);
   padding: 9px 13px;
@@ -67,6 +70,32 @@
 
 .tr-ai {
   min-width: 0;
+}
+
+.tr-ai code,
+.tr-ai .markdown {
+  overflow-wrap: anywhere;
+}
+
+.tr-tool,
+.tr-note,
+.tr-divider {
+  min-width: 0;
+}
+
+.tr-errtag {
+  flex: none;
+  margin-left: auto;
+}
+
+.tr-errtag + .tr-diff {
+  margin-left: 0;
+}
+
+.tr-more {
+  display: block;
+  font: inherit;
+  font-size: 12.5px;
 }
 
 .tr-ai .markdown > :last-child {
@@ -116,6 +145,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
   min-width: 0;
 }
 
@@ -205,6 +235,7 @@
 .tr-term {
   font: 12.5px/1.55 var(--mono);
   max-width: 100%;
+  min-width: 0;
 }
 
 .tr-term .tr-divider {
@@ -213,12 +244,18 @@
 }
 
 .tr-ln {
+  min-width: 0;
   display: grid;
   grid-template-columns: 64px 18px minmax(0, 1fr);
 }
 
 .tr-ts {
   color: var(--muted);
+}
+
+.tr-tx {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tr-tx pre {

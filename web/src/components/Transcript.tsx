@@ -107,12 +107,7 @@ function ConversationEntry({
         </div>
       );
     case 'prompt':
-      return (
-        <div className="tr-you">
-          <div className="tr-lbl">{e.label}</div>
-          <span className="tr-body">{e.text}</span>
-        </div>
-      );
+      return <PromptSheet label={e.label} text={e.text} />;
     case 'text':
       return (
         <div className="tr-ai">
@@ -161,6 +156,25 @@ function ConversationEntry({
   }
 }
 
+const PROMPT_PREVIEW_LINES = 6;
+
+/** A task prompt can run to dozens of lines, so the conversation view shows a few and a toggle. */
+function PromptSheet({ label, text }: { label: string; text: string }) {
+  const [all, setAll] = useState(false);
+  const { lines, clipped } = clipLines(text, PROMPT_PREVIEW_LINES, all);
+  return (
+    <div className="tr-you">
+      <div className="tr-lbl">{label}</div>
+      <span className="tr-body">{lines.join('\n')}</span>
+      {clipped ? (
+        <button type="button" className="link-button tr-more" onClick={() => setAll(!all)}>
+          {all ? 'show less' : 'show more'}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function ToolRow({ entry }: { entry: ToolEntry }) {
   const [open, setOpen] = useState(false);
   const { tool } = entry;
@@ -173,6 +187,7 @@ function ToolRow({ entry }: { entry: ToolEntry }) {
         </span>
         <span className="tr-name">{tool.name}</span>
         <span className="tr-arg">{tool.arg}</span>
+        {entry.resultError ? <span className="tr-denied tr-errtag">error</span> : null}
         {hasDiff ? (
           <span className="tr-diff">
             <span className="a">+{tool.added ?? 0}</span> <span className="d">−{tool.removed ?? 0}</span>
