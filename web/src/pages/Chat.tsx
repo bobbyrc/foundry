@@ -22,6 +22,7 @@ import {
   useFlushQueued,
   useReopenTaskConversation,
   useRun,
+  useRunsMap,
   useSendMessage,
   useSendTaskMessage,
   useStopRun,
@@ -548,7 +549,8 @@ function OrchestratorThread({
   const lastRunId = runIds[runIds.length - 1];
   const logs = useRunLogsMap(runIds, liveRunId);
   const lastRun = useRun(lastRunId ?? '');
-  const entries = orchestratorEntries(messages, logs);
+  const runs = useRunsMap(runIds);
+  const entries = orchestratorEntries(messages, logs, runs);
   const queued = messages.filter((m) => m.queued && m.role === 'user').length;
   const working = !!conv?.busy;
   const byId = Object.fromEntries(messages.map((m) => [m.id, m]));

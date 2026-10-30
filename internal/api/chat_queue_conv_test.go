@@ -37,18 +37,19 @@ func (f *fakeCtl) CancelQueuedMessage(_ context.Context, id string) error {
 
 func TestMessageRoutes(t *testing.T) {
 	x := newHarness(t)
+	cookie := x.newUserSession(t, "alice", domain.RoleOperator)
 
-	rec := x.call(t, http.MethodPatch, "/api/v1/messages/m1", `{"text":"fixed"}`)
+	rec := x.authReq(t, http.MethodPatch, "/api/v1/messages/m1", `{"text":"fixed"}`, withCookie(cookie))
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	var m domain.ChatMessage
 	decode(t, rec, &m)
 	assert.Equal(t, "m1", m.ID)
 	assert.Equal(t, "fixed", m.Text)
 
-	rec = x.call(t, http.MethodPatch, "/api/v1/messages/m1", `{"text":"x","bogus":1}`)
+	rec = x.authReq(t, http.MethodPatch, "/api/v1/messages/m1", `{"text":"x","bogus":1}`, withCookie(cookie))
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "unknown fields are errors")
 
-	rec = x.call(t, http.MethodDelete, "/api/v1/messages/m1", "")
+	rec = x.authReq(t, http.MethodDelete, "/api/v1/messages/m1", "", withCookie(cookie))
 	assert.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
 
 	rec = x.call(t, http.MethodPost, "/api/v1/conversations/c1/flush", "")
@@ -57,9 +58,9 @@ func TestMessageRoutes(t *testing.T) {
 
 	x.ctl.errs["EditQueuedMessage"] = ErrConflict
 	x.ctl.errs["CancelQueuedMessage"] = ErrConflict
-	rec = x.call(t, http.MethodPatch, "/api/v1/messages/m1", `{"text":"late"}`)
+	rec = x.authReq(t, http.MethodPatch, "/api/v1/messages/m1", `{"text":"late"}`, withCookie(cookie))
 	assert.Equal(t, http.StatusConflict, rec.Code)
-	rec = x.call(t, http.MethodDelete, "/api/v1/messages/m1", "")
+	rec = x.authReq(t, http.MethodDelete, "/api/v1/messages/m1", "", withCookie(cookie))
 	assert.Equal(t, http.StatusConflict, rec.Code)
 }
 

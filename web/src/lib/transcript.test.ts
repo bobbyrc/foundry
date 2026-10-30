@@ -118,7 +118,7 @@ describe('orchestratorEntries', () => {
 });
 
 describe('taskEntries', () => {
-  const run = (id: string, session_id?: string) => ({ id, task_id: 't', session_id, started_at: '2026-01-01T00:00:00Z' }) as Run;
+  const run = (id: string, session_id?: string) => ({ id, task_id: 't', session_id, started_at: '2026-01-01T00:00:00Z', status: 'succeeded' }) as Run;
   const conv = (runs: Run[], messages: ChatMessage[] = []) =>
     ({ task: { id: 't', title: 'T', body: 'body' } as Task, tasks: [], runs, messages, can_send: true }) as TaskConversation;
 
@@ -128,7 +128,7 @@ describe('taskEntries', () => {
       r2: [line('prompt', 'p2', undefined, 'r2')],
     });
     expect(e.map((x) => x.kind)).toEqual(['prompt', 'divider', 'prompt']);
-    expect(e[1]).toMatchObject({ text: 'New session · retried by owner' });
+    expect(e[1]).toMatchObject({ text: 'New session' });
     const same = taskEntries(conv([run('r1', 's1'), run('r2', 's1')]), { r1: [line('text', 'a', undefined, 'r1')], r2: [] });
     expect(same.some((x) => x.kind === 'divider')).toBe(false);
   });
@@ -185,8 +185,40 @@ describe('a message delivered mid-run', () => {
       [msg({ id: 'm1', role: 'user', text: 'one', run_id: 'r1' }), msg({ id: 'm2', role: 'user', text: 'two', run_id: 'r1' })],
       { r1: [line('prompt', 'one\n\ntwo', undefined, 'r1'), line('text', 'ok', undefined, 'r1')] },
     );
-    expect(e.map((x) => x.kind)).toEqual(['owner', 'text', 'owner']);
-    expect(e[2]).toMatchObject({ text: 'two' });
+    expect(e.map((x) => x.kind)).toEqual(['owner', 'owner', 'text']);
+    expect(e[1]).toMatchObject({ text: 'two' });
+  });
+});
+
+describe('why a run ended', () => {
+  const run = (id: string, status: Run['status'], error?: string) =>
+    ({ id, task_id: 't', started_at: '2026-01-01T00:00:00Z', status, error }) as Run;
+  const conv = (runs: Run[]) =>
+    ({ task: { id: 't', title: 'T', body: 'body' } as Task, tasks: [], runs, messages: [], can_send: true }) as TaskConversation;
+
+  it('shows why a stopped run ended', () => {
+    const e = taskEntries(conv([run('r1', 'stalled', 'no output for 10m')]), { r1: [line('text', 'a', undefined, 'r1')] });
+    expect(e[e.length - 1]).toMatchObject({ kind: 'system', runId: 'r1', text: 'Run ended: stalled: no output for 10m' });
+    const plain = taskEntries(conv([run('r1', 'denied')]), { r1: [line('text', 'a', undefined, 'r1')] });
+    expect(plain[plain.length - 1]).toMatchObject({ kind: 'system', text: 'Run ended: denied' });
+
+    const o = orchestratorEntries(
+      [msg({ id: 'm1', role: 'user', text: 'go', run_id: 'r1' }), msg({ id: 'm2', role: 'assistant', text: 'partial', run_id: 'r1' })],
+      { r1: [line('text', 'working', undefined, 'r1')] },
+      { r1: { status: 'timed_out', error: 'timed out after 1h' } },
+    );
+    expect(o.map((x) => x.kind)).toEqual(['owner', 'text', 'system']);
+    expect(o[2]).toMatchObject({ text: 'Run ended: timed_out: timed out after 1h' });
+  });
+  it('adds nothing for a succeeded run', () => {
+    const e = taskEntries(conv([run('r1', 'succeeded')]), { r1: [line('text', 'a', undefined, 'r1')] });
+    expect(e.some((x) => x.kind === 'system')).toBe(false);
+    const live = taskEntries(conv([run('r1', 'running')]), { r1: [line('text', 'a', undefined, 'r1')] });
+    expect(live.some((x) => x.kind === 'system')).toBe(false);
+    const o = orchestratorEntries([msg({ id: 'm1', role: 'user', text: 'go', run_id: 'r1' })], { r1: [line('text', 'ok', undefined, 'r1')] }, {
+      r1: { status: 'succeeded' },
+    });
+    expect(o.some((x) => x.kind === 'system')).toBe(false);
   });
 });
 

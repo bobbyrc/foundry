@@ -58,6 +58,7 @@ func (e *Engine) CancelTask(ctx context.Context, id, by string) error {
 			return fmt.Errorf("%w: task is %s", api.ErrConflict, t.Status)
 		}
 		t.Status = domain.TaskCancelled
+		t.FollowUpPending = false
 		return nil
 	})
 	if err != nil {
@@ -127,6 +128,7 @@ func (e *Engine) RetryTask(ctx context.Context, id, note string) error {
 		t.Status = domain.TaskQueued
 		t.Attempts = 0
 		t.BlockedReason = ""
+		t.FollowUpPending = false
 		if note != "" {
 			t.Body += "\n\n## Note from the owner\n\n" + note
 		}
@@ -365,6 +367,9 @@ func (e *Engine) SendChat(ctx context.Context, conversationID, text string) (dom
 	if err != nil {
 		return domain.ChatMessage{}, err
 	}
+	if cur.TaskID != "" {
+		return domain.ChatMessage{}, fmt.Errorf("%w: conversation %s", store.ErrNotFound, conversationID)
+	}
 	if cur.Busy && cur.ActiveRunID != "" {
 		switch err := e.deliverToRun(ctx, cur.ActiveRunID, text); {
 		case err == nil:
@@ -474,7 +479,7 @@ func (e *Engine) claimQueued(ctx context.Context, conversationID string) ([]doma
 func (e *Engine) restoreQueued(ctx context.Context, ids []string) {
 	for _, id := range ids {
 		m, err := e.d.Store.UpdateChatMessage(context.WithoutCancel(ctx), id, func(m *domain.ChatMessage) error {
-			m.Queued = true
+			m.Queued, m.RunID = true, "" // not delivered after all
 			return nil
 		})
 		if errors.Is(err, store.ErrNotFound) {
@@ -522,6 +527,9 @@ func (e *Engine) FlushChat(ctx context.Context, conversationID string) error {
 	cur, err := e.d.Store.GetConversation(ctx, conversationID)
 	if err != nil {
 		return err
+	}
+	if cur.TaskID != "" {
+		return fmt.Errorf("%w: conversation %s", store.ErrNotFound, conversationID)
 	}
 	if cur.Busy {
 		return nil

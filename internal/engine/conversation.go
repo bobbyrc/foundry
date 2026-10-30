@@ -465,8 +465,8 @@ func (e *Engine) claimOwnerMessages(ctx context.Context, t domain.Task) (domain.
 		}
 	}
 	conv, err := e.d.Store.GetConversationByTask(ctx, root.ID)
-	if err != nil {
-		return root, nil
+	if err != nil || conv.ClosedAt != nil {
+		return root, nil // a closed conversation never delivers, whatever starts the run
 	}
 	claimed, err := e.claimQueued(ctx, conv.ID)
 	if err != nil {

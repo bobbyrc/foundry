@@ -226,15 +226,17 @@ under the agent's name, each tool call as one row (name, main argument, `+n −m
 opens to its input and result, and a red DENIED row for a refused call. Terminal view shows one
 line per entry with a time gutter, `›` for owner and prompt, `●` for prose and tool calls and `⎿` for
 results clipped to three lines with "show more". A task agent's view shows each run in order, with a
-divider where a retry started a new session; a run with no recorded prompt starts with the task body
-labelled "Task (prompt not recorded)". Lines of the live run arrive as `run.log` events, so tool
+divider ("New session") where a retry started a new session; a run with no recorded prompt starts with the task body
+labelled "Task (prompt not recorded)". A run that did not succeed ends with a system line,
+"Run ended: <status>" and the error when there is one, because a stalled or denied run has no last
+words of its own. Lines of the live run arrive as `run.log` events, so tool
 rows appear as they happen. When an orchestrator turn created tasks, a chip under that turn shows
 each task's lamp, title and status, with "open agent" (`/chat/task/:id`) and "task" links.
 
 While a run is live a line shows "Working · 3m 41s · output 2s ago" with a link to the run and a
 **Stop** button (Esc in the field does the same); both cancel the live run. The composer stays
-enabled: a message sent to the orchestrator mid-run reaches it at once, and a message for a task
-agent is queued. Queued messages show at the end in a dashed box, "Queued · sends when the agent
+enabled: a message sent mid-run reaches a Claude agent at once (the orchestrator, or a task agent
+whose harness takes input), and is queued only for a harness that cannot take input. Queued messages show at the end in a dashed box, "Queued · sends when the agent
 finishes this run", with edit and cancel (no longer possible once delivered). When messages are
 queued and no run is live, for example after a failed run, **Send now** starts the follow-up.
 
@@ -242,7 +244,9 @@ A task agent's view adds a yellow note above the box, "You're talking directly t
 agent. For anything beyond this task, ask the orchestrator." (the last words link to `/chat`).
 Close asks for a reason. A closed conversation replaces the composer with "Closed by <who>:
 <reason>", shown as plain text, and a **Reopen** button for operators and owners. When the server
-refuses a message (a 409) the composer shows its reason. Viewers read the thread and see a muted
+refuses a message (a 409) the composer shows its reason. Retrying a cancelled task does not reopen
+its conversation: the owner reopens it. Messaging, Send now, and editing or cancelling a queued
+message are for signed-in people only; the API token gets 403. Viewers read the thread and see a muted
 line, "Viewers can read conversations but not send messages.", in place of the composer.
 
 **Tasks** (`/tasks`) — filter bar: project select, status chips (multi-select; default

@@ -510,7 +510,8 @@ paths:
         task with its own branch). While a run is live, the queue waits for that run to succeed;
         it is never sent after a run that was cancelled, denied, stalled, timed out or failed,
         only by another send or by the flush route. 409 carries the `reason` the agent cannot
-        be messaged (see `can_send` on the conversation).
+        be messaged (see `can_send` on the conversation). A signed-in person only; the API token
+        gets 403.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -530,6 +531,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -605,7 +608,8 @@ paths:
       description: |
         Starts the follow-up run for the queued messages instead of waiting for the current run
         to succeed. This is how queued messages move after a run that was denied, stalled, timed
-        out or failed. Does nothing when no message is queued or a run is live.
+        out or failed. Does nothing when no message is queued or a run is live. A signed-in person
+        only; the API token gets 403.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -613,6 +617,8 @@ paths:
           description: Accepted.
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -1091,6 +1097,7 @@ paths:
       operationId: getConversation
       tags: [conversations]
       summary: Get a conversation with its messages.
+      description: A task agent's conversation is not found here (404); read it through `/tasks/{id}/conversation`.
       parameters:
         - $ref: '#/components/parameters/ConversationId'
       responses:
@@ -1113,6 +1120,7 @@ paths:
       tags: [conversations]
       summary: Send a message to the orchestrator.
       description: |
+        A task agent's conversation is not found here (404); use `/tasks/{id}/messages`.
         When the orchestrator is idle this starts its reply, which is not in the response: it
         arrives on the event stream as `chat.delta` events (live, text chunks) and a final
         `chat.message` event. While a reply is running the message goes straight to the agent if
@@ -1153,7 +1161,7 @@ paths:
       summary: Send the queued messages now.
       description: |
         Starts an orchestrator turn from the queued messages. Does nothing when the queue is
-        empty or a turn is already running.
+        empty or a turn is already running. A task agent's conversation is not found here (404).
       parameters:
         - $ref: '#/components/parameters/ConversationId'
       responses:
@@ -1171,7 +1179,7 @@ paths:
       operationId: editMessage
       tags: [conversations]
       summary: Edit a queued message.
-      description: Only a message still waiting in the queue can be edited; once delivered it returns 409.
+      description: Only a message still waiting in the queue can be edited; once delivered it returns 409. A signed-in person only; the API token gets 403.
       parameters:
         - name: id
           in: path
@@ -1195,6 +1203,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -1205,7 +1215,7 @@ paths:
       operationId: cancelMessage
       tags: [conversations]
       summary: Cancel a queued message.
-      description: Only a message still waiting in the queue can be cancelled; once delivered it returns 409.
+      description: Only a message still waiting in the queue can be cancelled; once delivered it returns 409. A signed-in person only; the API token gets 403.
       parameters:
         - name: id
           in: path
@@ -1217,6 +1227,8 @@ paths:
           description: Cancelled.
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2060,7 +2072,7 @@ components:
             type: string
         source:
           type: string
-          description: "Where the task came from: chat, api, github_issue, signal, friction, followup or shepherd."
+          description: "Where the task came from: chat, api, github_issue, signal, friction, followup, shepherd or conversation (a follow-up task started by an owner message to a task agent whose work had shipped)."
         source_ref:
           type: string
           description: Dedupe key per project, such as `github_issue:42`.
@@ -2083,6 +2095,9 @@ components:
         created_by_run:
           type: string
           description: The run that created this task, when an agent created it through the CLI with the API token. Set from the `X-Onett-Run-ID` request header; ignored for a signed-in user.
+        follow_up_pending:
+          type: boolean
+          description: The task was queued by an owner message to its agent. Only its next run takes the queued messages and resumes the agent's session; Cancel and Retry clear it.
         attempts:
           type: integer
         max_attempts:

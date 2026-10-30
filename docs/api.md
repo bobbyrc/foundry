@@ -82,8 +82,8 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `POST /tasks` | `NewTask` | `Task` (201) |
 | `GET /tasks/{id}` | | `TaskDetail` |
 | `GET /tasks/{id}/conversation` | | `TaskConversation`: the task agent's root task, follow-up tasks, runs across them (oldest first), messages, `live_run_id`, and `can_send` with a `reason` when false. A follow-up task id returns its root's conversation. |
-| `POST /tasks/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202). Messages the task's agent (the root task or any follow-up id). A live agent that takes input gets it at once (`run_id` set); otherwise it is queued (`queued: true`) and the next run resumes the agent's session with it, started now when no run is live. 409 with the `reason` when the agent cannot be messaged |
-| `POST /tasks/{id}/conversation/flush` | | 202; starts the follow-up for queued messages now (the way past a denied, stalled, timed-out or failed run); no-op when none are queued |
+| `POST /tasks/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202). Messages the task's agent (the root task or any follow-up id). A live agent that takes input gets it at once (`run_id` set); otherwise it is queued (`queued: true`) and the next run resumes the agent's session with it, started now when no run is live. 409 with the `reason` when the agent cannot be messaged. A signed-in person only (the API token gets 403) |
+| `POST /tasks/{id}/conversation/flush` | | 202; starts the follow-up for queued messages now (the way past a denied, stalled, timed-out or failed run); no-op when none are queued. A signed-in person only (the API token gets 403) |
 | `POST /tasks/{id}/conversation/close` | `{"reason":"…"}` | 204; closes the task agent's conversation: it can no longer be messaged and queued messages stay queued, never delivered. Marks the conversation only; the task is untouched. Closed by `orchestrator` (the API token) or `owner:<username>`; 409 when already closed. Emits `conversation.updated` |
 | `POST /tasks/{id}/conversation/reopen` | | 204; reopens a closed conversation. A signed-in person only (the API token gets 403); 409 when it is open. Emits `conversation.updated` |
 | `GET /agent-conversations` | | `[]AgentConversation`: root tasks with a run; open ones first, then ones closed or active in the last 7 days; at most 100 |
@@ -105,11 +105,11 @@ Two kinds of caller, told apart by how they authenticate. Base path `/api/v1`.
 | `POST /config/reload` | | 204 |
 | `GET /conversations` | | `[]Conversation` |
 | `POST /conversations` | `{"title":"…","project":"…"}` | `Conversation` (201) |
-| `GET /conversations/{id}` | | `{"conversation":Conversation,"messages":[]ChatMessage}` |
-| `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202). Sent while the orchestrator works, it reaches the agent at once if the harness takes input (`run_id` set), else is queued (`queued: true`) |
+| `GET /conversations/{id}` | | 404 for a task agent's conversation (use `/tasks/{id}/conversation`). `{"conversation":Conversation,"messages":[]ChatMessage}` |
+| `POST /conversations/{id}/messages` | `{"text":"…"}` | `ChatMessage` (202); 404 for a task agent's conversation. Sent while the orchestrator works, it reaches the agent at once if the harness takes input (`run_id` set), else is queued (`queued: true`) |
 | `POST /conversations/{id}/flush` | | 202; sends the queued messages now (no-op when empty or busy) |
-| `PATCH /messages/{id}` | `{"text":"…"}` | `ChatMessage`; 409 once delivered |
-| `DELETE /messages/{id}` | | 204; 409 once delivered |
+| `PATCH /messages/{id}` | `{"text":"…"}` | `ChatMessage`; 409 once delivered. A signed-in person only (the API token gets 403) |
+| `DELETE /messages/{id}` | | 204; 409 once delivered. A signed-in person only (the API token gets 403) |
 
 Which role may call each route: every `GET` needs `viewer` or better (the token included). Every
 `POST` that acts on work (tasks, approvals, pause, loops, chat, `config/reload`, projects) needs

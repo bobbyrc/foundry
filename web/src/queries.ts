@@ -1,9 +1,9 @@
 // React Query hooks for every route. Lists refetch every 30 seconds as a fallback to events.
 import { useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import * as api from './api';
 import { ApiError } from './api';
-import type { ConfigChange, NewTask, Role, Stats, TaskDetail } from './types';
+import type { ConfigChange, NewTask, Role, Run, Stats, TaskDetail } from './types';
 import { keys } from './keys';
 import { normaliseProject } from './lib/projects';
 
@@ -91,6 +91,19 @@ export function useRun(id: string) {
     queryFn: () => api.getRun(id),
     enabled: id !== '',
   });
+}
+
+/** Several runs by id (the same cached reads as useRun), for a transcript that says why each ended. */
+export function useRunsMap(ids: string[]): Record<string, Run> {
+  const results = useQueries({
+    queries: ids.map((id) => ({ queryKey: keys.run(id), queryFn: () => api.getRun(id) })),
+  });
+  const out: Record<string, Run> = {};
+  ids.forEach((id, i) => {
+    const run = results[i]?.data;
+    if (run) out[id] = run;
+  });
+  return out;
 }
 
 export function useApprovals(status: 'pending' | 'all') {

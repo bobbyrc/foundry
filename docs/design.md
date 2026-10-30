@@ -241,26 +241,34 @@ failed, in-review, awaiting-approval or done-without-a-PR task is re-queued (com
 status, attempts reset, stale reviews cancelled), so the agent continues on the same branch and
 pull request through the normal publish path. A merged, deploying or done-with-a-PR task gets a
 child task (source `conversation`, parent the newest task) that resumes the session on its own
-fresh branch, because the old branch has shipped. A queued or running task does nothing: the
-scheduler, or the end of the live run, picks the messages up.
+fresh branch, because the old branch has shipped. A queued or running task does nothing here: for
+a task re-queued by the message itself, the scheduler starts the follow-up run that claims them. An
+automatic retry (a re-queue after a failure) does not deliver queued messages; they wait for a run
+that succeeds or for the owner's Send now.
 
 Queued messages move on only after a run that succeeded, once it is no longer registered as live.
 A run that was cancelled, denied, stalled, timed out or failed leaves them (invariant 4); an
-explicit send or `POST /tasks/{id}/conversation/flush` starts the follow-up. Nothing here adds a
+explicit send or `POST /tasks/{id}/conversation/flush` starts the follow-up. A follow-up run that
+itself fails (the agent reports failure, a check fails, or the commit or push fails) is not
+retried: it puts the messages it took back in the queue, where they show as not delivered, and
+blocks the task with "follow-up failed: <reason>", so the owner decides (Send now, or Retry).
+Runs that took no owner messages keep the normal re-queue-then-block rule. Nothing here adds a
 path from agent output to a commit, push or merge: follow-ups run through the same publish code.
 
 ### When a conversation closes
 
 A task agent's conversation stays open until something closes it, and closing only marks it
 (`closed_at`, `closed_by`, `closed_reason`): it never changes the task, runs or git. Three things
-close it. The agent, by setting `"finished": true` in its report, closed by `agent` with its
-summary as the reason (reviews are ignored). The orchestrator, with `onett task close-conversation
+close it. The agent, by setting `"finished": true` in a completed or no-changes report, closed by
+`agent` with its summary as the reason (a blocked or failed report, and reviews, are ignored). The orchestrator, with `onett task close-conversation
 ID --reason R` (`POST /tasks/{id}/conversation/close`), closed by `orchestrator`. The owner, by
 cancelling the task (closed by `owner:<username>`, or `orchestrator` when the API token cancels)
 or through the same route. A closed conversation refuses new messages; messages already queued
 stay queued and visible but are never delivered, because `continueConversation` does nothing for
-a closed one. Closing twice is a conflict. Only a signed-in person can reopen
-(`POST /tasks/{id}/conversation/reopen`), so an agent cannot undo an owner's decision. Both
+a closed one. Closing twice is a conflict. Retrying a cancelled task leaves the conversation closed, and the
+retry run neither resumes the session nor delivers the queue; the owner reopens it. Only a
+signed-in person can reopen (`POST /tasks/{id}/conversation/reopen`), so an agent cannot undo an
+owner's decision. Sending, flushing, editing and cancelling messages are person-only too. Both
 routes emit `conversation.updated` with the root `task_id`.
 
 A task re-queued or created by an owner message carries `follow_up_pending`; only its run claims

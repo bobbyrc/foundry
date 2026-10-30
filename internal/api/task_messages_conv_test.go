@@ -31,25 +31,26 @@ func (f *fakeCtl) FlushTaskMessages(_ context.Context, taskID string) error {
 
 func TestTaskMessageRoutes(t *testing.T) {
 	x := newHarness(t)
+	cookie := x.newUserSession(t, "alice", domain.RoleOperator)
 
-	rec := x.call(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":"keep going"}`)
+	rec := x.authReq(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":"keep going"}`, withCookie(cookie))
 	require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
 	var m domain.ChatMessage
 	decode(t, rec, &m)
 	assert.Equal(t, "keep going", m.Text)
 	assert.Equal(t, "t1", x.ctl.chatConvID)
 
-	rec = x.call(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":"x","bogus":1}`)
+	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":"x","bogus":1}`, withCookie(cookie))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	rec = x.call(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":""}`)
+	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":""}`, withCookie(cookie))
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 	x.ctl.errs["SendTaskMessage"] = fmt.Errorf("%w: This agent has no session to continue. Retry the task instead.", ErrConflict)
-	rec = x.call(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":"hi"}`)
+	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks/t1/messages", `{"text":"hi"}`, withCookie(cookie))
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), "no session to continue")
 
-	rec = x.call(t, http.MethodPost, "/api/v1/tasks/t2/conversation/flush", "")
+	rec = x.authReq(t, http.MethodPost, "/api/v1/tasks/t2/conversation/flush", "", withCookie(cookie))
 	assert.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
 	assert.Equal(t, "t2", x.ctl.chatConvID)
 }

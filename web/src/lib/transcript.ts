@@ -1,6 +1,6 @@
 // Turns stored chat messages and agent run logs into an ordered list of transcript entries.
 // Pure logic: no React, no fetching. The UI renders the entries like a coding-agent transcript.
-import type { ChatMessage, LogLine, TaskConversation } from '../types';
+import type { ChatMessage, LogLine, RunStatus, TaskConversation } from '../types';
 
 export interface ToolSummary {
   name: string;
@@ -155,9 +155,38 @@ export function clipLines(result: string, max: number, all = false): { lines: st
   return { lines: clipped && !all ? lines.slice(0, max) : lines, clipped };
 }
 
-/** An orchestrator conversation: each message, then the log of the run it started. */
-export function orchestratorEntries(messages: ChatMessage[], logsByRun: Record<string, LogLine[]>): Entry[] {
+/** What the transcript needs of a run to say why it ended. */
+export interface RunOutcome {
+  status: RunStatus;
+  error?: string;
+}
+
+/**
+ * A system line saying why a run stopped, or nothing for a run that succeeded, is still live or
+ * is unknown. The agent's own last words do not say it: a stalled or denied run has none.
+ */
+function endedEntries(runId: string, time: string, run?: RunOutcome): Entry[] {
+  if (!run || run.status === 'succeeded' || run.status === 'starting' || run.status === 'running') return [];
+  const text = run.error ? `Run ended: ${run.status}: ${run.error}` : `Run ended: ${run.status}`;
+  return [{ id: `end:${runId}`, runId, kind: 'system', text, time }];
+}
+
+function lastTime(entries: Entry[], fallback: string): string {
+  return entries.length > 0 ? entries[entries.length - 1].time : fallback;
+}
+
+/**
+ * An orchestrator conversation: each message, then the log of the run it started and, for a run
+ * that did not succeed, why it ended. `runs` holds the status of each run by id.
+ */
+export function orchestratorEntries(
+  messages: ChatMessage[],
+  logsByRun: Record<string, LogLine[]>,
+  runs: Record<string, RunOutcome> = {},
+): Entry[] {
   const out: Entry[] = [];
+  // Messages already placed ahead of their run's log (see below).
+  const placed = new Set<string>();
   // Runs whose log is already shown. A message delivered while the run was live names that same
   // run, so its log must not be shown again under the message.
   const shown = new Set<string>();
@@ -170,13 +199,23 @@ export function orchestratorEntries(messages: ChatMessage[], logsByRun: Record<s
         // The log carries a mid-run message as an owner line. One that rode the same turn's prompt
         // has no such line, so it still needs its own entry.
         if (logs?.some((l) => l.kind === 'owner' && l.text === m.text)) continue;
+        if (placed.has(m.id)) continue;
         out.push({ id: `m:${m.id}`, kind: 'owner', text: m.text, time: m.created_at, messageId: m.id });
         continue;
       }
       out.push({ id: `m:${m.id}`, kind: 'owner', text: m.text, time: m.created_at, messageId: m.id });
       if (m.run_id && hasLogs) {
         shown.add(m.run_id);
-        out.push(...linesToEntries(logs, true));
+        // Messages that rode this same turn's prompt came before the agent spoke, so they sit
+        // between the first message and the run's output, not after it.
+        for (const r of messages) {
+          if (r === m || r.queued || r.role !== 'user' || r.run_id !== m.run_id) continue;
+          if (logs.some((l) => l.kind === 'owner' && l.text === r.text)) continue;
+          placed.add(r.id);
+          out.push({ id: `m:${r.id}`, kind: 'owner', text: r.text, time: r.created_at, messageId: r.id });
+        }
+        const run = linesToEntries(logs, true);
+        out.push(...run, ...endedEntries(m.run_id, lastTime(run, m.created_at), runs[m.run_id]));
       }
     } else if (m.role === 'assistant') {
       // The reply is already the last text line of the run's log when the log is loaded.
@@ -195,9 +234,10 @@ export function taskEntries(conv: TaskConversation, logsByRun: Record<string, Lo
   conv.runs.forEach((run, i) => {
     const prev = conv.runs[i - 1];
     if (prev && run.session_id && run.session_id !== prev.session_id) {
-      out.push({ id: `div:${run.id}`, kind: 'divider', text: 'New session · retried by owner', time: run.started_at });
+      out.push({ id: `div:${run.id}`, kind: 'divider', text: 'New session', time: run.started_at });
     }
-    out.push(...linesToEntries(logsByRun[run.id] ?? [], false, conv.task.body));
+    const lines = linesToEntries(logsByRun[run.id] ?? [], false, conv.task.body);
+    out.push(...lines, ...endedEntries(run.id, lastTime(lines, run.started_at), run));
   });
   out.push(...queuedEntries(conv.messages));
   return out;

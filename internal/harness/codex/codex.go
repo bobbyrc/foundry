@@ -4,6 +4,7 @@ package codex
 
 import (
 	"context"
+	"strings"
 
 	"github.com/bobbyrc/onett/internal/harness"
 )
@@ -105,14 +106,26 @@ func buildArgs(cfg harness.Config, spec harness.Spec) []string {
 	return append(args, "-")
 }
 
-// hasSandboxFlag reports whether an extra argument already chooses a sandbox or approval mode.
+// hasSandboxFlag reports whether an extra argument already chooses a sandbox or approval mode,
+// either with a flag or with a config override of sandbox_mode (-c sandbox_mode=..., or the
+// single-argument forms -c=... and --config=...).
 func hasSandboxFlag(lists ...[]string) bool {
+	const key = "sandbox_mode="
 	for _, list := range lists {
-		for _, a := range list {
+		for i, a := range list {
 			switch a {
 			case "--sandbox", "-s", "--approve-for-me", "--full-auto",
 				"--dangerously-bypass-approvals-and-sandbox":
 				return true
+			case "-c", "--config":
+				if i+1 < len(list) && strings.HasPrefix(strings.TrimSpace(list[i+1]), key) {
+					return true
+				}
+			}
+			for _, p := range []string{"-c=", "--config="} {
+				if v, ok := strings.CutPrefix(a, p); ok && strings.HasPrefix(strings.TrimSpace(v), key) {
+					return true
+				}
 			}
 		}
 	}

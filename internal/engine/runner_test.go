@@ -576,7 +576,7 @@ func TestRunnerPublishStopsWhenTaskMovedOn(t *testing.T) {
 	rtGit(t, ws.Dir, "add", "late.txt")
 	rtGit(t, ws.Dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "late")
 
-	assert.False(t, e.publish(ctx, task, p, ws, domain.RunResult{}), "publish refuses to run for a cancelled task")
+	assert.False(t, e.publish(ctx, task, p, ws, domain.RunResult{}, e.requeueOrBlock), "publish refuses to run for a cancelled task")
 	assert.Empty(t, rtRevParseQuiet(bare, "refs/heads/"+ws.Branch), "nothing is pushed")
 	assert.Empty(t, r.fk.PRs, "no pull request is opened")
 
